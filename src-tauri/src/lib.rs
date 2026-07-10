@@ -39,6 +39,8 @@ pub fn run() {
             commands::list_downloads,
             commands::delete_download,
             commands::export_csv,
+            commands::get_download_dir,
+            commands::set_download_dir,
             downloads::download_episode,
         ])
         .run(tauri::generate_context!())

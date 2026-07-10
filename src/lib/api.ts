@@ -157,6 +157,8 @@ export const api = {
     invoke<void>("delete_download", { episodeId }),
   downloadEpisode: (episodeId: number) =>
     invoke<string>("download_episode", { episodeId }),
+  getDownloadDir: () => invoke<string>("get_download_dir"),
+  setDownloadDir: (dir: string) => invoke<void>("set_download_dir", { dir }),
   exportCsv: (kind: "favourites" | "listens" | "stats", dest: string) =>
     invoke<string>("export_csv", { kind, dest }),
 };

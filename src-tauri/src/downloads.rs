@@ -17,6 +17,50 @@ fn emit(app: &AppHandle, p: &DownloadProgress) {
     let _ = app.emit("download-progress", p);
 }
 
+/// "Show - Air date - Title", using the episode id when there's no air date so distinct
+/// episodes can't collide on one filename.
+fn build_name(show: &str, air: Option<&str>, title: Option<&str>, episode_id: i64) -> String {
+    let mut s = show.trim().to_string();
+    if s.is_empty() {
+        s = format!("Episode {episode_id}");
+    }
+    match air {
+        Some(a) if !a.trim().is_empty() => {
+            s.push_str(" - ");
+            s.push_str(a.trim());
+        }
+        _ => s.push_str(&format!(" - {episode_id}")),
+    }
+    if let Some(t) = title {
+        if !t.trim().is_empty() {
+            s.push_str(" - ");
+            s.push_str(t.trim());
+        }
+    }
+    s
+}
+
+/// Strip characters that are illegal in Windows filenames and cap the length.
+fn sanitize_filename(name: &str) -> String {
+    let mapped: String = name
+        .chars()
+        .map(|c| match c {
+            '\\' | '/' | ':' | '*' | '?' | '"' | '<' | '>' | '|' => '-',
+            c if c.is_control() => ' ',
+            c => c,
+        })
+        .collect();
+    let collapsed = mapped.split_whitespace().collect::<Vec<_>>().join(" ");
+    let trimmed = collapsed.trim_matches(|c| c == '.' || c == ' ');
+    let capped: String = trimmed.chars().take(120).collect();
+    let capped = capped.trim_matches(|c| c == '.' || c == ' ').to_string();
+    if capped.is_empty() {
+        "download".to_string()
+    } else {
+        capped
+    }
+}
+
 #[tauri::command]
 pub async fn download_episode(
     episode_id: i64,
@@ -28,15 +72,30 @@ pub async fn download_episode(
     if source.local {
         return Ok(source.url); // already downloaded
     }
-    let dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| format!("no app data dir: {e}"))?
-        .join("downloads");
+    // Destination directory: user-configured, or the default under app data.
+    let configured = { state.db.lock().unwrap().get_setting("download_dir").ok().flatten() };
+    let dir = match configured {
+        Some(d) if !d.trim().is_empty() => std::path::PathBuf::from(d),
+        _ => app
+            .path()
+            .app_data_dir()
+            .map_err(|e| format!("no app data dir: {e}"))?
+            .join("downloads"),
+    };
     tokio::fs::create_dir_all(&dir)
         .await
         .map_err(|e| format!("mkdir failed: {e}"))?;
-    let dest = dir.join(format!("{episode_id}.mp3"));
+    // Meaningful filename: "Show - Air date - Title.mp3" (sanitised), falling back to the id.
+    let filename = {
+        let parts = state.db.lock().unwrap().episode_filename_parts(episode_id).ok();
+        match parts {
+            Some((show, air, title)) => {
+                sanitize_filename(&build_name(&show, air.as_deref(), title.as_deref(), episode_id))
+            }
+            None => episode_id.to_string(),
+        }
+    };
+    let dest = dir.join(format!("{filename}.mp3"));
     let dest_str = dest.to_string_lossy().to_string();
 
     let resp = state

@@ -1,4 +1,4 @@
-use rusqlite::{params, Connection};
+use rusqlite::{params, Connection, OptionalExtension};
 use serde::Serialize;
 use std::path::Path;
 
@@ -113,6 +113,10 @@ CREATE TABLE IF NOT EXISTS downloads (
     bytes INTEGER NOT NULL DEFAULT 0,
     total INTEGER NOT NULL DEFAULT 0,
     status TEXT NOT NULL DEFAULT 'pending'
+);
+CREATE TABLE IF NOT EXISTS settings (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL
 );
 "#;
 
@@ -430,6 +434,35 @@ impl Db {
             params![episode_id, position, duration, completed as i64],
         )?;
         Ok(())
+    }
+
+    pub fn get_setting(&self, key: &str) -> Result<Option<String>, rusqlite::Error> {
+        self.conn
+            .query_row("SELECT value FROM settings WHERE key = ?1", [key], |r| r.get(0))
+            .optional()
+    }
+
+    pub fn set_setting(&self, key: &str, value: &str) -> Result<(), rusqlite::Error> {
+        self.conn.execute(
+            "INSERT INTO settings (key, value) VALUES (?1, ?2)
+             ON CONFLICT(key) DO UPDATE SET value = ?2",
+            params![key, value],
+        )?;
+        Ok(())
+    }
+
+    /// Show name, air date and title for building a meaningful download filename.
+    pub fn episode_filename_parts(
+        &self,
+        episode_id: i64,
+    ) -> Result<(String, Option<String>, Option<String>), rusqlite::Error> {
+        self.conn.query_row(
+            "SELECT s.name, e.air_date, e.title
+             FROM episodes e JOIN shows s ON s.id = e.show_id
+             WHERE e.id = ?1",
+            [episode_id],
+            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+        )
     }
 
     pub fn upsert_download(

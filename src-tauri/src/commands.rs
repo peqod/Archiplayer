@@ -3,7 +3,7 @@ use crate::wfmu;
 use crate::AppState;
 use rusqlite::params;
 use serde::Serialize;
-use tauri::State;
+use tauri::{AppHandle, Manager, State};
 
 type CmdResult<T> = Result<T, String>;
 
@@ -435,6 +435,33 @@ pub fn record_listen(
         .lock()
         .unwrap()
         .record_listen(&session_id, episode_id, seconds, completed, position, duration)
+        .map_err(db_err)
+}
+
+/// The folder new downloads are saved to: the user's chosen directory, or the default
+/// under the app data dir.
+#[tauri::command]
+pub fn get_download_dir(app: AppHandle, state: State<'_, AppState>) -> CmdResult<String> {
+    if let Some(d) = state.db.lock().unwrap().get_setting("download_dir").map_err(db_err)? {
+        if !d.trim().is_empty() {
+            return Ok(d);
+        }
+    }
+    let def = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| e.to_string())?
+        .join("downloads");
+    Ok(def.to_string_lossy().to_string())
+}
+
+#[tauri::command]
+pub fn set_download_dir(dir: String, state: State<'_, AppState>) -> CmdResult<()> {
+    state
+        .db
+        .lock()
+        .unwrap()
+        .set_setting("download_dir", &dir)
         .map_err(db_err)
 }
 

@@ -8,7 +8,8 @@
     type DownloadRow,
   } from "$lib/api";
   import { player } from "$lib/player.svelte";
-  import { save } from "@tauri-apps/plugin-dialog";
+  import { open, save } from "@tauri-apps/plugin-dialog";
+  import { revealItemInDir } from "@tauri-apps/plugin-opener";
   import { listen } from "@tauri-apps/api/event";
   import { onMount } from "svelte";
   import ThemePicker from "$lib/ThemePicker.svelte";
@@ -18,6 +19,7 @@
   let stats = $state<Stats | null>(null);
   let downloads = $state<DownloadRow[]>([]);
   let dlLoading = $state(true);
+  let downloadDir = $state("");
   let error = $state<string | null>(null);
   let notice = $state<string | null>(null);
   let showBanner = $state(false);
@@ -45,6 +47,7 @@
     error = null;
     try {
       downloads = await api.listDownloads();
+      downloadDir = await api.getDownloadDir();
     } catch (e) {
       error = String(e);
     } finally {
@@ -52,6 +55,26 @@
     }
   }
   loadDownloads();
+
+  async function changeDownloadDir() {
+    try {
+      const picked = await open({ directory: true, defaultPath: downloadDir || undefined });
+      if (typeof picked === "string") {
+        await api.setDownloadDir(picked);
+        downloadDir = picked;
+      }
+    } catch (e) {
+      error = String(e);
+    }
+  }
+
+  async function revealDownload(row: DownloadRow) {
+    try {
+      await revealItemInDir(row.download.path);
+    } catch (e) {
+      error = String(e);
+    }
+  }
 
   onMount(() => {
     const un = listen<{ episode_id: number; bytes: number; total: number; status: string }>(
@@ -291,6 +314,11 @@
     <span class="cz-title">Downloads</span>
     <span class="cz-hint">saved for offline</span>
   </summary>
+  <div class="dl-dir">
+    <span class="muted">Folder:</span>
+    <span class="dl-dir-path" title={downloadDir}>{downloadDir || "default"}</span>
+    <button class="ghost" onclick={changeDownloadDir}>Change…</button>
+  </div>
   {#if dlLoading}
     <p class="muted">Loading…</p>
   {:else if downloads.length === 0}
@@ -324,6 +352,12 @@
               {/if}
             </div>
           </div>
+          <button
+            class="dl-open"
+            onclick={() => revealDownload(row)}
+            disabled={row.download.status !== "done"}
+            title="Show in file explorer"
+          >📁</button>
           <button class="dl-del" onclick={() => removeDownload(row)} title="Delete file">🗑</button>
         </div>
       {/each}
@@ -604,5 +638,34 @@
   }
   .dl-del:hover {
     color: var(--c-danger);
+  }
+  .dl-open {
+    background: none;
+    border: none;
+    color: var(--c-dim);
+    cursor: pointer;
+    font-size: 15px;
+  }
+  .dl-open:hover:not(:disabled) {
+    color: var(--c-accent);
+  }
+  .dl-open:disabled {
+    opacity: 0.35;
+  }
+  .dl-dir {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 8px 0 12px;
+    font-size: 13px;
+  }
+  .dl-dir-path {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--c-dim);
+    font-family: monospace;
   }
 </style>
