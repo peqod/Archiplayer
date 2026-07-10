@@ -19,6 +19,8 @@ class Player {
   currentTime = $state(0);
   duration = $state(0);
   volume = $state(1);
+  muted = $state(false);
+  private preMuteVolume = 1;
   error = $state<string | null>(null);
 
   // listen-session bookkeeping
@@ -171,8 +173,20 @@ class Player {
 
   setVolume(v: number) {
     this.volume = Math.max(0, Math.min(1, v));
+    this.muted = false;
     if (this.audio) this.audio.volume = this.volume;
     localStorage.setItem("ab2.volume", String(this.volume));
+  }
+
+  toggleMute() {
+    this.muted = !this.muted;
+    if (this.muted) {
+      this.preMuteVolume = this.volume;
+      if (this.audio) this.audio.volume = 0;
+    } else {
+      this.volume = this.preMuteVolume;
+      if (this.audio) this.audio.volume = this.preMuteVolume;
+    }
   }
 
   setEpisodeFavourite(fav: boolean) {

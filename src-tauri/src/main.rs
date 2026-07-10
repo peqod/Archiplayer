@@ -2,5 +2,5 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 fn main() {
-    archivebunker2_lib::run()
+    archiplayer_lib::run()
 }

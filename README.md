@@ -43,4 +43,4 @@ cd src-tauri && cargo test   # parser + unit tests
 npm run tauri build    # release bundle
 ```
 
-App data (SQLite DB + downloads): `%APPDATA%/org.archivebunker.two/`.
+App data (SQLite DB + downloads): `%APPDATA%/org.archiplayer.app/`.

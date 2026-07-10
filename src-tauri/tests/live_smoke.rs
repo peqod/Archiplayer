@@ -1,6 +1,6 @@
 //! Live end-to-end smoke test against wfmu.org. Ignored by default (network + politeness).
 //! Run explicitly:  cargo test --test live_smoke -- --ignored --nocapture
-use archivebunker2_lib::wfmu::{self, Fetcher};
+use archiplayer_lib::wfmu::{self, Fetcher};
 
 #[tokio::test]
 #[ignore]

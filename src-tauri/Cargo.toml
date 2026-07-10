@@ -1,12 +1,12 @@
 [package]
-name = "archivebunker2"
+name = "archiplayer"
 version = "0.1.0"
-description = "WFMU Archive Bunker 2 - local-first archive browser and player"
-authors = ["archivebunker2"]
+description = "Archiplayer — local-first WFMU archive browser and player"
+authors = ["archiplayer"]
 edition = "2021"
 
 [lib]
-name = "archivebunker2_lib"
+name = "archiplayer_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]

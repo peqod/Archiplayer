@@ -8,6 +8,7 @@
   import { theme } from "$lib/theme.svelte";
   import Icon from "$lib/Icon.svelte";
   import { page } from "$app/stores";
+  import { goto } from "$app/navigation";
   import { tick } from "svelte";
   import { getCurrentWindow, LogicalSize } from "@tauri-apps/api/window";
 
@@ -60,6 +61,21 @@
     await applyWindowSize();
   }
 
+  function isActive(path: string): boolean {
+    return path === "/" ? $page.url.pathname === "/" : $page.url.pathname.startsWith(path);
+  }
+
+  // Clicking a tab toggles player-only: already on that view → collapse;
+  // otherwise navigate there and make sure the library is expanded.
+  async function navTo(path: string) {
+    if (isActive(path)) {
+      await toggleCollapse();
+      return;
+    }
+    await goto(path);
+    if (collapsed) await toggleCollapse();
+  }
+
   $effect(() => {
     if (audioEl) player.attach(audioEl);
   });
@@ -72,7 +88,7 @@
   });
 
   const volumeIcon = $derived(
-    player.volume < 0.02 ? "volume-mute" : player.volume < 0.5 ? "volume-quiet" : "volume-loud",
+    player.muted || player.volume < 0.02 ? "volume-mute" : player.volume < 0.5 ? "volume-quiet" : "volume-loud",
   );
 
   function onScrub(e: Event) {
@@ -165,7 +181,9 @@
           />
           <span class="p-time">{fmtTime(player.duration)}</span>
           <div class="p-volume">
-            <Icon name={volumeIcon} size="24px" />
+            <button class="pvol-btn" onclick={() => player.toggleMute()} title={player.muted ? "Unmute" : "Mute"}>
+              <Icon name={volumeIcon} size="24px" />
+            </button>
             <input type="range" min="0" max="1" step="0.02" value={player.volume} oninput={onVolume} />
           </div>
         </div>
@@ -182,16 +200,19 @@
       <span class="brand-sub">WFMU</span>
     </a>
     <div class="nav-links">
-      <a href="/" class:active={$page.url.pathname === "/"}>Shows</a>
-      <a href="/profile" class:active={$page.url.pathname.startsWith("/profile")}>Profile</a>
-      <a href="/downloads" class:active={$page.url.pathname.startsWith("/downloads")}>Downloads</a>
+      <a
+        href="/"
+        class:active={isActive("/")}
+        title={isActive("/") && !collapsed ? "Collapse to player only" : "Shows"}
+        onclick={(e) => { e.preventDefault(); navTo("/"); }}
+      >Shows</a>
+      <a
+        href="/profile"
+        class:active={isActive("/profile")}
+        title={isActive("/profile") && !collapsed ? "Collapse to player only" : "Profile"}
+        onclick={(e) => { e.preventDefault(); navTo("/profile"); }}
+      >Profile</a>
     </div>
-    <button
-      class="collapse-btn"
-      onclick={toggleCollapse}
-      title={collapsed ? "Show library" : "Collapse to player only"}
-      aria-label={collapsed ? "Show library" : "Collapse to player only"}
-    >{collapsed ? "▾ Library" : "▴ Player only"}</button>
   </nav>
 
   {#if !collapsed}
@@ -275,20 +296,6 @@
   .nav-links {
     display: flex;
     gap: 16px;
-  }
-  .collapse-btn {
-    margin-left: auto;
-    background: var(--c-surface2);
-    color: var(--c-dim);
-    border: none;
-    border-radius: 6px;
-    padding: 5px 12px;
-    font-weight: 600;
-    font-size: 13px;
-    cursor: pointer;
-  }
-  .collapse-btn:hover {
-    color: var(--c-accent);
   }
   .nav-links a {
     color: var(--c-dim);
@@ -445,5 +452,18 @@
   .p-volume input {
     width: 90px;
     accent-color: var(--c-accent);
+  }
+  .pvol-btn {
+    background: none;
+    border: none;
+    color: var(--c-dim);
+    cursor: pointer;
+    padding: 2px;
+    border-radius: 4px;
+    display: inline-flex;
+    align-items: center;
+  }
+  .pvol-btn:hover {
+    color: var(--c-accent);
   }
 </style>

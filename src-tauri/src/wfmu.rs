@@ -113,6 +113,23 @@ fn non_empty(s: String) -> Option<String> {
     }
 }
 
+/// Convert a WFMU short date ("MM.DD.YY", as it appears in the playlist-index link
+/// text on deep-archive shows like Kenny G's — /playlists/KG) into the app's canonical
+/// "Month D, YYYY" form so those episodes don't render as "unknown date".
+fn mdy_from_dotted(mm: &str, dd: &str, yy: &str) -> Option<String> {
+    const MONTHS: [&str; 12] = [
+        "January", "February", "March", "April", "May", "June",
+        "July", "August", "September", "October", "November", "December",
+    ];
+    let m: usize = mm.parse().ok()?;
+    let d: u32 = dd.parse().ok()?;
+    let y: i32 = yy.parse().ok()?;
+    let name = MONTHS.get(m.checked_sub(1)?)?;
+    // 2-digit years: pivot at 70 (WFMU archives run 1990s→present).
+    let year = if y < 70 { 2000 + y } else { 1900 + y };
+    Some(format!("{name} {d}, {year}"))
+}
+
 /// Parse the full catalog from https://wfmu.org/playlists/.
 /// Shows appear multiple times (weekday schedule + alphabetical list);
 /// entries seen more than once are treated as currently on air.
@@ -217,10 +234,19 @@ fn archive_for(chunk: &str, episode_id: i64) -> Option<i64> {
 pub fn parse_show_page(html: &str) -> Vec<ParsedEpisode> {
     static SPLIT: OnceLock<Regex> = OnceLock::new();
     static DATE: OnceLock<Regex> = OnceLock::new();
+    static ALT_DATE: OnceLock<Regex> = OnceLock::new();
     static TITLE: OnceLock<Regex> = OnceLock::new();
     let split = SPLIT.get_or_init(|| Regex::new(r#"id="KDBepisode-(\d+)""#).unwrap());
     let date_re =
         DATE.get_or_init(|| Regex::new(r"([A-Z][a-z]+ \d{1,2}, \d{4})\s*:").unwrap());
+    // Deep-archive templates (e.g. /playlists/KG and its legacy per-year pages): the date
+    // is rendered as "MM.DD.YY" rather than the "Month DD, YYYY:" heading — either as a
+    // "MM.DD.YY playlist" link, or (for episodes with no archived playlist) as bare text
+    // followed by "| Listen". Anchor on a trailing "playlist" or "|" so we skip the date
+    // baked into legacy hrefs (…/MM.DD.YY.html) and only read the displayed date. The month
+    // is validated in mdy_from_dotted, so stray dotted numbers are rejected.
+    let alt_date_re = ALT_DATE
+        .get_or_init(|| Regex::new(r"(\d{1,2})\.(\d{1,2})\.(\d{2})\s*(?:playlist|\|)").unwrap());
     let title_re = TITLE.get_or_init(|| Regex::new(r"(?s)<b>(.*?)</b>").unwrap());
 
     let matches: Vec<(i64, usize)> = split
@@ -238,7 +264,14 @@ pub fn parse_show_page(html: &str) -> Vec<ParsedEpisode> {
             .map(|(_, s)| *s)
             .unwrap_or(html.len().min(start + 3000));
         let chunk = &html[*start..end.min(html.len())];
-        let air_date = date_re.captures(chunk).map(|c| clean_text(&c[1]));
+        let air_date = date_re
+            .captures(chunk)
+            .map(|c| clean_text(&c[1]))
+            .or_else(|| {
+                alt_date_re
+                    .captures(chunk)
+                    .and_then(|c| mdy_from_dotted(&c[1], &c[2], &c[3]))
+            });
         let title = title_re
             .captures(chunk)
             .map(|c| clean_text(&c[1]))
@@ -282,6 +315,49 @@ pub fn parse_show_description(html: &str) -> Option<String> {
         .trim()
         .to_string();
     non_empty(text)
+}
+
+/// Discover archive-year sub-pages for a show that has an "OLDER PLAYLISTS"
+/// dropdown on its page (e.g. /playlists/KG links to /playlists/KG2009, etc.).
+/// Returns the URL path portions (e.g. "/playlists/KG2009") for each year.
+pub fn parse_show_archive_years(html: &str, show_id: &str) -> Vec<String> {
+    // Find the <SELECT NAME="Ubu_Nav_Popup"> block.
+    let sel_start = match html.find("Ubu_Nav_Popup") {
+        Some(i) => i,
+        None => return vec![],
+    };
+    // Back up to the opening <select / <SELECT tag.
+    let block_start = match html[..sel_start]
+        .rfind("<select")
+        .or_else(|| html[..sel_start].rfind("<SELECT"))
+    {
+        Some(i) => i,
+        None => return vec![],
+    };
+    let block = &html[block_start..];
+    let block_end = match block.find("</select>").or_else(|| block.find("</SELECT>")) {
+        Some(i) => i,
+        None => return vec![],
+    };
+    let block = &block[..block_end];
+
+    static OPTION_RE: OnceLock<Regex> = OnceLock::new();
+    let re = OPTION_RE.get_or_init(|| {
+        Regex::new(r#"<option\s+value="(/playlists/[A-Za-z0-9]+)""#).unwrap()
+    });
+
+    // Build the expected prefix: /playlists/{show_id} followed by digits.
+    let prefix = format!("/playlists/{show_id}");
+    let mut years: Vec<String> = re
+        .captures_iter(block)
+        .map(|c| c[1].to_string())
+        .filter(|path| {
+            path.starts_with(&prefix)
+                && path[prefix.len()..].chars().all(|c| c.is_ascii_digit())
+        })
+        .collect();
+    years.sort();
+    years
 }
 
 /// Extract the archive id from a single playlist page (its "Listen to this show" /
@@ -373,6 +449,57 @@ pub fn parse_playlist(html: &str) -> Vec<ParsedTrack> {
             start_sec,
         });
     }
+    // Deep-archive DJs (e.g. Kenny G's Hour of Pain, /playlists/KG) use a free-form
+    // "comment" template with no col_* table, so the tabular pass finds nothing.
+    if tracks.is_empty() {
+        return parse_playlist_freeform(html);
+    }
+    tracks
+}
+
+/// Fallback parser for the free-form "comment" playlist template. Each track is a red
+/// ">" marker followed by "Artist | Title" text, a KDBsong star span, and an optional
+/// "| H:MM:SS" approximate start time (also carried in the pop-up link's `starttime`).
+/// Tracks are separated by `<br><br>`.
+fn parse_playlist_freeform(html: &str) -> Vec<ParsedTrack> {
+    static SONG: OnceLock<Regex> = OnceLock::new();
+    static START: OnceLock<Regex> = OnceLock::new();
+    let song_span =
+        SONG.get_or_init(|| Regex::new(r#"<span[^>]*class="KDBFavIcon KDBsong""#).unwrap());
+    let start_re = START.get_or_init(|| Regex::new(r"starttime=(\d+:\d{1,2}:\d{2})").unwrap());
+
+    let mut tracks = Vec::new();
+    for segment in html.split("<br><br>") {
+        // Only segments carrying a song star are real tracks.
+        let Some(m) = song_span.find(segment) else {
+            continue;
+        };
+        // Text before the star holds ">Artist | Title".
+        let head = clean_text(&segment[..m.start()]);
+        let head = head.trim_start_matches('>').trim();
+        if head.is_empty() {
+            continue;
+        }
+        let (artist, title) = match head.split_once('|') {
+            Some((a, t)) => (
+                non_empty(a.trim().to_string()),
+                non_empty(t.trim().to_string()),
+            ),
+            None => (non_empty(head.to_string()), None),
+        };
+        if artist.is_none() && title.is_none() {
+            continue;
+        }
+        let start_sec = start_re.captures(segment).and_then(|c| parse_hms(&c[1]));
+        tracks.push(ParsedTrack {
+            artist,
+            title,
+            album: None,
+            label: None,
+            comments: None,
+            start_sec,
+        });
+    }
     tracks
 }
 
@@ -440,6 +567,33 @@ mod tests {
     }
 
     #[test]
+    fn deep_archive_short_dates_are_parsed() {
+        // Kenny G-style playlist-index template: date is in the link text ("MM.DD.YY
+        // playlist"), not a "Month DD, YYYY:" heading. It must still yield an air_date.
+        let html = r#"
+<span class="KDBFavIcon KDBepisode" id="KDBepisode-37520"></span>
+<a href="/playlists/shows/37520">09.30.10 playlist</a>
+| Listen: <a href="/flashplayer.php?version=3&amp;show=37520&amp;archive=99">Pop-up</a>
+<span class="KDBFavIcon KDBepisode" id="KDBepisode-58274"></span>
+<a href="/playlists/shows/58274">11.26.14 playlist</a>
+<span class="KDBFavIcon KDBepisode" id="KDBepisode-136"></span>
+<a href="https://www.wfmu.org/Playlists/KG/playlists/01/02.15.01.html">02.15.01 playlist</a>
+<span class="KDBFavIcon KDBepisode" id="KDBepisode-888"></span>
+&gt;
+10.11.01
+| Listen: <img src="/flashplayer/playbuttont.gif">
+"#;
+        let eps = parse_show_page(html);
+        assert_eq!(eps.len(), 4);
+        assert_eq!(eps[0].air_date.as_deref(), Some("September 30, 2010"));
+        assert_eq!(eps[1].air_date.as_deref(), Some("November 26, 2014"));
+        // Legacy per-year page link (different href, same "MM.DD.YY playlist" text).
+        assert_eq!(eps[2].air_date.as_deref(), Some("February 15, 2001"));
+        // Episode with no archived playlist: bare "MM.DD.YY" before "| Listen".
+        assert_eq!(eps[3].air_date.as_deref(), Some("October 11, 2001"));
+    }
+
+    #[test]
     fn archiveplayer_extracts_audio_url() {
         let html = r#"<audio autoplay preload="metadata" src="https://s3.amazonaws.com/arch.wfmu.org/BT/bt010116r.mp4"></audio>"#;
         assert_eq!(
@@ -496,6 +650,37 @@ mod tests {
     }
 
     #[test]
+    fn freeform_comment_playlist_parses_tracks() {
+        // Kenny G-style free-form template: no col_* table, tracks are ">Artist | Title"
+        // with an optional "| H:MM:SS" start time in the pop-up link.
+        let html = r#"
+| <font size="-1">Approx. start time</font>
+<br><br><br>
+<span style="color: red">&gt;</span>
+Nachum Segal
+| Kenny G is Next
+<span class="KDBFavIcon KDBsong" id="KDBsong-1456397"><a href="x">star</a></span>
+<br><br>
+<span style="color: red">&gt;</span>
+Peter Sellers
+| Singing in the rain
+<span class="KDBFavIcon KDBsong" id="KDBsong-1456406"><a href="x">star</a></span>
+|
+0:32:14 <a href="/flashplayer.php?version=3&amp;show=58274&amp;archive=118775&amp;starttime=0:32:14">Pop-up</a>)
+<br><br>
+"#;
+        // The tabular parser finds nothing, so parse_playlist falls back to free-form.
+        let tracks = parse_playlist(html);
+        assert_eq!(tracks.len(), 2);
+        assert_eq!(tracks[0].artist.as_deref(), Some("Nachum Segal"));
+        assert_eq!(tracks[0].title.as_deref(), Some("Kenny G is Next"));
+        assert_eq!(tracks[0].start_sec, None);
+        assert_eq!(tracks[1].artist.as_deref(), Some("Peter Sellers"));
+        assert_eq!(tracks[1].title.as_deref(), Some("Singing in the rain"));
+        assert_eq!(tracks[1].start_sec, Some(32 * 60 + 14));
+    }
+
+    #[test]
     fn title_with_nested_markup_is_stripped() {
         // Real case: Advanced D&D (SU), May 19 2005 — title wrapped in <h2><font><b>…
         let html = r##"<span class="KDBFavIcon KDBepisode" id="KDBepisode-15110"></span>
@@ -507,6 +692,44 @@ mod tests {
         let ep = eps.iter().find(|e| e.id == 15110).expect("episode parsed");
         assert_eq!(ep.title.as_deref(), Some("Death by vinyl!!!!"));
         assert_eq!(ep.archive_id, Some(122625));
+    }
+
+    #[test]
+    fn archive_years_extracted_from_dropdown() {
+        let html = r##"<SELECT NAME="Ubu_Nav_Popup" ONCHANGE="goto_URL(this.form.Ubu_Nav_Popup)" SIZE="-3">
+<OPTION VALUE="">OLDER PLAYLISTS</option>
+<OPTION VALUE="">------</option>
+<option value="/playlists/KG2010">2010</option>
+<option value="/playlists/KG2009">2009</option>
+<option value="/playlists/KG2008">2008</option>
+</SELECT>"##;
+        let years = parse_show_archive_years(html, "KG");
+        assert_eq!(
+            years,
+            vec![
+                "/playlists/KG2008".to_string(),
+                "/playlists/KG2009".to_string(),
+                "/playlists/KG2010".to_string(),
+            ]
+        );
+    }
+
+    #[test]
+    fn archive_years_ignores_non_matching_urls() {
+        let html = r##"<SELECT NAME="Ubu_Nav_Popup">
+<option value="/playlists/KG2009">2009</option>
+<option value="/~kennyg/playlists/00.html">2000</option>
+<option value="/playlists/WA2009">WA 2009 (wrong show)</option>
+</SELECT>"##;
+        let years = parse_show_archive_years(html, "KG");
+        assert_eq!(years, vec!["/playlists/KG2009".to_string()]);
+    }
+
+    #[test]
+    fn archive_years_empty_when_no_dropdown() {
+        let html = "<html><body>No dropdown here</body></html>";
+        let years = parse_show_archive_years(html, "KG");
+        assert!(years.is_empty());
     }
 
     #[test]

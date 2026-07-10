@@ -66,24 +66,50 @@ pub async fn get_show(
 ) -> CmdResult<ShowDetail> {
     let need_scrape = {
         let db = state.db.lock().unwrap();
-        refresh || db.list_episodes(&show_id).map_err(db_err)?.is_empty()
+        refresh || !db.show_was_scraped(&show_id).map_err(db_err)?
     };
     if need_scrape {
         let html = state.fetcher.get_text(&wfmu::show_url(&show_id)).await?;
         let episodes = wfmu::parse_show_page(&html);
         let description = wfmu::parse_show_description(&html);
-        let db = state.db.lock().unwrap();
-        for (i, e) in episodes.iter().enumerate() {
-            db.upsert_episode(
-                e.id,
-                &show_id,
-                e.air_date.as_deref(),
-                e.title.as_deref(),
-                e.archive_id,
-                i as i64,
-            )
-            .map_err(db_err)?;
+        let archive_years = wfmu::parse_show_archive_years(&html, &show_id);
+
+        // Upsert episodes from the main page, then chase each archive year.
+        let mut seq: i64 = 0;
+        {
+            let db = state.db.lock().unwrap();
+            for e in &episodes {
+                db.upsert_episode(
+                    e.id,
+                    &show_id,
+                    e.air_date.as_deref(),
+                    e.title.as_deref(),
+                    e.archive_id,
+                    seq,
+                )
+                .map_err(db_err)?;
+                seq += 1;
+            }
         }
+        for year_path in &archive_years {
+            let year_url = format!("{}{}", wfmu::BASE, year_path);
+            let year_html = state.fetcher.get_text(&year_url).await?;
+            let year_eps = wfmu::parse_show_page(&year_html);
+            let db = state.db.lock().unwrap();
+            for e in &year_eps {
+                db.upsert_episode(
+                    e.id,
+                    &show_id,
+                    e.air_date.as_deref(),
+                    e.title.as_deref(),
+                    e.archive_id,
+                    seq,
+                )
+                .map_err(db_err)?;
+                seq += 1;
+            }
+        }
+        let db = state.db.lock().unwrap();
         if let Some(desc) = description {
             db.set_show_description(&show_id, &desc).map_err(db_err)?;
         }

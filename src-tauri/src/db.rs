@@ -196,6 +196,17 @@ impl Db {
         Ok(())
     }
 
+    pub fn show_was_scraped(&self, id: &str) -> Result<bool, rusqlite::Error> {
+        let scraped: Option<i64> = self
+            .conn
+            .query_row(
+                "SELECT last_scraped FROM shows WHERE id=?1",
+                params![id],
+                |r| r.get(0),
+            )?;
+        Ok(scraped.is_some())
+    }
+
     pub fn upsert_episode(
         &self,
         id: i64,
