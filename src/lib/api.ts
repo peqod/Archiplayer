@@ -23,6 +23,9 @@ export interface Episode {
   downloaded: boolean;
   download_path: string | null;
   track_count: number;
+  resume_sec: number | null;
+  duration_sec: number | null;
+  completed: boolean;
 }
 
 export interface Track {
@@ -137,8 +140,17 @@ export const api = {
     episodeId: number,
     seconds: number,
     completed: boolean,
+    position: number,
+    duration: number,
   ) =>
-    invoke<void>("record_listen", { sessionId, episodeId, seconds, completed }),
+    invoke<void>("record_listen", {
+      sessionId,
+      episodeId,
+      seconds,
+      completed,
+      position,
+      duration,
+    }),
   getStats: () => invoke<Stats>("get_stats"),
   listDownloads: () => invoke<DownloadRow[]>("list_downloads"),
   deleteDownload: (episodeId: number) =>

@@ -27,6 +27,9 @@ pub struct Episode {
     pub downloaded: bool,
     pub download_path: Option<String>,
     pub track_count: i64,
+    pub resume_sec: Option<i64>,
+    pub duration_sec: Option<i64>,
+    pub completed: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -127,6 +130,13 @@ impl Db {
         conn.execute_batch(SCHEMA)?;
         // Migration for DBs created before the description column existed.
         let _ = conn.execute("ALTER TABLE shows ADD COLUMN description TEXT", []);
+        // Resume / progress tracking, added later.
+        let _ = conn.execute("ALTER TABLE episodes ADD COLUMN resume_sec INTEGER", []);
+        let _ = conn.execute("ALTER TABLE episodes ADD COLUMN duration_sec INTEGER", []);
+        let _ = conn.execute(
+            "ALTER TABLE episodes ADD COLUMN completed INTEGER NOT NULL DEFAULT 0",
+            [],
+        );
         let fts = conn.execute_batch(FTS_SCHEMA).is_ok();
         Ok(Db { conn, fts })
     }
@@ -234,7 +244,8 @@ impl Db {
             "SELECT e.id, e.show_id, e.air_date, e.title, e.archive_id, e.audio_url, e.has_audio,
                     EXISTS(SELECT 1 FROM favourites f WHERE f.kind='episode' AND f.ref_id = CAST(e.id AS TEXT)),
                     d.path, COALESCE(d.status,''),
-                    (SELECT COUNT(*) FROM tracks t WHERE t.episode_id = e.id)
+                    (SELECT COUNT(*) FROM tracks t WHERE t.episode_id = e.id),
+                    e.resume_sec, e.duration_sec, e.completed
              FROM episodes e LEFT JOIN downloads d ON d.episode_id = e.id
              WHERE e.show_id = ?1 ORDER BY e.seq",
         )?;
@@ -252,6 +263,9 @@ impl Db {
                 download_path: r.get(8)?,
                 downloaded: status == "done",
                 track_count: r.get(10)?,
+                resume_sec: r.get(11)?,
+                duration_sec: r.get(12)?,
+                completed: r.get::<_, i64>(13)? != 0,
             })
         })?;
         rows.collect()
@@ -262,7 +276,8 @@ impl Db {
             "SELECT e.id, e.show_id, e.air_date, e.title, e.archive_id, e.audio_url, e.has_audio,
                     EXISTS(SELECT 1 FROM favourites f WHERE f.kind='episode' AND f.ref_id = CAST(e.id AS TEXT)),
                     d.path, COALESCE(d.status,''),
-                    (SELECT COUNT(*) FROM tracks t WHERE t.episode_id = e.id)
+                    (SELECT COUNT(*) FROM tracks t WHERE t.episode_id = e.id),
+                    e.resume_sec, e.duration_sec, e.completed
              FROM episodes e LEFT JOIN downloads d ON d.episode_id = e.id
              WHERE e.id = ?1",
             [id],
@@ -280,6 +295,9 @@ impl Db {
                     download_path: r.get(8)?,
                     downloaded: status == "done",
                     track_count: r.get(10)?,
+                    resume_sec: r.get(11)?,
+                    duration_sec: r.get(12)?,
+                    completed: r.get::<_, i64>(13)? != 0,
                 })
             },
         )
@@ -392,12 +410,24 @@ impl Db {
         episode_id: i64,
         seconds: i64,
         completed: bool,
+        position: i64,
+        duration: i64,
     ) -> Result<(), rusqlite::Error> {
         self.conn.execute(
             "INSERT INTO listens (id, episode_id, started_at, seconds, completed)
              VALUES (?1, ?2, ?3, ?4, ?5)
              ON CONFLICT(id) DO UPDATE SET seconds=MAX(seconds, ?4), completed=MAX(completed, ?5)",
             params![session_id, episode_id, Self::now(), seconds, completed as i64],
+        )?;
+        // Remember where the listener left off (for the resume marker and progress bar).
+        // Only advance duration when we actually know it; never clear a completed flag.
+        self.conn.execute(
+            "UPDATE episodes SET
+               resume_sec = ?2,
+               duration_sec = CASE WHEN ?3 > 0 THEN ?3 ELSE duration_sec END,
+               completed = MAX(completed, ?4)
+             WHERE id = ?1",
+            params![episode_id, position, duration, completed as i64],
         )?;
         Ok(())
     }

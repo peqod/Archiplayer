@@ -426,13 +426,15 @@ pub fn record_listen(
     episode_id: i64,
     seconds: i64,
     completed: bool,
+    position: i64,
+    duration: i64,
     state: State<'_, AppState>,
 ) -> CmdResult<()> {
     state
         .db
         .lock()
         .unwrap()
-        .record_listen(&session_id, episode_id, seconds, completed)
+        .record_listen(&session_id, episode_id, seconds, completed, position, duration)
         .map_err(db_err)
 }
 

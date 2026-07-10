@@ -104,8 +104,17 @@ class Player {
   private pushListen(completed: boolean) {
     const ep = this.current?.episode;
     if (!ep || !this.sessionId) return;
+    const position = Math.round(this.currentTime);
+    const duration = Math.round(this.duration);
+    // Treat "almost at the end" as completed even if the audio element never fires "ended".
+    const done = completed || (duration > 0 && position / duration >= 0.97);
+    // Keep the in-memory episode in sync so the row's progress bar / completed badge
+    // update immediately without a reload.
+    ep.resume_sec = position;
+    if (duration > 0) ep.duration_sec = duration;
+    if (done) ep.completed = true;
     api
-      .recordListen(this.sessionId, ep.id, Math.round(this.sessionSeconds), completed)
+      .recordListen(this.sessionId, ep.id, Math.round(this.sessionSeconds), done, position, duration)
       .catch(() => {});
   }
 

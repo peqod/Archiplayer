@@ -99,10 +99,23 @@
   async function playEpisode(ep: Episode) {
     if (!show) return;
     try {
-      await player.playEpisode(ep, show.name);
+      // Resume where the listener left off (unless finished — then start over).
+      const resume =
+        !ep.completed && ep.resume_sec && ep.resume_sec > 5 ? ep.resume_sec : null;
+      await player.playEpisode(ep, show.name, resume);
     } catch (e) {
       error = String(e);
     }
+  }
+
+  // Fraction (0–1) an episode has been listened to, for the row's progress bar.
+  function progressFrac(ep: Episode): number {
+    if (player.current?.episode.id === ep.id && player.duration > 0)
+      return Math.min(player.currentTime / player.duration, 1);
+    if (ep.completed) return 1;
+    if (ep.resume_sec && ep.duration_sec && ep.duration_sec > 0)
+      return Math.min(ep.resume_sec / ep.duration_sec, 1);
+    return 0;
   }
 
   async function playFromHere(ep: Episode) {
@@ -223,6 +236,13 @@
     {#each episodes as ep (ep.id)}
       <div class="ep" class:current={player.current?.episode.id === ep.id}>
         <div class="ep-row">
+          {#if progressFrac(ep) > 0}
+            <div
+              class="ep-prog"
+              class:done={ep.completed}
+              style="width:{progressFrac(ep) * 100}%"
+            ></div>
+          {/if}
           <button
             class="playbtn"
             onclick={() => playEpisode(ep)}
@@ -236,6 +256,10 @@
             onkeydown={(e) => e.key === "Enter" && togglePlaylist(ep)}>
             <span class="ep-date">{ep.air_date ?? "unknown date"}</span>
             {#if ep.title}<span class="ep-title">{ep.title}</span>{/if}
+            {#if ep.completed}<span class="badge done">completed</span>{/if}
+            {#if !ep.completed && ep.resume_sec && ep.resume_sec > 5}
+              <span class="badge resume">↺ {fmtTime(ep.resume_sec)}</span>
+            {/if}
             {#if !ep.has_audio}<span class="badge">playlist only</span>{/if}
             {#if ep.downloaded}<span class="badge dl">offline</span>{/if}
             {#if downloading[ep.id]}
@@ -397,6 +421,25 @@
     display: flex;
     align-items: center;
     gap: 10px;
+    position: relative;
+  }
+  .ep-prog {
+    position: absolute;
+    inset: 0 auto 0 0;
+    border-radius: 6px;
+    background: color-mix(in srgb, var(--c-accent) 20%, transparent);
+    pointer-events: none;
+    transition: width 0.25s ease;
+    z-index: 0;
+  }
+  .ep-prog.done {
+    background: color-mix(in srgb, var(--c-accent) 9%, transparent);
+  }
+  .ep-row > .playbtn,
+  .ep-row > .ep-main,
+  .ep-row > .ep-actions {
+    position: relative;
+    z-index: 1;
   }
   .playbtn {
     background: var(--c-surface2);
@@ -452,6 +495,14 @@
   }
   .badge.prog {
     color: var(--c-accent);
+  }
+  .badge.done {
+    color: var(--c-on-accent);
+    background: var(--c-accent);
+  }
+  .badge.resume {
+    color: var(--c-accent);
+    font-variant-numeric: tabular-nums;
   }
   .ep-actions {
     display: flex;
