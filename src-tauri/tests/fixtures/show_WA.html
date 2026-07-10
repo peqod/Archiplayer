@@ -1,0 +1,2238 @@
+<!DOCTYPE html>
+<!--Default templates created 2/21/01 (v3: 11/6/18), written 2001-2022 by Ken Garson (ken@kenzodb.com). Some contributions copyright 2020-2022 Ken Garson Systems LLC: https://kenzodb.com. v4/18/22-->
+<!--playlist generator Created 10/20/00 (v3: 11/1/18), written 2000-2025 by Ken Garson (ken@kenzodb.com). Some contributions copyright 2020-2025 Ken Garson Systems LLC: https://kenzodb.com. v7/9/25-->
+<html>
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0, maximum-scale=2.0, user-scalable=yes">
+<script type="text/javascript">
+document.domain="wfmu.org";
+</script>
+<base target="_top">
+<link rel="alternate" type="application/rss+xml" title="WFMU Playlists for Wake with Clay Pigeon" href="http://www.wfmu.org/playlistfeed/WA.xml">
+<link rel="alternate" type="application/rss+xml" title="WFMU MP3 archives for Wake with Clay Pigeon" href="http://www.wfmu.org/archivefeed/mp3/WA.xml">
+<script type="text/javascript" src="/libraries/jquery/jquery-3.7.1.min.js"></script><link type="text/css" href="/libraries/jqueryui/1.12.1-dialogsmoothness/jquery-ui.min.css" rel="stylesheet" /><script type="text/javascript" src="/libraries/jqueryui/1.12.1-dialogsmoothness/jquery-ui-kenzo-210507.min.js"></script>
+<script type="text/javascript" src="/libraries/jquery/js.cookie.js"></script>
+<script type="text/javascript" src="/libraries/highslide/highslide-v4.1.13.min.js"></script><script type="text/javascript" src="/libraries/highslide/highslide.config-v4.1.13.js"></script><link rel="stylesheet" type="text/css" href="/libraries/highslide/highslide-v4.1.13.css" />
+<style type="text/css">
+a.highslide img {
+max-width:335px;
+max-height:263px;
+display:inline-block;
+margin-left:auto;
+margin-right:auto;
+height:auto;
+width:auto;
+border-style:none;
+}
+div.highslide-caption {
+text-align:center;
+color: black;
+}
+div.image_caption {
+text-align:center;
+font-size: small;
+padding-left:12px;
+max-width:333px;
+}
+div.image_caption_top {
+text-align:center;
+font-size: small;
+}
+a.playlist_top_image img {
+/*max-width:800px;*/
+max-height:500px;
+max-width:95%;
+}
+span.KDBFavIcon img {
+display:inline-block;
+margin-left:auto;
+margin-right:auto;
+}
+</style>
+<link id="noframes_style" type="text/css" href="/css/playlist_noframes_aftershow.1670968947.css" rel="stylesheet" />
+<script type="text/javascript">
+function kdbarchivelink(url, v) {
+window.open(url, "kdbflashplayerwindow",(v==1 ? "width=645,height=135":(v==2 ? "width=540,height=164":(v==3 ? "width=605,height=708":(v==4 ? "width=0,height=0":"width=0,height=0")))) + ",scrollbars=no,resizable=yes,toolbar=no,directories=no,location=no,menubar=no,status=no");
+return false;
+}
+</script>
+<meta property="og:site_name" content="WFMU" />
+<meta property="og:type" content="website" />
+<meta property="og:title" content="Wake with Clay Pigeon" />
+<meta property="og:description" content="Playlists &amp; archives" />
+<meta property="og:url" content="http://wfmu.org/playlists/WA" />
+<title>
+WFMU:
+Wake with Clay Pigeon:
+Playlists and Archives
+</title>
+<style type="text/css" id="playlist_css_additional">
+BODY, TD, TH, .everything, P {
+color: #0c57d2;
+font-family: verdana, geneva, arial, sans-serif;
+}
+button.reply_thread_button {
+color: #0c57d2;
+}
+.showlist {
+font-size: 80%;
+font-family: verdana, geneva, arial, sans-serif;
+}
+BODY {
+background-color: white
+}
+.song, table#comments-table td {
+background-color: silver;
+}
+A:link {color: #e65e38}
+A:visited {color: #e65e38}
+A:active, button.reply_thread_button:hover {color: #0c57d2}
+.invis {text-decoration: none}
+.webonly {
+font-style: italic;
+font-size: 70%;
+}
+.KDBFavIcon.KDBsong {
+float:right;
+margin-right: 5px;
+}
+.playlistcommentsform {
+font-size: 90%;
+margin:0;
+width:98%;
+}
+.topborder {
+/*border: 2px solid;*/
+}
+p.content, td.content {
+margin: 0;
+padding: 0.5em;
+}
+p.content div, td.content div {
+font-size: 120%;
+font-weight: bold;
+}
+p.boxed, td.boxed {
+border-top:1px solid silver;
+margin: 0.25em;
+padding: 0.25em 0.5em 0.55em 0.5em; /*pre-avatars*/
+/*padding: 0.15em 0.25em 0.15em 0.25em;*/ /*avatars*/
+}
+table#comments-table {
+border-spacing:0;
+border-collapse:collapse;
+font-size: 95%;
+border: 2px solid;
+line-height: 120%;
+table-layout:fixed;
+word-wrap:break-word;
+overflow:hidden;
+}
+.nounder {
+text-decoration: none;
+}
+span.key { font-weight: bold; }
+span.value { }
+div#playlistcommentstable {
+/*margin: 0.2em 4em;*/
+font-size: 90%;
+}
+div#playlistcommentstable_listonly {
+margin: 0.2em 0.2em;
+font-size: 90%;
+}
+span.rightmost {
+width:13.5em;
+/*width:17.2em;*/ /*for reply/next/up*/
+float:right;
+text-align:right;
+font-size: 90%;
+}
+span.rightmost_live {
+/*width:11.9em;*/ /* 11/28/22 test */
+/*width:15.6em;*/ /*for reply/next/up*/
+float:right;
+text-align:right;
+font-size: 90%;
+white-space: nowrap;
+}
+span.badges {
+font-size:180%;
+font-weight:bold;
+vertical-align:text-top;
+}
+textarea {
+font-family: verdana, geneva, arial, sans-serif;
+font-size: 100%;
+overflow-x: hidden; /*avoids firefox extra row*/
+}
+</style>
+<style type="text/css">
+.noDialogTitle .ui-dialog-titlebar {display:none}
+.ui-widget {
+font-size: 13px;
+}
+.ui-dialog .ui-dialog-content, .ui-widget-content a {
+padding: 0px;
+line-height:150%;
+font-weight: normal;
+color: black;
+}
+</style>
+<script type="text/javascript" src="/js/kenzodb_fav_comp.1670147842.js"></script>
+</head>
+<body>
+<div id="wrapper">
+<div class="songs">
+<div class="KDBFavPop"><div class="KDBFavPopMessage"></div></div>
+<script type="text/javascript">
+KDBFav.initialize({"myurl":"http:\/\/wfmu.org\/playlists\/WA","login":"\/auth.php?a=login&r=http%3A%2F%2Fwfmu.org%2Fplaylists%2FWA","register":"\/auth.php?a=register&r=http%3A%2F%2Fwfmu.org%2Fplaylists%2FWA","profile_favs":"\/auth.php?a=update_profile&panel_id=favorites&r=http%3A%2F%2Fwfmu.org%2Fplaylists%2FWA","fav_icon_clicked":"\/auth.php?a=fav_icon_clicked&r=http%3A%2F%2Fwfmu.org%2Fplaylists%2FWA","user_favs_base":"\/user_favs.php","song_page_base":"\/song.php","controller":"\/favcon.php","fav_unset_icon":"\/Gfx\/star_empty_2.png","fav_set_icon":"\/Gfx\/star_favorited_2.png","fav_busy_icon":"\/Gfx\/star_empty_spin.gif"},"playlist index","WA");
+</script>
+<iframe src="https://www.wfmu.org/auth.php?a=iframe&amp;t=r&amp;cf=verdana%2C+geneva%2C+arial%2Csans-serif&amp;ct=%230c57d2&amp;cl=%23e65e38&amp;cv=%23e65e38&amp;ca=%230c57d2&amp;r=http%3A%2F%2Fwfmu.org%2Fplaylists%2FWA"
+marginheight="0" frameborder="0" scrolling="no" id="kdb_login_iframe" title="WFMU login"
+width="100%"
+height="27"
+>
+<div align="right">
+<a href="http://www.wfmu.org/auth.php?a=login&amp;r=http%3A%2F%2Fwfmu.org%2Fplaylists%2FWA" target="_top">Login/Logout</a> |
+<a href="http://www.wfmu.org/auth.php?a=register&amp;r=http%3A%2F%2Fwfmu.org%2Fplaylists%2FWA" target="_top">Register</a> |
+Please enable inline frames!
+</div>
+</iframe>
+<script type="text/javascript">
+function kdb_login_iframeResize(id){
+var size_element; var e;
+try {
+size_element=document.getElementById(id).contentWindow.document.getElementById("kdb_login_text_size");
+document.getElementById(id).height= (size_element.clientHeight + 2) + "px";
+document.getElementById(id).width= (size_element.clientWidth + 17) + "px";
+} catch (e) {}
+}
+</script>
+<!--Generated by KenzoDB ( https://kenzodb.com ), written 2000-2026 by Ken Garson-->
+<h2>
+<span class="KDBFavIcon KDBprogram" id="KDBprogram-WA">
+<a href="http://www.wfmu.org/auth.php?a=fav_icon_clicked&amp;type=program&amp;id=WA&amp;page_type=playlist+index&amp;page_id=WA&amp;r=http%3A%2F%2Fwfmu.org%2Fplaylists%2FWA"
+onclick="KDBFav.fav_icon_clicked(event, this.parentNode);"
+title="Favoriting"
+><img src="/Gfx/star_empty_2.png" border="0" alt="Favoriting" width="15" height="15" /></a>
+</span>
+Wake with Clay Pigeon:
+Playlists and Archives
+</h2>
+<table style="table-layout:fixed">
+<tr>
+<td><img src="https://www.wfmu.org/Gfx/user_images/Dirt_Track_4546474188801325_pd.jpg" width="49" height="29" align="left" border="2" alt="Clay Pigeon's avatar"/></td>
+<td valign="middle">
+<a href="http://www.wfmu.org/profile/786943508/Clay_Pigeon">View Clay Pigeon's profile</a>
+<span class="KDBFavIcon KDBuser" id="KDBuser-76">
+<a href="http://www.wfmu.org/auth.php?a=fav_icon_clicked&amp;type=user&amp;id=76&amp;page_type=playlist+index&amp;page_id=WA&amp;r=http%3A%2F%2Fwfmu.org%2Fplaylists%2FWA"
+onclick="KDBFav.fav_icon_clicked(event, this.parentNode);"
+title="Favoriting"
+><img src="/Gfx/star_empty_2.png" border="0" alt="Favoriting" width="15" height="15" /></a>
+</span>
+</td>
+</tr>
+</table>
+<div class="everything">
+<p><font size="-1">
+<b>WFMU's morning show, featuring new technology that will sonically force caffeine directly into your bloodstream. Hosted by Clay Pigeon.<br><br />
+<br />
+<a href="http://eepurl.com/dnIJTL">Click here</a> to subscribe to the Wake n' Bake Email Newsletter.<br><br />
+<br />
+<A HREF="https://itunes.apple.com/us/podcast/wake-and-bake-podcast-with-clay-pigeon-wfmu/id1321633629">Click here</a> to subscribe to the Wake and Bake podcast and have all of each week's Wake and Bake segments delivered to you every Monday.<br><br />
+<br />
+The Wake and Bake Answering Machine (WABAM) is now at this number: <b>646-494-1095</b>. Call and leave a message for the show!<br />
+<br />
+<!-- <A HREF="https://www.facebook.com/groups/pigeonnaires/" target="_blank">Click here</a> to join the Pigeonnaires group on Facebook.<br> -->
+</b>
+</font></p>
+<div>
+<b>
+Monday-Friday
+6 - 9am
+(<span title="America/New_York (-04:00)">EDT</span>)
+|
+On
+<a href="https://wfmu.org/" title="More info">WFMU</a>
+|
+91.1, 90.1, 91.9 FM &amp;
+<a href="http://wfmu.org/">wfmu.org</a>
+<div style="margin-left: 20px; margin-top: 3px;">
+<font size="-1">
+WFMU LIVE Audio Streams
+(<a href="/audiostream.shtml">Get help</a>): &nbsp;
+<a href="http://www.radiorethink.com/tuner/?stationCode=wfmu&amp;stream=hi" title="Listen"
+onclick="window.open(this.href,'kdbflashplayerwindow','width=425,height=800,scrollbars=no,resizable=yes,toolbar=no,directories=no,location=no,menubar=no,status=no'); return false;"
+>Pop-up</a>&nbsp; |&nbsp;
+<a href="/wfmu_aac.pls" title="Listen"
+>128k AAC</a>&nbsp; |&nbsp;
+<a href="/wfmu_mp3.pls" title="Listen"
+>128k MP3</a>&nbsp; |&nbsp;
+<a href="/wfmu32.pls" title="Listen"
+>32k MP3</a>
+</font>
+</div>
+</b>
+</div>
+<font size="-1"><br>
+<center>
+<br><A HREF="http://eepurl.com/dnIJTL">Click here to subscribe to the Wake n' Bake Email Newsletter.</a><br>
+</center></font>
+</div>
+<hr size="3">
+<h2 id="upcomingevents">Upcoming events:</h2>
+<dl>
+<dt>Thu. Aug 27th, 6am - 9am:
+<b>
+Dan Morfitt guest hosts Wake
+</b>
+<br>
+<dt>Fri. Aug 28th, 6am - 9am:
+<b>
+Dan Morfitt guest hosts Wake
+</b>
+<br>
+<dt>Mon. Aug 31st, 6am - 9am:
+<b>
+Dan Morfitt guest hosts Wake
+</b>
+<br>
+<dt>Tue. Sep 1st, 6am - 9am:
+<b>
+Dan Morfitt guest hosts Wake
+</b>
+<br>
+<dt>Wed. Sep 2nd, 6am - 9am:
+<b>
+Dan Morfitt guest hosts Wake
+</b>
+<br>
+<dt>Thu. Sep 3rd, 6am - 9am:
+<b>
+Dan Morfitt guest hosts Wake
+</b>
+<br>
+<dt>Fri. Sep 4th, 6am - 9am:
+<b>
+Dan Morfitt guest hosts Wake
+</b>
+<br>
+<dt>Mon. Sep 7th, 6am - 9am:
+<b>
+Dan Morfitt guest hosts Wake
+</b>
+<br>
+<dt>Tue. Sep 8th, 6am - 9am:
+<b>
+Dan Morfitt guest hosts Wake
+</b>
+<br>
+<dt>Wed. Sep 9th, 6am - 9am:
+<b>
+Dan Morfitt guest hosts Wake
+</b>
+<br>
+<dt>Thu. Sep 10th, 6am - 9am:
+<b>
+Dan Morfitt guest hosts Wake
+</b>
+<br>
+<dt>Fri. Sep 11th, 6am - 9am:
+<b>
+Dan Morfitt guest hosts Wake
+</b>
+<br>
+</dl>
+<hr size="3"
+>
+<div class="showlist">
+<ul>
+<li>
+<a name="2026"> </a>
+<span class="KDBFavIcon KDBepisode" id="KDBepisode-166245">
+<a href="http://www.wfmu.org/auth.php?a=fav_icon_clicked&amp;type=episode&amp;id=166245&amp;page_type=playlist+index&amp;page_id=WA&amp;r=http%3A%2F%2Fwfmu.org%2Fplaylists%2FWA"
+onclick="KDBFav.fav_icon_clicked(event, this.parentNode);"
+title="Favoriting"
+><img src="/Gfx/star_empty_2.png" border="0" alt="Favoriting" width="15" height="15" /></a>
+</span>
+July 10, 2026:
+<b></b>
+<a href="/playlists/shows/166245">See the playlist</a>
+(Playlist updated live!)
+<br>
+<li>
+<span class="KDBFavIcon KDBepisode" id="KDBepisode-166195">
+<a href="http://www.wfmu.org/auth.php?a=fav_icon_clicked&amp;type=episode&amp;id=166195&amp;page_type=playlist+index&amp;page_id=WA&amp;r=http%3A%2F%2Fwfmu.org%2Fplaylists%2FWA"
+onclick="KDBFav.fav_icon_clicked(event, this.parentNode);"
+title="Favoriting"
+><img src="/Gfx/star_empty_2.png" border="0" alt="Favoriting" width="15" height="15" /></a>
+</span>
+July 9, 2026:
+<b>Wake 'N Bake: Thought Sauce and Silk Duds!</b>
+|
+<a href="/playlists/shows/166195">See the playlist</a>
+| Listen: <a href="/listen.m3u?show=166195&amp;archive=291228">MP3 - 128K</a> | <span style="white-space:nowrap"><a href="/flashplayer.php?version=3&amp;show=166195&amp;archive=291227" onclick="return kdbarchivelink(this.href, 3)"><img class="listen_link_image" src="/flashplayer/playbuttont.gif" alt="Pop-up listen">&nbsp;Pop-up&nbsp;player!</a></span>
+<br>
+<li>
+<span class="KDBFavIcon KDBepisode" id="KDBepisode-166173">
+<a href="http://www.wfmu.org/auth.php?a=fav_icon_clicked&amp;type=episode&amp;id=166173&amp;page_type=playlist+index&amp;page_id=WA&amp;r=http%3A%2F%2Fwfmu.org%2Fplaylists%2FWA"
+onclick="KDBFav.fav_icon_clicked(event, this.parentNode);"
+title="Favoriting"
+><img src="/Gfx/star_empty_2.png" border="0" alt="Favoriting" width="15" height="15" /></a>
+</span>
+July 8, 2026:
+<b>Wake N Bake: ideally before your alarm!</b>
+|
+<a href="/playlists/shows/166173">See the playlist</a>
+| Listen: <a href="/listen.m3u?show=166173&amp;archive=291170">MP3 - 128K</a> | <span style="white-space:nowrap"><a href="/flashplayer.php?version=3&amp;show=166173&amp;archive=291169" onclick="return kdbarchivelink(this.href, 3)"><img class="listen_link_image" src="/flashplayer/playbuttont.gif" alt="Pop-up listen">&nbsp;Pop-up&nbsp;player!</a></span>
+<br>
+<li>
+<span class="KDBFavIcon KDBepisode" id="KDBepisode-166139">
+<a href="http://www.wfmu.org/auth.php?a=fav_icon_clicked&amp;type=episode&amp;id=166139&amp;page_type=playlist+index&amp;page_id=WA&amp;r=http%3A%2F%2Fwfmu.org%2Fplaylists%2FWA"
+onclick="KDBFav.fav_icon_clicked(event, this.parentNode);"
+title="Favoriting"
+><img src="/Gfx/star_empty_2.png" border="0" alt="Favoriting" width="15" height="15" /></a>
+</span>
+July 7, 2026:
+<b>Wake N Bake Now With More Bakin'! Tuesday</b>
+|
+<a href="/playlists/shows/166139">See the playlist</a>
+| Listen: <a href="/listen.m3u?show=166139&amp;archive=291117">MP3 - 128K</a> | <span style="white-space:nowrap"><a href="/flashplayer.php?version=3&amp;show=166139&amp;archive=291116" onclick="return kdbarchivelink(this.href, 3)"><img class="listen_link_image" src="/flashplayer/playbuttont.gif" alt="Pop-up listen">&nbsp;Pop-up&nbsp;player!</a></span>
+<br>
+<li>
+<span class="KDBFavIcon KDBepisode" id="KDBepisode-166092">
+<a href="http://www.wfmu.org/auth.php?a=fav_icon_clicked&amp;type=episode&amp;id=166092&amp;page_type=playlist+index&amp;page_id=WA&amp;r=http%3A%2F%2Fwfmu.org%2Fplaylists%2FWA"
+onclick="KDBFav.fav_icon_clicked(event, this.parentNode);"
+title="Favoriting"
+><img src="/Gfx/star_empty_2.png" border="0" alt="Favoriting" width="15" height="15" /></a>
+</span>
+July 6, 2026:
+<b>Wake &amp; Bake in the RAIN RAIN RAIN!</b>
+|
+<a href="/playlists/shows/166092">See the playlist</a>
+| Listen: <a href="/listen.m3u?show=166092&amp;archive=291064">MP3 - 128K</a> | <span style="white-space:nowrap"><a href="/flashplayer.php?version=3&amp;show=166092&amp;archive=291063" onclick="return kdbarchivelink(this.href, 3)"><img class="listen_link_image" src="/flashplayer/playbuttont.gif" alt="Pop-up listen">&nbsp;Pop-up&nbsp;player!</a></span>
+<br>
+<li>
+<span class="KDBFavIcon KDBepisode" id="KDBepisode-166004">
+<a href="http://www.wfmu.org/auth.php?a=fav_icon_clicked&amp;type=episode&amp;id=166004&amp;page_type=playlist+index&amp;page_id=WA&amp;r=http%3A%2F%2Fwfmu.org%2Fplaylists%2FWA"
+onclick="KDBFav.fav_icon_clicked(event, this.parentNode);"
+title="Favoriting"
+><img src="/Gfx/star_empty_2.png" border="0" alt="Favoriting" width="15" height="15" /></a>
+</span>
+July 3, 2026:
+<b>Wake 'n Bake: HEATDOME FRIDAY! Stay Cool by the Blow-Up Pool!</b>
+|
+<a href="/playlists/shows/166004">See the playlist</a>
+| Listen: <a href="/listen.m3u?show=166004&amp;archive=290863">MP3 - 128K</a> | <span style="white-space:nowrap"><a href="/flashplayer.php?version=3&amp;show=166004&amp;archive=290862" onclick="return kdbarchivelink(this.href, 3)"><img class="listen_link_image" src="/flashplayer/playbuttont.gif" alt="Pop-up listen">&nbsp;Pop-up&nbsp;player!</a></span>
+<br>
+<li>
+<span class="KDBFavIcon KDBepisode" id="KDBepisode-165959">
+<a href="http://www.wfmu.org/auth.php?a=fav_icon_clicked&amp;type=episode&amp;id=165959&amp;page_type=playlist+index&amp;page_id=WA&amp;r=http%3A%2F%2Fwfmu.org%2Fplaylists%2FWA"
+onclick="KDBFav.fav_icon_clicked(event, this.parentNode);"
+title="Favoriting"
+><img src="/Gfx/star_empty_2.png" border="0" alt="Favoriting" width="15" height="15" /></a>
+</span>
+July 2, 2026:
+<b>Wake 'N Bake: Fia Marrow and Brain Dennehy</b>
+|
+<a href="/playlists/shows/165959">See the playlist</a>
+| Listen: <a href="/listen.m3u?show=165959&amp;archive=290786">MP3 - 128K</a> | <span style="white-space:nowrap"><a href="/flashplayer.php?version=3&amp;show=165959&amp;archive=290785" onclick="return kdbarchivelink(this.href, 3)"><img class="listen_link_image" src="/flashplayer/playbuttont.gif" alt="Pop-up listen">&nbsp;Pop-up&nbsp;player!</a></span>
+<br>
+<li>
+<span class="KDBFavIcon KDBepisode" id="KDBepisode-165931">
+<a href="http://www.wfmu.org/auth.php?a=fav_icon_clicked&amp;type=episode&amp;id=165931&amp;page_type=playlist+index&amp;page_id=WA&amp;r=http%3A%2F%2Fwfmu.org%2Fplaylists%2FWA"
+onclick="KDBFav.fav_icon_clicked(event, this.parentNode);"
+title="Favoriting"
+><img src="/Gfx/star_empty_2.png" border="0" alt="Favoriting" width="15" height="15" /></a>
+</span>
+July 1, 2026:
+<b>Wake N Bake on International Chicken Wing Day</b>
+|
+<a href="/playlists/shows/165931">See the playlist</a>
+| Listen: <a href="/listen.m3u?show=165931&amp;archive=290728">MP3 - 128K</a> | <span style="white-space:nowrap"><a href="/flashplayer.php?version=3&amp;show=165931&amp;archive=290727" onclick="return kdbarchivelink(this.href, 3)"><img class="listen_link_image" src="/flashplayer/playbuttont.gif" alt="Pop-up listen">&nbsp;Pop-up&nbsp;player!</a></span>
+<br>
+</ul><ul>
+<li>
+<span class="KDBFavIcon KDBepisode" id="KDBepisode-165896">
+<a href="http://www.wfmu.org/auth.php?a=fav_icon_clicked&amp;type=episode&amp;id=165896&amp;page_type=playlist+index&amp;page_id=WA&amp;r=http%3A%2F%2Fwfmu.org%2Fplaylists%2FWA"
+onclick="KDBFav.fav_icon_clicked(event, this.parentNode);"
+title="Favoriting"
+><img src="/Gfx/star_empty_2.png" border="0" alt="Favoriting" width="15" height="15" /></a>
+</span>
+June 30, 2026:
+<b>Wake N Bake June's Done Tuesday</b>
+|
+<a href="/playlists/shows/165896">See the playlist</a>
+| Listen: <a href="/listen.m3u?show=165896&amp;archive=290652">MP3 - 128K</a> | <span style="white-space:nowrap"><a href="/flashplayer.php?version=3&amp;show=165896&amp;archive=290651" onclick="return kdbarchivelink(this.href, 3)"><img class="listen_link_image" src="/flashplayer/playbuttont.gif" alt="Pop-up listen">&nbsp;Pop-up&nbsp;player!</a></span>
+<br>
+<li>
+<span class="KDBFavIcon KDBepisode" id="KDBepisode-165849">
+<a href="http://www.wfmu.org/auth.php?a=fav_icon_clicked&amp;type=episode&amp;id=165849&amp;page_type=playlist+index&amp;page_id=WA&amp;r=http%3A%2F%2Fwfmu.org%2Fplaylists%2FWA"
+onclick="KDBFav.fav_icon_clicked(event, this.parentNode);"
+title="Favoriting"
+><img src="/Gfx/star_empty_2.png" border="0" alt="Favoriting" width="15" height="15" /></a>
+</span>
+June 29, 2026:
+<b>Wake N Bake - Before ya get poked!</b>
+|
+<a href="/playlists/shows/165849">See the playlist</a>
+| Listen: <a href="/listen.m3u?show=165849&amp;archive=290587">MP3 - 128K</a> | <span style="white-space:nowrap"><a href="/flashplayer.php?version=3&amp;show=165849&amp;archive=290586" onclick="return kdbarchivelink(this.href, 3)"><img class="listen_link_image" src="/flashplayer/playbuttont.gif" alt="Pop-up listen">&nbsp;Pop-up&nbsp;player!</a></span>
+<br>
+<li>
+<span class="KDBFavIcon KDBepisode" id="KDBepisode-165754">
+<a href="http://www.wfmu.org/auth.php?a=fav_icon_clicked&amp;type=episode&amp;id=165754&amp;page_type=playlist+index&amp;page_id=WA&amp;r=http%3A%2F%2Fwfmu.org%2Fplaylists%2FWA"
+onclick="KDBFav.fav_icon_clicked(event, this.parentNode);"
+title="Favoriting"
+><img src="/Gfx/star_empty_2.png" border="0" alt="Favoriting" width="15" height="15" /></a>
+</span>
+June 26, 2026:
+<b>Wake 'n Bake: On this Fabulous Friday! Happy Pride!</b>
+|
+<a href="/playlists/shows/165754">See the playlist</a>
+| Listen: <a href="/listen.m3u?show=165754&amp;archive=290398">MP3 - 128K</a> | <span style="white-space:nowrap"><a href="/flashplayer.php?version=3&amp;show=165754&amp;archive=290397" onclick="return kdbarchivelink(this.href, 3)"><img class="listen_link_image" src="/flashplayer/playbuttont.gif" alt="Pop-up listen">&nbsp;Pop-up&nbsp;player!</a></span>
+<br>
+<li>
+<span class="KDBFavIcon KDBepisode" id="KDBepisode-165713">
+<a href="http://www.wfmu.org/auth.php?a=fav_icon_clicked&amp;type=episode&amp;id=165713&amp;page_type=playlist+index&amp;page_id=WA&amp;r=http%3A%2F%2Fwfmu.org%2Fplaylists%2FWA"
+onclick="KDBFav.fav_icon_clicked(event, this.parentNode);"
+title="Favoriting"
+><img src="/Gfx/star_empty_2.png" border="0" alt="Favoriting" width="15" height="15" /></a>
+</span>
+June 25, 2026:
+<b>Wake 'N Bake: Promised Glands and Careless Whiskers</b>
+|
+<a href="/playlists/shows/165713">See the playlist</a>
+| Listen: <a href="/listen.m3u?show=165713&amp;archive=290324">MP3 - 128K</a> | <span style="white-space:nowrap"><a href="/flashplayer.php?version=3&amp;show=165713&amp;archive=290323" onclick="return kdbarchivelink(this.href, 3)"><img class="listen_link_image" src="/flashplayer/playbuttont.gif" alt="Pop-up listen">&nbsp;Pop-up&nbsp;player!</a></span>
+<br>
+<li>
+<span class="KDBFavIcon KDBepisode" id="KDBepisode-165679">
+<a href="http://www.wfmu.org/auth.php?a=fav_icon_clicked&amp;type=episode&amp;id=165679&amp;page_type=playlist+index&amp;page_id=WA&amp;r=http%3A%2F%2Fwfmu.org%2Fplaylists%2FWA"
+onclick="KDBFav.fav_icon_clicked(event, this.parentNode);"
+title="Favoriting"
+><img src="/Gfx/star_empty_2.png" border="0" alt="Favoriting" width="15" height="15" /></a>
+</span>
+June 24, 2026:
+<b>Wake N Bake on Cat World Domination Day!</b>
+|
+<a href="/playlists/shows/165679">See the playlist</a>
+| Listen: <a href="/listen.m3u?show=165679&amp;archive=290266">MP3 - 128K</a> | <span style="white-space:nowrap"><a href="/flashplayer.php?version=3&amp;show=165679&amp;archive=290265" onclick="return kdbarchivelink(this.href, 3)"><img class="listen_link_image" src="/flashplayer/playbuttont.gif" alt="Pop-up listen">&nbsp;Pop-up&nbsp;player!</a></span>
+<br>
+<li>
+<span class="KDBFavIcon KDBepisode" id="KDBepisode-165647">
+<a href="http://www.wfmu.org/auth.php?a=fav_icon_clicked&amp;type=episode&amp;id=165647&amp;page_type=playlist+index&amp;page_id=WA&amp;r=http%3A%2F%2Fwfmu.org%2Fplaylists%2FWA"
+onclick="KDBFav.fav_icon_clicked(event, this.parentNode);"
+title="Favoriting"
+><img src="/Gfx/star_empty_2.png" border="0" alt="Favoriting" width="15" height="15" /></a>
+</span>
+June 23, 2026:
+<b>Wake N Bake Hot Heat Dome Tuesday</b>
+|
+<a href="/playlists/shows/165647">See the playlist</a>
+| Listen: <a href="/listen.m3u?show=165647&amp;archive=290201">MP3 - 128K</a> | <span style="white-space:nowrap"><a href="/flashplayer.php?version=3&amp;show=165647&amp;archive=290200" onclick="return kdbarchivelink(this.href, 3)"><img class="listen_link_image" src="/flashplayer/playbuttont.gif" alt="Pop-up listen">&nbsp;Pop-up&nbsp;player!</a></span>
+<br>
+<li>
+<span class="KDBFavIcon KDBepisode" id="KDBepisode-165600">
+<a href="http://www.wfmu.org/auth.php?a=fav_icon_clicked&amp;type=episode&amp;id=165600&amp;page_type=playlist+index&amp;page_id=WA&amp;r=http%3A%2F%2Fwfmu.org%2Fplaylists%2FWA"
+onclick="KDBFav.fav_icon_clicked(event, this.parentNode);"
+title="Favoriting"
+><img src="/Gfx/star_empty_2.png" border="0" alt="Favoriting" width="15" height="15" /></a>
+</span>
+June 22, 2026:
+<b>Wake 'n Bake: Mind blown Monday AND National Onion ring Day!</b>
+|
+<a href="/playlists/shows/165600">See the playlist</a>
+| Listen: <a href="/listen.m3u?show=165600&amp;archive=290151">MP3 - 128K</a> | <span style="white-space:nowrap"><a href="/flashplayer.php?version=3&amp;show=165600&amp;archive=290150" onclick="return kdbarchivelink(this.href, 3)"><img class="listen_link_image" src="/flashplayer/playbuttont.gif" alt="Pop-up listen">&nbsp;Pop-up&nbsp;player!</a></span>
+<br>
+<li>
+<span class="KDBFavIcon KDBepisode" id="KDBepisode-165505">
+<a href="http://www.wfmu.org/auth.php?a=fav_icon_clicked&amp;type=episode&amp;id=165505&amp;page_type=playlist+index&amp;page_id=WA&amp;r=http%3A%2F%2Fwfmu.org%2Fplaylists%2FWA"
+onclick="KDBFav.fav_icon_clicked(event, this.parentNode);"
+title="Favoriting"
+><img src="/Gfx/star_empty_2.png" border="0" alt="Favoriting" width="15" height="15" /></a>
+</span>
+June 19, 2026:
+<b>Wake N Bake on Juneteenth!</b>
+|
+<a href="/playlists/shows/165505">See the playlist</a>
+| Listen: <a href="/listen.m3u?show=165505&amp;archive=290006">MP3 - 128K</a> | <span style="white-space:nowrap"><a href="/flashplayer.php?version=3&amp;show=165505&amp;archive=290005" onclick="return kdbarchivelink(this.href, 3)"><img class="listen_link_image" src="/flashplayer/playbuttont.gif" alt="Pop-up listen">&nbsp;Pop-up&nbsp;player!</a></span>
+<br>
+<li>
+<span class="KDBFavIcon KDBepisode" id="KDBepisode-165463">
+<a href="http://www.wfmu.org/auth.php?a=fav_icon_clicked&amp;type=episode&amp;id=165463&amp;page_type=playlist+index&amp;page_id=WA&amp;r=http%3A%2F%2Fwfmu.org%2Fplaylists%2FWA"
+onclick="KDBFav.fav_icon_clicked(event, this.parentNode);"
+title="Favoriting"
+><img src="/Gfx/star_empty_2.png" border="0" alt="Favoriting" width="15" height="15" /></a>
+</span>
+June 18, 2026:
+<b>Wake 'N Bake: Happypotamus and Neck Nolte</b>
+|
+<a href="/playlists/shows/165463">See the playlist</a>
+| Listen: <a href="/listen.m3u?show=165463&amp;archive=289956">MP3 - 128K</a> | <span style="white-space:nowrap"><a href="/flashplayer.php?version=3&amp;show=165463&amp;archive=289955" onclick="return kdbarchivelink(this.href, 3)"><img class="listen_link_image" src="/flashplayer/playbuttont.gif" alt="Pop-up listen">&nbsp;Pop-up&nbsp;player!</a></span>
+<br>
+<li>
+<span class="KDBFavIcon KDBepisode" id="KDBepisode-165434">
+<a href="http://www.wfmu.org/auth.php?a=fav_icon_clicked&amp;type=episode&amp;id=165434&amp;page_type=playlist+index&amp;page_id=WA&amp;r=http%3A%2F%2Fwfmu.org%2Fplaylists%2FWA"
+onclick="KDBFav.fav_icon_clicked(event, this.parentNode);"
+title="Favoriting"
+><img src="/Gfx/star_empty_2.png" border="0" alt="Favoriting" width="15" height="15" /></a>
+</span>
+June 17, 2026:
+<b>Wake N Bake on National Eat Your Vegetables Day</b>
+|
+<a href="/playlists/shows/165434">See the playlist</a>
+| Listen: <a href="/listen.m3u?show=165434&amp;archive=289899">MP3 - 128K</a> | <span style="white-space:nowrap"><a href="/flashplayer.php?version=3&amp;show=165434&amp;archive=289898" onclick="return kdbarchivelink(this.href, 3)"><img class="listen_link_image" src="/flashplayer/playbuttont.gif" alt="Pop-up listen">&nbsp;Pop-up&nbsp;player!</a></span>
+<br>
+<li>
+<span class="KDBFavIcon KDBepisode" id="KDBepisode-165399">
+<a href="http://www.wfmu.org/auth.php?a=fav_icon_clicked&amp;type=episode&amp;id=165399&amp;page_type=playlist+index&amp;page_id=WA&amp;r=http%3A%2F%2Fwfmu.org%2Fplaylists%2FWA"
+onclick="KDBFav.fav_icon_clicked(event, this.parentNode);"
+title="Favoriting"
+><img src="/Gfx/star_empty_2.png" border="0" alt="Favoriting" width="15" height="15" /></a>
+</span>
+June 16, 2026:
+<b>Wake N Bake Big Brown Moon Tuesday</b>
+|
+<a href="/playlists/shows/165399">See the playlist</a>
+| Listen: <a href="/listen.m3u?show=165399&amp;archive=289847">MP3 - 128K</a> | <span style="white-space:nowrap"><a href="/flashplayer.php?version=3&amp;show=165399&amp;archive=289846" onclick="return kdbarchivelink(this.href, 3)"><img class="listen_link_image" src="/flashplayer/playbuttont.gif" alt="Pop-up listen">&nbsp;Pop-up&nbsp;player!</a></span>
+<br>
+<li>
+<span class="KDBFavIcon KDBepisode" id="KDBepisode-165352">
+<a href="http://www.wfmu.org/auth.php?a=fav_icon_clicked&amp;type=episode&amp;id=165352&amp;page_type=playlist+index&amp;page_id=WA&amp;r=http%3A%2F%2Fwfmu.org%2Fplaylists%2FWA"
+onclick="KDBFav.fav_icon_clicked(event, this.parentNode);"
+title="Favoriting"
+><img src="/Gfx/star_empty_2.png" border="0" alt="Favoriting" width="15" height="15" /></a>
+</span>
+June 15, 2026:
+<b>Wake 'n Bake: Motivating Monday! </b>
+|
+<a href="/playlists/shows/165352">See the playlist</a>
+| Listen: <a href="/listen.m3u?show=165352&amp;archive=289795">MP3 - 128K</a> | <span style="white-space:nowrap"><a href="/flashplayer.php?version=3&amp;show=165352&amp;archive=289794" onclick="return kdbarchivelink(this.href, 3)"><img class="listen_link_image" src="/flashplayer/playbuttont.gif" alt="Pop-up listen">&nbsp;Pop-up&nbsp;player!</a></span>
+<br>
+<li>
+<span class="KDBFavIcon KDBepisode" id="KDBepisode-165273">
+<a href="http://www.wfmu.org/auth.php?a=fav_icon_clicked&amp;type=episode&amp;id=165273&amp;page_type=playlist+index&amp;page_id=WA&amp;r=http%3A%2F%2Fwfmu.org%2Fplaylists%2FWA"
+onclick="KDBFav.fav_icon_clicked(event, this.parentNode);"
+title="Favoriting"
+><img src="/Gfx/star_empty_2.png" border="0" alt="Favoriting" width="15" height="15" /></a>
+</span>
+June 12, 2026:
+<b>Wake 'n Bake: Don't Melt on This Fiery Friday!</b>
+|
+<a href="/playlists/shows/165273">See the playlist</a>
+| Listen: <a href="/listen.m3u?show=165273&amp;archive=289664">MP3 - 128K</a> | <span style="white-space:nowrap"><a href="/flashplayer.php?version=3&amp;show=165273&amp;archive=289663" onclick="return kdbarchivelink(this.href, 3)"><img class="listen_link_image" src="/flashplayer/playbuttont.gif" alt="Pop-up listen">&nbsp;Pop-up&nbsp;player!</a></span>
+<br>
+<li>
+<span class="KDBFavIcon KDBepisode" id="KDBepisode-165233">
+<a href="http://www.wfmu.org/auth.php?a=fav_icon_clicked&amp;type=episode&amp;id=165233&amp;page_type=playlist+index&amp;page_id=WA&amp;r=http%3A%2F%2Fwfmu.org%2Fplaylists%2FWA"
+onclick="KDBFav.fav_icon_clicked(event, this.parentNode);"
+title="Favoriting"
+><img src="/Gfx/star_empty_2.png" border="0" alt="Favoriting" width="15" height="15" /></a>
+</span>
+June 11, 2026:
+<b>Wake 'N Bake: Reader's Digestion and Taint Misbehavin'</b>
+|
+<a href="/playlists/shows/165233">See the playlist</a>
+| Listen: <span style="white-space:nowrap"><a href="/flashplayer.php?version=3&amp;show=165233&amp;archive=289609" onclick="return kdbarchivelink(this.href, 3)"><img class="listen_link_image" src="/flashplayer/playbuttont.gif" alt="Pop-up listen">&nbsp;Pop-up&nbsp;player!</a></span>
+<br>
+<li>
+<span class="KDBFavIcon KDBepisode" id="KDBepisode-165209">
+<a href="http://www.wfmu.org/auth.php?a=fav_icon_clicked&amp;type=episode&amp;id=165209&amp;page_type=playlist+index&amp;page_id=WA&amp;r=http%3A%2F%2Fwfmu.org%2Fplaylists%2FWA"
+onclick="KDBFav.fav_icon_clicked(event, this.parentNode);"
+title="Favoriting"
+><img src="/Gfx/star_empty_2.png" border="0" alt="Favoriting" width="15" height="15" /></a>
+</span>
+June 10, 2026:
+<b>Wake N Bake - Happy World Art Nouveau Day!</b>
+|
+<a href="/playlists/shows/165209">See the playlist</a>
+| Listen: <span style="white-space:nowrap"><a href="/flashplayer.php?version=3&amp;show=165209&amp;archive=289552" onclick="return kdbarchivelink(this.href, 3)"><img class="listen_link_image" src="/flashplayer/playbuttont.gif" alt="Pop-up listen">&nbsp;Pop-up&nbsp;player!</a></span>
+<br>
+<li>
+<span class="KDBFavIcon KDBepisode" id="KDBepisode-165177">
+<a href="http://www.wfmu.org/auth.php?a=fav_icon_clicked&amp;type=episode&amp;id=165177&amp;page_type=playlist+index&amp;page_id=WA&amp;r=http%3A%2F%2Fwfmu.org%2Fplaylists%2FWA"
+onclick="KDBFav.fav_icon_clicked(event, this.parentNode);"
+title="Favoriting"
+><img src="/Gfx/star_empty_2.png" border="0" alt="Favoriting" width="15" height="15" /></a>
+</span>
+June 9, 2026:
+<b>Wake N Bake Giant Jumpin' Goldfish Tuesday</b>
+|
+<a href="/playlists/shows/165177">See the playlist</a>
+| Listen: <span style="white-space:nowrap"><a href="/flashplayer.php?version=3&amp;show=165177&amp;archive=289498" onclick="return kdbarchivelink(this.href, 3)"><img class="listen_link_image" src="/flashplayer/playbuttont.gif" alt="Pop-up listen">&nbsp;Pop-up&nbsp;player!</a></span>
+<br>
+<li>
+<span class="KDBFavIcon KDBepisode" id="KDBepisode-165092">
+<a href="http://www.wfmu.org/auth.php?a=fav_icon_clicked&amp;type=episode&amp;id=165092&amp;page_type=playlist+index&amp;page_id=WA&amp;r=http%3A%2F%2Fwfmu.org%2Fplaylists%2FWA"
+onclick="KDBFav.fav_icon_clicked(event, this.parentNode);"
+title="Favoriting"
+><img src="/Gfx/star_empty_2.png" border="0" alt="Favoriting" width="15" height="15" /></a>
+</span>
+June 8, 2026:
+<b>Wake N Bake with your BEST FRIEND!</b>
+|
+<a href="/playlists/shows/165092">See the playlist</a>
+| Listen: <span style="white-space:nowrap"><a href="/flashplayer.php?version=3&amp;show=165092&amp;archive=289446" onclick="return kdbarchivelink(this.href, 3)"><img class="listen_link_image" src="/flashplayer/playbuttont.gif" alt="Pop-up listen">&nbsp;Pop-up&nbsp;player!</a></span>
+<br>
+<li>
+<span class="KDBFavIcon KDBepisode" id="KDBepisode-164998">
+<a href="http://www.wfmu.org/auth.php?a=fav_icon_clicked&amp;type=episode&amp;id=164998&amp;page_type=playlist+index&amp;page_id=WA&amp;r=http%3A%2F%2Fwfmu.org%2Fplaylists%2FWA"
+onclick="KDBFav.fav_icon_clicked(event, this.parentNode);"
+title="Favoriting"
+><img src="/Gfx/star_empty_2.png" border="0" alt="Favoriting" width="15" height="15" /></a>
+</span>
+June 5, 2026:
+<b>Wake 'n Bake: It's PROM NIGHT!!! </b>
+|
+<a href="/playlists/shows/164998">See the playlist</a>
+| Listen: <span style="white-space:nowrap"><a href="/flashplayer.php?version=3&amp;show=164998&amp;archive=289304" onclick="return kdbarchivelink(this.href, 3)"><img class="listen_link_image" src="/flashplayer/playbuttont.gif" alt="Pop-up listen">&nbsp;Pop-up&nbsp;player!</a></span>
+<br>
+<li>
+<span class="KDBFavIcon KDBepisode" id="KDBepisode-164947">
+<a href="http://www.wfmu.org/auth.php?a=fav_icon_clicked&amp;type=episode&amp;id=164947&amp;page_type=playlist+index&amp;page_id=WA&amp;r=http%3A%2F%2Fwfmu.org%2Fplaylists%2FWA"
+onclick="KDBFav.fav_icon_clicked(event, this.parentNode);"
+title="Favoriting"
+><img src="/Gfx/star_empty_2.png" border="0" alt="Favoriting" width="15" height="15" /></a>
+</span>
+June 4, 2026:
+<b>Wake 'N Bake: Spleen Cuisine and Ab-dom-en Dumber</b>
+|
+<a href="/playlists/shows/164947">See the playlist</a>
+| Listen: <span style="white-space:nowrap"><a href="/flashplayer.php?version=3&amp;show=164947&amp;archive=289245" onclick="return kdbarchivelink(this.href, 3)"><img class="listen_link_image" src="/flashplayer/playbuttont.gif" alt="Pop-up listen">&nbsp;Pop-up&nbsp;player!</a></span>
+<br>
+<li>
+<span class="KDBFavIcon KDBepisode" id="KDBepisode-164925">
+<a href="http://www.wfmu.org/auth.php?a=fav_icon_clicked&amp;type=episode&amp;id=164925&amp;page_type=playlist+index&amp;page_id=WA&amp;r=http%3A%2F%2Fwfmu.org%2Fplaylists%2FWA"
+onclick="KDBFav.fav_icon_clicked(event, this.parentNode);"
+title="Favoriting"
+><img src="/Gfx/star_empty_2.png" border="0" alt="Favoriting" width="15" height="15" /></a>
+</span>
+June 3, 2026:
+<b>Wake N Bake upon this World Cider Day</b>
+|
+<a href="/playlists/shows/164925">See the playlist</a>
+| Listen: <span style="white-space:nowrap"><a href="/flashplayer.php?version=3&amp;show=164925&amp;archive=289189" onclick="return kdbarchivelink(this.href, 3)"><img class="listen_link_image" src="/flashplayer/playbuttont.gif" alt="Pop-up listen">&nbsp;Pop-up&nbsp;player!</a></span>
+<br>
+<li>
+<span class="KDBFavIcon KDBepisode" id="KDBepisode-164891">
+<a href="http://www.wfmu.org/auth.php?a=fav_icon_clicked&amp;type=episode&amp;id=164891&amp;page_type=playlist+index&amp;page_id=WA&amp;r=http%3A%2F%2Fwfmu.org%2Fplaylists%2FWA"
+onclick="KDBFav.fav_icon_clicked(event, this.parentNode);"
+title="Favoriting"
+><img src="/Gfx/star_empty_2.png" border="0" alt="Favoriting" width="15" height="15" /></a>
+</span>
+June 2, 2026:
+<b>Wake N Bake Rocks Wreaking Havoc Tuesday</b>
+|
+<a href="/playlists/shows/164891">See the playlist</a>
+| Listen: <span style="white-space:nowrap"><a href="/flashplayer.php?version=3&amp;show=164891&amp;archive=289137" onclick="return kdbarchivelink(this.href, 3)"><img class="listen_link_image" src="/flashplayer/playbuttont.gif" alt="Pop-up listen">&nbsp;Pop-up&nbsp;player!</a></span>
+<br>
+<li>
+<span class="KDBFavIcon KDBepisode" id="KDBepisode-164850">
+<a href="http://www.wfmu.org/auth.php?a=fav_icon_clicked&amp;type=episode&amp;id=164850&amp;page_type=playlist+index&amp;page_id=WA&amp;r=http%3A%2F%2Fwfmu.org%2Fplaylists%2FWA"
+onclick="KDBFav.fav_icon_clicked(event, this.parentNode);"
+title="Favoriting"
+><img src="/Gfx/star_empty_2.png" border="0" alt="Favoriting" width="15" height="15" /></a>
+</span>
+June 1, 2026:
+<b>Wake N Bake with PRIDE!</b>
+|
+<a href="/playlists/shows/164850">See the playlist</a>
+| Listen: <span style="white-space:nowrap"><a href="/flashplayer.php?version=3&amp;show=164850&amp;archive=289085" onclick="return kdbarchivelink(this.href, 3)"><img class="listen_link_image" src="/flashplayer/playbuttont.gif" alt="Pop-up listen">&nbsp;Pop-up&nbsp;player!</a></span>
+<br>
+</ul><ul>
+<li>
+<span class="KDBFavIcon KDBepisode" id="KDBepisode-164755">
+<a href="http://www.wfmu.org/auth.php?a=fav_icon_clicked&amp;type=episode&amp;id=164755&amp;page_type=playlist+index&amp;page_id=WA&amp;r=http%3A%2F%2Fwfmu.org%2Fplaylists%2FWA"
+onclick="KDBFav.fav_icon_clicked(event, this.parentNode);"
+title="Favoriting"
+><img src="/Gfx/star_empty_2.png" border="0" alt="Favoriting" width="15" height="15" /></a>
+</span>
+May 29, 2026:
+<b>Wake 'n Bake: A Little Static Never Hurt Anyone on a Friday!</b>
+|
+<a href="/playlists/shows/164755">See the playlist</a>
+| Listen: <span style="white-space:nowrap"><a href="/flashplayer.php?version=3&amp;show=164755&amp;archive=288980" onclick="return kdbarchivelink(this.href, 3)"><img class="listen_link_image" src="/flashplayer/playbuttont.gif" alt="Pop-up listen">&nbsp;Pop-up&nbsp;player!</a></span>
+<br>
+<li>
+<span class="KDBFavIcon KDBepisode" id="KDBepisode-164714">
+<a href="http://www.wfmu.org/auth.php?a=fav_icon_clicked&amp;type=episode&amp;id=164714&amp;page_type=playlist+index&amp;page_id=WA&amp;r=http%3A%2F%2Fwfmu.org%2Fplaylists%2FWA"
+onclick="KDBFav.fav_icon_clicked(event, this.parentNode);"
+title="Favoriting"
+><img src="/Gfx/star_empty_2.png" border="0" alt="Favoriting" width="15" height="15" /></a>
+</span>
+May 28, 2026:
+<b>Wake 'N Bake: Nasal Rathbone and Chest Kidding</b>
+|
+<a href="/playlists/shows/164714">See the playlist</a>
+| Listen: <span style="white-space:nowrap"><a href="/flashplayer.php?version=3&amp;show=164714&amp;archive=288894" onclick="return kdbarchivelink(this.href, 3)"><img class="listen_link_image" src="/flashplayer/playbuttont.gif" alt="Pop-up listen">&nbsp;Pop-up&nbsp;player!</a></span>
+<br>
+<li>
+<span class="KDBFavIcon KDBepisode" id="KDBepisode-164684">
+<a href="http://www.wfmu.org/auth.php?a=fav_icon_clicked&amp;type=episode&amp;id=164684&amp;page_type=playlist+index&amp;page_id=WA&amp;r=http%3A%2F%2Fwfmu.org%2Fplaylists%2FWA"
+onclick="KDBFav.fav_icon_clicked(event, this.parentNode);"
+title="Favoriting"
+><img src="/Gfx/star_empty_2.png" border="0" alt="Favoriting" width="15" height="15" /></a>
+</span>
+May 27, 2026:
+<b>Wake N Bake: Happy Old-Time Player Piano Day!</b>
+|
+<a href="/playlists/shows/164684">See the playlist</a>
+| Listen: <span style="white-space:nowrap"><a href="/flashplayer.php?version=3&amp;show=164684&amp;archive=288836" onclick="return kdbarchivelink(this.href, 3)"><img class="listen_link_image" src="/flashplayer/playbuttont.gif" alt="Pop-up listen">&nbsp;Pop-up&nbsp;player!</a></span>
+<br>
+<li>
+<span class="KDBFavIcon KDBepisode" id="KDBepisode-164646">
+<a href="http://www.wfmu.org/auth.php?a=fav_icon_clicked&amp;type=episode&amp;id=164646&amp;page_type=playlist+index&amp;page_id=WA&amp;r=http%3A%2F%2Fwfmu.org%2Fplaylists%2FWA"
+onclick="KDBFav.fav_icon_clicked(event, this.parentNode);"
+title="Favoriting"
+><img src="/Gfx/star_empty_2.png" border="0" alt="Favoriting" width="15" height="15" /></a>
+</span>
+May 26, 2026:
+<b>Wake N Bake Waiting For the Aliens Tuesday</b>
+|
+<a href="/playlists/shows/164646">See the playlist</a>
+| Listen: <span style="white-space:nowrap"><a href="/flashplayer.php?version=3&amp;show=164646&amp;archive=288782" onclick="return kdbarchivelink(this.href, 3)"><img class="listen_link_image" src="/flashplayer/playbuttont.gif" alt="Pop-up listen">&nbsp;Pop-up&nbsp;player!</a></span>
+<br>
+<li>
+<span class="KDBFavIcon KDBepisode" id="KDBepisode-164607">
+<a href="http://www.wfmu.org/auth.php?a=fav_icon_clicked&amp;type=episode&amp;id=164607&amp;page_type=playlist+index&amp;page_id=WA&amp;r=http%3A%2F%2Fwfmu.org%2Fplaylists%2FWA"
+onclick="KDBFav.fav_icon_clicked(event, this.parentNode);"
+title="Favoriting"
+><img src="/Gfx/star_empty_2.png" border="0" alt="Favoriting" width="15" height="15" /></a>
+</span>
+May 25, 2026:
+<b>It's Never Wrong to Wake and Bake on Memorial Day!</b>
+|
+<a href="/playlists/shows/164607">See the playlist</a>
+| Listen: <span style="white-space:nowrap"><a href="/flashplayer.php?version=3&amp;show=164607&amp;archive=288732" onclick="return kdbarchivelink(this.href, 3)"><img class="listen_link_image" src="/flashplayer/playbuttont.gif" alt="Pop-up listen">&nbsp;Pop-up&nbsp;player!</a></span>
+<br>
+<li>
+<span class="KDBFavIcon KDBepisode" id="KDBepisode-164521">
+<a href="http://www.wfmu.org/auth.php?a=fav_icon_clicked&amp;type=episode&amp;id=164521&amp;page_type=playlist+index&amp;page_id=WA&amp;r=http%3A%2F%2Fwfmu.org%2Fplaylists%2FWA"
+onclick="KDBFav.fav_icon_clicked(event, this.parentNode);"
+title="Favoriting"
+><img src="/Gfx/star_empty_2.png" border="0" alt="Favoriting" width="15" height="15" /></a>
+</span>
+May 22, 2026:
+<b>Wake 'n Bake: On this Fantabulous World Goth Friday!</b>
+|
+<a href="/playlists/shows/164521">See the playlist</a>
+| Listen: <span style="white-space:nowrap"><a href="/flashplayer.php?version=3&amp;show=164521&amp;archive=288598" onclick="return kdbarchivelink(this.href, 3)"><img class="listen_link_image" src="/flashplayer/playbuttont.gif" alt="Pop-up listen">&nbsp;Pop-up&nbsp;player!</a></span>
+<br>
+<li>
+<span class="KDBFavIcon KDBepisode" id="KDBepisode-164461">
+<a href="http://www.wfmu.org/auth.php?a=fav_icon_clicked&amp;type=episode&amp;id=164461&amp;page_type=playlist+index&amp;page_id=WA&amp;r=http%3A%2F%2Fwfmu.org%2Fplaylists%2FWA"
+onclick="KDBFav.fav_icon_clicked(event, this.parentNode);"
+title="Favoriting"
+><img src="/Gfx/star_empty_2.png" border="0" alt="Favoriting" width="15" height="15" /></a>
+</span>
+May 21, 2026:
+<b>Wake 'N Bake: Facial Harmony!</b>
+|
+<a href="/playlists/shows/164461">See the playlist</a>
+| Listen: <span style="white-space:nowrap"><a href="/flashplayer.php?version=3&amp;show=164461&amp;archive=288544" onclick="return kdbarchivelink(this.href, 3)"><img class="listen_link_image" src="/flashplayer/playbuttont.gif" alt="Pop-up listen">&nbsp;Pop-up&nbsp;player!</a></span>
+<br>
+<li>
+<span class="KDBFavIcon KDBepisode" id="KDBepisode-164450">
+<a href="http://www.wfmu.org/auth.php?a=fav_icon_clicked&amp;type=episode&amp;id=164450&amp;page_type=playlist+index&amp;page_id=WA&amp;r=http%3A%2F%2Fwfmu.org%2Fplaylists%2FWA"
+onclick="KDBFav.fav_icon_clicked(event, this.parentNode);"
+title="Favoriting"
+><img src="/Gfx/star_empty_2.png" border="0" alt="Favoriting" width="15" height="15" /></a>
+</span>
+May 20, 2026:
+<b>Wake N Bake - on this, World Bee Day!</b>
+|
+<a href="/playlists/shows/164450">See the playlist</a>
+| Listen: <span style="white-space:nowrap"><a href="/flashplayer.php?version=3&amp;show=164450&amp;archive=288488" onclick="return kdbarchivelink(this.href, 3)"><img class="listen_link_image" src="/flashplayer/playbuttont.gif" alt="Pop-up listen">&nbsp;Pop-up&nbsp;player!</a></span>
+<br>
+<li>
+<span class="KDBFavIcon KDBepisode" id="KDBepisode-164417">
+<a href="http://www.wfmu.org/auth.php?a=fav_icon_clicked&amp;type=episode&amp;id=164417&amp;page_type=playlist+index&amp;page_id=WA&amp;r=http%3A%2F%2Fwfmu.org%2Fplaylists%2FWA"
+onclick="KDBFav.fav_icon_clicked(event, this.parentNode);"
+title="Favoriting"
+><img src="/Gfx/star_empty_2.png" border="0" alt="Favoriting" width="15" height="15" /></a>
+</span>
+May 19, 2026:
+<b>Wake N Bake Smokin' HOT Tuesday</b>
+|
+<a href="/playlists/shows/164417">See the playlist</a>
+| Listen: <span style="white-space:nowrap"><a href="/flashplayer.php?version=3&amp;show=164417&amp;archive=288435" onclick="return kdbarchivelink(this.href, 3)"><img class="listen_link_image" src="/flashplayer/playbuttont.gif" alt="Pop-up listen">&nbsp;Pop-up&nbsp;player!</a></span>
+<br>
+<li>
+<span class="KDBFavIcon KDBepisode" id="KDBepisode-164376">
+<a href="http://www.wfmu.org/auth.php?a=fav_icon_clicked&amp;type=episode&amp;id=164376&amp;page_type=playlist+index&amp;page_id=WA&amp;r=http%3A%2F%2Fwfmu.org%2Fplaylists%2FWA"
+onclick="KDBFav.fav_icon_clicked(event, this.parentNode);"
+title="Favoriting"
+><img src="/Gfx/star_empty_2.png" border="0" alt="Favoriting" width="15" height="15" /></a>
+</span>
+May 18, 2026:
+<b>Wake N Bake: The Mighty Return of Clay Pigeon!</b>
+|
+<a href="/playlists/shows/164376">See the playlist</a>
+| Listen: <span style="white-space:nowrap"><a href="/flashplayer.php?version=3&amp;show=164376&amp;archive=288384" onclick="return kdbarchivelink(this.href, 3)"><img class="listen_link_image" src="/flashplayer/playbuttont.gif" alt="Pop-up listen">&nbsp;Pop-up&nbsp;player!</a></span>
+<br>
+<li>
+<span class="KDBFavIcon KDBepisode" id="KDBepisode-164226">
+<a href="http://www.wfmu.org/auth.php?a=fav_icon_clicked&amp;type=episode&amp;id=164226&amp;page_type=playlist+index&amp;page_id=WA&amp;r=http%3A%2F%2Fwfmu.org%2Fplaylists%2FWA"
+onclick="KDBFav.fav_icon_clicked(event, this.parentNode);"
+title="Favoriting"
+><img src="/Gfx/star_empty_2.png" border="0" alt="Favoriting" width="15" height="15" /></a>
+</span>
+May 15, 2026:
+<b>Wake N Bake: May May Friday Yay Fill-In with that Dan Morfitt</b>
+|
+<a href="/playlists/shows/164226">See the playlist</a>
+| Listen: <span style="white-space:nowrap"><a href="/flashplayer.php?version=3&amp;show=164226&amp;archive=288245" onclick="return kdbarchivelink(this.href, 3)"><img class="listen_link_image" src="/flashplayer/playbuttont.gif" alt="Pop-up listen">&nbsp;Pop-up&nbsp;player!</a></span>
+<br>
+<li>
+<span class="KDBFavIcon KDBepisode" id="KDBepisode-164225">
+<a href="http://www.wfmu.org/auth.php?a=fav_icon_clicked&amp;type=episode&amp;id=164225&amp;page_type=playlist+index&amp;page_id=WA&amp;r=http%3A%2F%2Fwfmu.org%2Fplaylists%2FWA"
+onclick="KDBFav.fav_icon_clicked(event, this.parentNode);"
+title="Favoriting"
+><img src="/Gfx/star_empty_2.png" border="0" alt="Favoriting" width="15" height="15" /></a>
+</span>
+May 14, 2026:
+<b>Wake N Bake: Roll a 6 Thursday Fill-In with the suave Dan Morfitt</b>
+|
+<a href="/playlists/shows/164225">See the playlist</a>
+| Listen: <span style="white-space:nowrap"><a href="/flashplayer.php?version=3&amp;show=164225&amp;archive=288194" onclick="return kdbarchivelink(this.href, 3)"><img class="listen_link_image" src="/flashplayer/playbuttont.gif" alt="Pop-up listen">&nbsp;Pop-up&nbsp;player!</a></span>
+<br>
+<li>
+<span class="KDBFavIcon KDBepisode" id="KDBepisode-164199">
+<a href="http://www.wfmu.org/auth.php?a=fav_icon_clicked&amp;type=episode&amp;id=164199&amp;page_type=playlist+index&amp;page_id=WA&amp;r=http%3A%2F%2Fwfmu.org%2Fplaylists%2FWA"
+onclick="KDBFav.fav_icon_clicked(event, this.parentNode);"
+title="Favoriting"
+><img src="/Gfx/star_empty_2.png" border="0" alt="Favoriting" width="15" height="15" /></a>
+</span>
+May 13, 2026:
+<b>Wu-Tang Wednesday Is Nothing To F With! Jim the Poet guest hosts today!</b>
+|
+<a href="/playlists/shows/164199">See the playlist</a>
+| Listen: <span style="white-space:nowrap"><a href="/flashplayer.php?version=3&amp;show=164199&amp;archive=288136" onclick="return kdbarchivelink(this.href, 3)"><img class="listen_link_image" src="/flashplayer/playbuttont.gif" alt="Pop-up listen">&nbsp;Pop-up&nbsp;player!</a></span>
+<br>
+<li>
+<span class="KDBFavIcon KDBepisode" id="KDBepisode-164166">
+<a href="http://www.wfmu.org/auth.php?a=fav_icon_clicked&amp;type=episode&amp;id=164166&amp;page_type=playlist+index&amp;page_id=WA&amp;r=http%3A%2F%2Fwfmu.org%2Fplaylists%2FWA"
+onclick="KDBFav.fav_icon_clicked(event, this.parentNode);"
+title="Favoriting"
+><img src="/Gfx/star_empty_2.png" border="0" alt="Favoriting" width="15" height="15" /></a>
+</span>
+May 12, 2026:
+<b>Shoegaze Tuezdayze? Is That A Thing? Jim the Poet guest hosts Wake today</b>
+|
+<a href="/playlists/shows/164166">See the playlist</a>
+| Listen: <span style="white-space:nowrap"><a href="/flashplayer.php?version=3&amp;show=164166&amp;archive=288084" onclick="return kdbarchivelink(this.href, 3)"><img class="listen_link_image" src="/flashplayer/playbuttont.gif" alt="Pop-up listen">&nbsp;Pop-up&nbsp;player!</a></span>
+<br>
+<li>
+<span class="KDBFavIcon KDBepisode" id="KDBepisode-164062">
+<a href="http://www.wfmu.org/auth.php?a=fav_icon_clicked&amp;type=episode&amp;id=164062&amp;page_type=playlist+index&amp;page_id=WA&amp;r=http%3A%2F%2Fwfmu.org%2Fplaylists%2FWA"
+onclick="KDBFav.fav_icon_clicked(event, this.parentNode);"
+title="Favoriting"
+><img src="/Gfx/star_empty_2.png" border="0" alt="Favoriting" width="15" height="15" /></a>
+</span>
+May 11, 2026:
+<b>Why Does Garfield Hate Mondays So Much?: Jim the Poet Hosts Wake Today</b>
+|
+<a href="/playlists/shows/164062">See the playlist</a>
+| Listen: <span style="white-space:nowrap"><a href="/flashplayer.php?version=3&amp;show=164062&amp;archive=288034" onclick="return kdbarchivelink(this.href, 3)"><img class="listen_link_image" src="/flashplayer/playbuttont.gif" alt="Pop-up listen">&nbsp;Pop-up&nbsp;player!</a></span>
+<br>
+<li>
+<span class="KDBFavIcon KDBepisode" id="KDBepisode-164036">
+<a href="http://www.wfmu.org/auth.php?a=fav_icon_clicked&amp;type=episode&amp;id=164036&amp;page_type=playlist+index&amp;page_id=WA&amp;r=http%3A%2F%2Fwfmu.org%2Fplaylists%2FWA"
+onclick="KDBFav.fav_icon_clicked(event, this.parentNode);"
+title="Favoriting"
+><img src="/Gfx/star_empty_2.png" border="0" alt="Favoriting" width="15" height="15" /></a>
+</span>
+May 8, 2026:
+<b>Wake 'n Bake: We Made It To Friday Once Again!</b>
+|
+<a href="/playlists/shows/164036">See the playlist</a>
+| Listen: <span style="white-space:nowrap"><a href="/flashplayer.php?version=3&amp;show=164036&amp;archive=287895" onclick="return kdbarchivelink(this.href, 3)"><img class="listen_link_image" src="/flashplayer/playbuttont.gif" alt="Pop-up listen">&nbsp;Pop-up&nbsp;player!</a></span>
+<br>
+<li>
+<span class="KDBFavIcon KDBepisode" id="KDBepisode-163991">
+<a href="http://www.wfmu.org/auth.php?a=fav_icon_clicked&amp;type=episode&amp;id=163991&amp;page_type=playlist+index&amp;page_id=WA&amp;r=http%3A%2F%2Fwfmu.org%2Fplaylists%2FWA"
+onclick="KDBFav.fav_icon_clicked(event, this.parentNode);"
+title="Favoriting"
+><img src="/Gfx/star_empty_2.png" border="0" alt="Favoriting" width="15" height="15" /></a>
+</span>
+May 7, 2026:
+<b>Wake 'N Bake: Walky Nose and Lump Thumb</b>
+|
+<a href="/playlists/shows/163991">See the playlist</a>
+<br>
+<li>
+<span class="KDBFavIcon KDBepisode" id="KDBepisode-163964">
+<a href="http://www.wfmu.org/auth.php?a=fav_icon_clicked&amp;type=episode&amp;id=163964&amp;page_type=playlist+index&amp;page_id=WA&amp;r=http%3A%2F%2Fwfmu.org%2Fplaylists%2FWA"
+onclick="KDBFav.fav_icon_clicked(event, this.parentNode);"
+title="Favoriting"
+><img src="/Gfx/star_empty_2.png" border="0" alt="Favoriting" width="15" height="15" /></a>
+</span>
+May 6, 2026:
+<b>Wake N Bake - May the 6th be with you</b>
+|
+<a href="/playlists/shows/163964">See the playlist</a>
+| Listen: <span style="white-space:nowrap"><a href="/flashplayer.php?version=3&amp;show=163964&amp;archive=287780" onclick="return kdbarchivelink(this.href, 3)"><img class="listen_link_image" src="/flashplayer/playbuttont.gif" alt="Pop-up listen">&nbsp;Pop-up&nbsp;player!</a></span>
+<br>
+<li>
+<span class="KDBFavIcon KDBepisode" id="KDBepisode-163931">
+<a href="http://www.wfmu.org/auth.php?a=fav_icon_clicked&amp;type=episode&amp;id=163931&amp;page_type=playlist+index&amp;page_id=WA&amp;r=http%3A%2F%2Fwfmu.org%2Fplaylists%2FWA"
+onclick="KDBFav.fav_icon_clicked(event, this.parentNode);"
+title="Favoriting"
+><img src="/Gfx/star_empty_2.png" border="0" alt="Favoriting" width="15" height="15" /></a>
+</span>
+May 5, 2026:
+<b>Wake N Bake on Cinco de Mayo Tuesday</b>
+|
+<a href="/playlists/shows/163931">See the playlist</a>
+| Listen: <span style="white-space:nowrap"><a href="/flashplayer.php?version=3&amp;show=163931&amp;archive=287728" onclick="return kdbarchivelink(this.href, 3)"><img class="listen_link_image" src="/flashplayer/playbuttont.gif" alt="Pop-up listen">&nbsp;Pop-up&nbsp;player!</a></span>
+<br>
+<li>
+<span class="KDBFavIcon KDBepisode" id="KDBepisode-163885">
+<a href="http://www.wfmu.org/auth.php?a=fav_icon_clicked&amp;type=episode&amp;id=163885&amp;page_type=playlist+index&amp;page_id=WA&amp;r=http%3A%2F%2Fwfmu.org%2Fplaylists%2FWA"
+onclick="KDBFav.fav_icon_clicked(event, this.parentNode);"
+title="Favoriting"
+><img src="/Gfx/star_empty_2.png" border="0" alt="Favoriting" width="15" height="15" /></a>
+</span>
+May 4, 2026:
+<b>Wake &amp; Bake on Star Wars Day!</b>
+|
+<a href="/playlists/shows/163885">See the playlist</a>
+| Listen: <span style="white-space:nowrap"><a href="/flashplayer.php?version=3&amp;show=163885&amp;archive=287766" onclick="return kdbarchivelink(this.href, 3)"><img class="listen_link_image" src="/flashplayer/playbuttont.gif" alt="Pop-up listen">&nbsp;Pop-up&nbsp;player!</a></span>
+<br>
+<li>
+<span class="KDBFavIcon KDBepisode" id="KDBepisode-163800">
+<a href="http://www.wfmu.org/auth.php?a=fav_icon_clicked&amp;type=episode&amp;id=163800&amp;page_type=playlist+index&amp;page_id=WA&amp;r=http%3A%2F%2Fwfmu.org%2Fplaylists%2FWA"
+onclick="KDBFav.fav_icon_clicked(event, this.parentNode);"
+title="Favoriting"
+><img src="/Gfx/star_empty_2.png" border="0" alt="Favoriting" width="15" height="15" /></a>
+</span>
+May 1, 2026:
+<b>Wake 'n Bake: Another Fantastic Friday on this MAY DAY!</b>
+|
+<a href="/playlists/shows/163800">See the playlist</a>
+| Listen: <span style="white-space:nowrap"><a href="/flashplayer.php?version=3&amp;show=163800&amp;archive=287544" onclick="return kdbarchivelink(this.href, 3)"><img class="listen_link_image" src="/flashplayer/playbuttont.gif" alt="Pop-up listen">&nbsp;Pop-up&nbsp;player!</a></span>
+<br>
+</ul><ul>
+<li>
+<span class="KDBFavIcon KDBepisode" id="KDBepisode-163761">
+<a href="http://www.wfmu.org/auth.php?a=fav_icon_clicked&amp;type=episode&amp;id=163761&amp;page_type=playlist+index&amp;page_id=WA&amp;r=http%3A%2F%2Fwfmu.org%2Fplaylists%2FWA"
+onclick="KDBFav.fav_icon_clicked(event, this.parentNode);"
+title="Favoriting"
+><img src="/Gfx/star_empty_2.png" border="0" alt="Favoriting" width="15" height="15" /></a>
+</span>
+April 30, 2026:
+<b>Wake 'n Bake: From THUMBwhere over the Rainbow</b>
+|
+<a href="/playlists/shows/163761">See the playlist</a>
+| Listen: <span style="white-space:nowrap"><a href="/flashplayer.php?version=3&amp;show=163761&amp;archive=287488" onclick="return kdbarchivelink(this.href, 3)"><img class="listen_link_image" src="/flashplayer/playbuttont.gif" alt="Pop-up listen">&nbsp;Pop-up&nbsp;player!</a></span>
+<br>
+<li>
+<span class="KDBFavIcon KDBepisode" id="KDBepisode-163725">
+<a href="http://www.wfmu.org/auth.php?a=fav_icon_clicked&amp;type=episode&amp;id=163725&amp;page_type=playlist+index&amp;page_id=WA&amp;r=http%3A%2F%2Fwfmu.org%2Fplaylists%2FWA"
+onclick="KDBFav.fav_icon_clicked(event, this.parentNode);"
+title="Favoriting"
+><img src="/Gfx/star_empty_2.png" border="0" alt="Favoriting" width="15" height="15" /></a>
+</span>
+April 29, 2026:
+<b>Wake N Bake - on this, International Dance Day!</b>
+|
+<a href="/playlists/shows/163725">See the playlist</a>
+| Listen: <span style="white-space:nowrap"><a href="/flashplayer.php?version=3&amp;show=163725&amp;archive=287430" onclick="return kdbarchivelink(this.href, 3)"><img class="listen_link_image" src="/flashplayer/playbuttont.gif" alt="Pop-up listen">&nbsp;Pop-up&nbsp;player!</a></span>
+<br>
+<li>
+<span class="KDBFavIcon KDBepisode" id="KDBepisode-163693">
+<a href="http://www.wfmu.org/auth.php?a=fav_icon_clicked&amp;type=episode&amp;id=163693&amp;page_type=playlist+index&amp;page_id=WA&amp;r=http%3A%2F%2Fwfmu.org%2Fplaylists%2FWA"
+onclick="KDBFav.fav_icon_clicked(event, this.parentNode);"
+title="Favoriting"
+><img src="/Gfx/star_empty_2.png" border="0" alt="Favoriting" width="15" height="15" /></a>
+</span>
+April 28, 2026:
+<b>Wake N Bake Finally it's Spring Tuesday</b>
+|
+<a href="/playlists/shows/163693">See the playlist</a>
+| Listen: <span style="white-space:nowrap"><a href="/flashplayer.php?version=3&amp;show=163693&amp;archive=287377" onclick="return kdbarchivelink(this.href, 3)"><img class="listen_link_image" src="/flashplayer/playbuttont.gif" alt="Pop-up listen">&nbsp;Pop-up&nbsp;player!</a></span>
+<br>
+<li>
+<span class="KDBFavIcon KDBepisode" id="KDBepisode-163653">
+<a href="http://www.wfmu.org/auth.php?a=fav_icon_clicked&amp;type=episode&amp;id=163653&amp;page_type=playlist+index&amp;page_id=WA&amp;r=http%3A%2F%2Fwfmu.org%2Fplaylists%2FWA"
+onclick="KDBFav.fav_icon_clicked(event, this.parentNode);"
+title="Favoriting"
+><img src="/Gfx/star_empty_2.png" border="0" alt="Favoriting" width="15" height="15" /></a>
+</span>
+April 27, 2026:
+<b>Wake N Bake: Clay is back, and with all his fingers!</b>
+|
+<a href="/playlists/shows/163653">See the playlist</a>
+| Listen: <span style="white-space:nowrap"><a href="/flashplayer.php?version=3&amp;show=163653&amp;archive=287328" onclick="return kdbarchivelink(this.href, 3)"><img class="listen_link_image" src="/flashplayer/playbuttont.gif" alt="Pop-up listen">&nbsp;Pop-up&nbsp;player!</a></span>
+<br>
+<li>
+<span class="KDBFavIcon KDBepisode" id="KDBepisode-163554">
+<a href="http://www.wfmu.org/auth.php?a=fav_icon_clicked&amp;type=episode&amp;id=163554&amp;page_type=playlist+index&amp;page_id=WA&amp;r=http%3A%2F%2Fwfmu.org%2Fplaylists%2FWA"
+onclick="KDBFav.fav_icon_clicked(event, this.parentNode);"
+title="Favoriting"
+><img src="/Gfx/star_empty_2.png" border="0" alt="Favoriting" width="15" height="15" /></a>
+</span>
+April 24, 2026:
+<b>Wake N Bake: Friday Fill-In with your Dan Morfitt</b>
+|
+<a href="/playlists/shows/163554">See the playlist</a>
+| Listen: <span style="white-space:nowrap"><a href="/flashplayer.php?version=3&amp;show=163554&amp;archive=287196" onclick="return kdbarchivelink(this.href, 3)"><img class="listen_link_image" src="/flashplayer/playbuttont.gif" alt="Pop-up listen">&nbsp;Pop-up&nbsp;player!</a></span>
+<br>
+<li>
+<span class="KDBFavIcon KDBepisode" id="KDBepisode-163528">
+<a href="http://www.wfmu.org/auth.php?a=fav_icon_clicked&amp;type=episode&amp;id=163528&amp;page_type=playlist+index&amp;page_id=WA&amp;r=http%3A%2F%2Fwfmu.org%2Fplaylists%2FWA"
+onclick="KDBFav.fav_icon_clicked(event, this.parentNode);"
+title="Favoriting"
+><img src="/Gfx/star_empty_2.png" border="0" alt="Favoriting" width="15" height="15" /></a>
+</span>
+April 23, 2026:
+<b>Surprise surprise surprise! EFD sits in for The Pidge today!</b>
+|
+<a href="/playlists/shows/163528">See the playlist</a>
+| Listen: <span style="white-space:nowrap"><a href="/flashplayer.php?version=3&amp;show=163528&amp;archive=287146" onclick="return kdbarchivelink(this.href, 3)"><img class="listen_link_image" src="/flashplayer/playbuttont.gif" alt="Pop-up listen">&nbsp;Pop-up&nbsp;player!</a></span>
+<br>
+<li>
+<span class="KDBFavIcon KDBepisode" id="KDBepisode-163496">
+<a href="http://www.wfmu.org/auth.php?a=fav_icon_clicked&amp;type=episode&amp;id=163496&amp;page_type=playlist+index&amp;page_id=WA&amp;r=http%3A%2F%2Fwfmu.org%2Fplaylists%2FWA"
+onclick="KDBFav.fav_icon_clicked(event, this.parentNode);"
+title="Favoriting"
+><img src="/Gfx/star_empty_2.png" border="0" alt="Favoriting" width="15" height="15" /></a>
+</span>
+April 22, 2026:
+<b>Wake N Bake this EARTH DAY! (also National Jelly Bean Day; National Baseball Day)</b>
+|
+<a href="/playlists/shows/163496">See the playlist</a>
+| Listen: <span style="white-space:nowrap"><a href="/flashplayer.php?version=3&amp;show=163496&amp;archive=287088" onclick="return kdbarchivelink(this.href, 3)"><img class="listen_link_image" src="/flashplayer/playbuttont.gif" alt="Pop-up listen">&nbsp;Pop-up&nbsp;player!</a></span>
+<br>
+<li>
+<span class="KDBFavIcon KDBepisode" id="KDBepisode-163463">
+<a href="http://www.wfmu.org/auth.php?a=fav_icon_clicked&amp;type=episode&amp;id=163463&amp;page_type=playlist+index&amp;page_id=WA&amp;r=http%3A%2F%2Fwfmu.org%2Fplaylists%2FWA"
+onclick="KDBFav.fav_icon_clicked(event, this.parentNode);"
+title="Favoriting"
+><img src="/Gfx/star_empty_2.png" border="0" alt="Favoriting" width="15" height="15" /></a>
+</span>
+April 21, 2026:
+<b>Wake N Bake Cold Kegs Tuesday</b>
+|
+<a href="/playlists/shows/163463">See the playlist</a>
+| Listen: <span style="white-space:nowrap"><a href="/flashplayer.php?version=3&amp;show=163463&amp;archive=287037" onclick="return kdbarchivelink(this.href, 3)"><img class="listen_link_image" src="/flashplayer/playbuttont.gif" alt="Pop-up listen">&nbsp;Pop-up&nbsp;player!</a></span>
+<br>
+<li>
+<span class="KDBFavIcon KDBepisode" id="KDBepisode-163417">
+<a href="http://www.wfmu.org/auth.php?a=fav_icon_clicked&amp;type=episode&amp;id=163417&amp;page_type=playlist+index&amp;page_id=WA&amp;r=http%3A%2F%2Fwfmu.org%2Fplaylists%2FWA"
+onclick="KDBFav.fav_icon_clicked(event, this.parentNode);"
+title="Favoriting"
+><img src="/Gfx/star_empty_2.png" border="0" alt="Favoriting" width="15" height="15" /></a>
+</span>
+April 20, 2026:
+<b>Wake N Bake: In High Spirts on 4/20!</b>
+|
+<a href="/playlists/shows/163417">See the playlist</a>
+| Listen: <span style="white-space:nowrap"><a href="/flashplayer.php?version=3&amp;show=163417&amp;archive=286987" onclick="return kdbarchivelink(this.href, 3)"><img class="listen_link_image" src="/flashplayer/playbuttont.gif" alt="Pop-up listen">&nbsp;Pop-up&nbsp;player!</a></span>
+<br>
+<li>
+<span class="KDBFavIcon KDBepisode" id="KDBepisode-163321">
+<a href="http://www.wfmu.org/auth.php?a=fav_icon_clicked&amp;type=episode&amp;id=163321&amp;page_type=playlist+index&amp;page_id=WA&amp;r=http%3A%2F%2Fwfmu.org%2Fplaylists%2FWA"
+onclick="KDBFav.fav_icon_clicked(event, this.parentNode);"
+title="Favoriting"
+><img src="/Gfx/star_empty_2.png" border="0" alt="Favoriting" width="15" height="15" /></a>
+</span>
+April 17, 2026:
+<b>Wake n' Bake: Leave the Ants at Home and Come to the Hoboken Yard Sale!</b>
+|
+<a href="/playlists/shows/163321">See the playlist</a>
+| Listen: <span style="white-space:nowrap"><a href="/flashplayer.php?version=3&amp;show=163321&amp;archive=286859" onclick="return kdbarchivelink(this.href, 3)"><img class="listen_link_image" src="/flashplayer/playbuttont.gif" alt="Pop-up listen">&nbsp;Pop-up&nbsp;player!</a></span>
+<br>
+<li>
+<span class="KDBFavIcon KDBepisode" id="KDBepisode-163284">
+<a href="http://www.wfmu.org/auth.php?a=fav_icon_clicked&amp;type=episode&amp;id=163284&amp;page_type=playlist+index&amp;page_id=WA&amp;r=http%3A%2F%2Fwfmu.org%2Fplaylists%2FWA"
+onclick="KDBFav.fav_icon_clicked(event, this.parentNode);"
+title="Favoriting"
+><img src="/Gfx/star_empty_2.png" border="0" alt="Favoriting" width="15" height="15" /></a>
+</span>
+April 16, 2026:
+<b>Wake N Bake: Pixie Power For Paul &amp; Family!</b>
+|
+<a href="/playlists/shows/163284">See the playlist</a>
+| Listen: <span style="white-space:nowrap"><a href="/flashplayer.php?version=3&amp;show=163284&amp;archive=286801" onclick="return kdbarchivelink(this.href, 3)"><img class="listen_link_image" src="/flashplayer/playbuttont.gif" alt="Pop-up listen">&nbsp;Pop-up&nbsp;player!</a></span>
+<br>
+<li>
+<span class="KDBFavIcon KDBepisode" id="KDBepisode-163252">
+<a href="http://www.wfmu.org/auth.php?a=fav_icon_clicked&amp;type=episode&amp;id=163252&amp;page_type=playlist+index&amp;page_id=WA&amp;r=http%3A%2F%2Fwfmu.org%2Fplaylists%2FWA"
+onclick="KDBFav.fav_icon_clicked(event, this.parentNode);"
+title="Favoriting"
+><img src="/Gfx/star_empty_2.png" border="0" alt="Favoriting" width="15" height="15" /></a>
+</span>
+April 15, 2026:
+<b>Wake N Bake - Happy World Art Day!</b>
+|
+<a href="/playlists/shows/163252">See the playlist</a>
+| Listen: <span style="white-space:nowrap"><a href="/flashplayer.php?version=3&amp;show=163252&amp;archive=286743" onclick="return kdbarchivelink(this.href, 3)"><img class="listen_link_image" src="/flashplayer/playbuttont.gif" alt="Pop-up listen">&nbsp;Pop-up&nbsp;player!</a></span>
+<br>
+<li>
+<span class="KDBFavIcon KDBepisode" id="KDBepisode-163210">
+<a href="http://www.wfmu.org/auth.php?a=fav_icon_clicked&amp;type=episode&amp;id=163210&amp;page_type=playlist+index&amp;page_id=WA&amp;r=http%3A%2F%2Fwfmu.org%2Fplaylists%2FWA"
+onclick="KDBFav.fav_icon_clicked(event, this.parentNode);"
+title="Favoriting"
+><img src="/Gfx/star_empty_2.png" border="0" alt="Favoriting" width="15" height="15" /></a>
+</span>
+April 14, 2026:
+<b>Wake N Bake Feels Like Tuesday</b>
+|
+<a href="/playlists/shows/163210">See the playlist</a>
+| Listen: <span style="white-space:nowrap"><a href="/flashplayer.php?version=3&amp;show=163210&amp;archive=286689" onclick="return kdbarchivelink(this.href, 3)"><img class="listen_link_image" src="/flashplayer/playbuttont.gif" alt="Pop-up listen">&nbsp;Pop-up&nbsp;player!</a></span>
+<br>
+<li>
+<span class="KDBFavIcon KDBepisode" id="KDBepisode-163163">
+<a href="http://www.wfmu.org/auth.php?a=fav_icon_clicked&amp;type=episode&amp;id=163163&amp;page_type=playlist+index&amp;page_id=WA&amp;r=http%3A%2F%2Fwfmu.org%2Fplaylists%2FWA"
+onclick="KDBFav.fav_icon_clicked(event, this.parentNode);"
+title="Favoriting"
+><img src="/Gfx/star_empty_2.png" border="0" alt="Favoriting" width="15" height="15" /></a>
+</span>
+April 13, 2026:
+<b>Wake N Bake: The Crystal Pepsi Method</b>
+|
+<a href="/playlists/shows/163163">See the playlist</a>
+| Listen: <span style="white-space:nowrap"><a href="/flashplayer.php?version=3&amp;show=163163&amp;archive=286639" onclick="return kdbarchivelink(this.href, 3)"><img class="listen_link_image" src="/flashplayer/playbuttont.gif" alt="Pop-up listen">&nbsp;Pop-up&nbsp;player!</a></span>
+<br>
+<li>
+<span class="KDBFavIcon KDBepisode" id="KDBepisode-163080">
+<a href="http://www.wfmu.org/auth.php?a=fav_icon_clicked&amp;type=episode&amp;id=163080&amp;page_type=playlist+index&amp;page_id=WA&amp;r=http%3A%2F%2Fwfmu.org%2Fplaylists%2FWA"
+onclick="KDBFav.fav_icon_clicked(event, this.parentNode);"
+title="Favoriting"
+><img src="/Gfx/star_empty_2.png" border="0" alt="Favoriting" width="15" height="15" /></a>
+</span>
+April 10, 2026:
+<b>Wake n' Bake and get ready for warmer days!!</b>
+|
+<a href="/playlists/shows/163080">See the playlist</a>
+| Listen: <span style="white-space:nowrap"><a href="/flashplayer.php?version=3&amp;show=163080&amp;archive=286512" onclick="return kdbarchivelink(this.href, 3)"><img class="listen_link_image" src="/flashplayer/playbuttont.gif" alt="Pop-up listen">&nbsp;Pop-up&nbsp;player!</a></span>
+<br>
+<li>
+<span class="KDBFavIcon KDBepisode" id="KDBepisode-163036">
+<a href="http://www.wfmu.org/auth.php?a=fav_icon_clicked&amp;type=episode&amp;id=163036&amp;page_type=playlist+index&amp;page_id=WA&amp;r=http%3A%2F%2Fwfmu.org%2Fplaylists%2FWA"
+onclick="KDBFav.fav_icon_clicked(event, this.parentNode);"
+title="Favoriting"
+><img src="/Gfx/star_empty_2.png" border="0" alt="Favoriting" width="15" height="15" /></a>
+</span>
+April 9, 2026:
+<b>Wake N Bake - We've got Infinite Jess!</b>
+|
+<a href="/playlists/shows/163036">See the playlist</a>
+| Listen: <span style="white-space:nowrap"><a href="/flashplayer.php?version=3&amp;show=163036&amp;archive=286454" onclick="return kdbarchivelink(this.href, 3)"><img class="listen_link_image" src="/flashplayer/playbuttont.gif" alt="Pop-up listen">&nbsp;Pop-up&nbsp;player!</a></span>
+<br>
+<li>
+<span class="KDBFavIcon KDBepisode" id="KDBepisode-162998">
+<a href="http://www.wfmu.org/auth.php?a=fav_icon_clicked&amp;type=episode&amp;id=162998&amp;page_type=playlist+index&amp;page_id=WA&amp;r=http%3A%2F%2Fwfmu.org%2Fplaylists%2FWA"
+onclick="KDBFav.fav_icon_clicked(event, this.parentNode);"
+title="Favoriting"
+><img src="/Gfx/star_empty_2.png" border="0" alt="Favoriting" width="15" height="15" /></a>
+</span>
+April 8, 2026:
+<b>Wake N Bake - Happy Birthday Buddha</b>
+|
+<a href="/playlists/shows/162998">See the playlist</a>
+| Listen: <span style="white-space:nowrap"><a href="/flashplayer.php?version=3&amp;show=162998&amp;archive=286393" onclick="return kdbarchivelink(this.href, 3)"><img class="listen_link_image" src="/flashplayer/playbuttont.gif" alt="Pop-up listen">&nbsp;Pop-up&nbsp;player!</a></span>
+<br>
+<li>
+<span class="KDBFavIcon KDBepisode" id="KDBepisode-162967">
+<a href="http://www.wfmu.org/auth.php?a=fav_icon_clicked&amp;type=episode&amp;id=162967&amp;page_type=playlist+index&amp;page_id=WA&amp;r=http%3A%2F%2Fwfmu.org%2Fplaylists%2FWA"
+onclick="KDBFav.fav_icon_clicked(event, this.parentNode);"
+title="Favoriting"
+><img src="/Gfx/star_empty_2.png" border="0" alt="Favoriting" width="15" height="15" /></a>
+</span>
+April 7, 2026:
+<b>Wake N Bake No-Dud Tuesday</b>
+|
+<a href="/playlists/shows/162967">See the playlist</a>
+| Listen: <span style="white-space:nowrap"><a href="/flashplayer.php?version=3&amp;show=162967&amp;archive=286338" onclick="return kdbarchivelink(this.href, 3)"><img class="listen_link_image" src="/flashplayer/playbuttont.gif" alt="Pop-up listen">&nbsp;Pop-up&nbsp;player!</a></span>
+<br>
+<li>
+<span class="KDBFavIcon KDBepisode" id="KDBepisode-162922">
+<a href="http://www.wfmu.org/auth.php?a=fav_icon_clicked&amp;type=episode&amp;id=162922&amp;page_type=playlist+index&amp;page_id=WA&amp;r=http%3A%2F%2Fwfmu.org%2Fplaylists%2FWA"
+onclick="KDBFav.fav_icon_clicked(event, this.parentNode);"
+title="Favoriting"
+><img src="/Gfx/star_empty_2.png" border="0" alt="Favoriting" width="15" height="15" /></a>
+</span>
+April 6, 2026:
+<b>Wake N Bake - We're Dancing Now!</b>
+|
+<a href="/playlists/shows/162922">See the playlist</a>
+| Listen: <span style="white-space:nowrap"><a href="/flashplayer.php?version=3&amp;show=162922&amp;archive=286290" onclick="return kdbarchivelink(this.href, 3)"><img class="listen_link_image" src="/flashplayer/playbuttont.gif" alt="Pop-up listen">&nbsp;Pop-up&nbsp;player!</a></span>
+<br>
+<li>
+<span class="KDBFavIcon KDBepisode" id="KDBepisode-162837">
+<a href="http://www.wfmu.org/auth.php?a=fav_icon_clicked&amp;type=episode&amp;id=162837&amp;page_type=playlist+index&amp;page_id=WA&amp;r=http%3A%2F%2Fwfmu.org%2Fplaylists%2FWA"
+onclick="KDBFav.fav_icon_clicked(event, this.parentNode);"
+title="Favoriting"
+><img src="/Gfx/star_empty_2.png" border="0" alt="Favoriting" width="15" height="15" /></a>
+</span>
+April 3, 2026:
+<b>Wake n' Bake on this fine Friday!</b>
+|
+<a href="/playlists/shows/162837">See the playlist</a>
+| Listen: <span style="white-space:nowrap"><a href="/flashplayer.php?version=3&amp;show=162837&amp;archive=286155" onclick="return kdbarchivelink(this.href, 3)"><img class="listen_link_image" src="/flashplayer/playbuttont.gif" alt="Pop-up listen">&nbsp;Pop-up&nbsp;player!</a></span>
+<br>
+<li>
+<span class="KDBFavIcon KDBepisode" id="KDBepisode-162788">
+<a href="http://www.wfmu.org/auth.php?a=fav_icon_clicked&amp;type=episode&amp;id=162788&amp;page_type=playlist+index&amp;page_id=WA&amp;r=http%3A%2F%2Fwfmu.org%2Fplaylists%2FWA"
+onclick="KDBFav.fav_icon_clicked(event, this.parentNode);"
+title="Favoriting"
+><img src="/Gfx/star_empty_2.png" border="0" alt="Favoriting" width="15" height="15" /></a>
+</span>
+April 2, 2026:
+<b>Wake 'N Bake: Smiles Davis and Disney Spells</b>
+|
+<a href="/playlists/shows/162788">See the playlist</a>
+| Listen: <span style="white-space:nowrap"><a href="/flashplayer.php?version=3&amp;show=162788&amp;archive=286104" onclick="return kdbarchivelink(this.href, 3)"><img class="listen_link_image" src="/flashplayer/playbuttont.gif" alt="Pop-up listen">&nbsp;Pop-up&nbsp;player!</a></span>
+<br>
+<li>
+<span class="KDBFavIcon KDBepisode" id="KDBepisode-162764">
+<a href="http://www.wfmu.org/auth.php?a=fav_icon_clicked&amp;type=episode&amp;id=162764&amp;page_type=playlist+index&amp;page_id=WA&amp;r=http%3A%2F%2Fwfmu.org%2Fplaylists%2FWA"
+onclick="KDBFav.fav_icon_clicked(event, this.parentNode);"
+title="Favoriting"
+><img src="/Gfx/star_empty_2.png" border="0" alt="Favoriting" width="15" height="15" /></a>
+</span>
+April 1, 2026:
+<b>Wake N Bake - home of the April fish</b>
+|
+<a href="/playlists/shows/162764">See the playlist</a>
+| Listen: <span style="white-space:nowrap"><a href="/flashplayer.php?version=3&amp;show=162764&amp;archive=286052" onclick="return kdbarchivelink(this.href, 3)"><img class="listen_link_image" src="/flashplayer/playbuttont.gif" alt="Pop-up listen">&nbsp;Pop-up&nbsp;player!</a></span>
+<br>
+</ul><ul>
+<li>
+<span class="KDBFavIcon KDBepisode" id="KDBepisode-162741">
+<a href="http://www.wfmu.org/auth.php?a=fav_icon_clicked&amp;type=episode&amp;id=162741&amp;page_type=playlist+index&amp;page_id=WA&amp;r=http%3A%2F%2Fwfmu.org%2Fplaylists%2FWA"
+onclick="KDBFav.fav_icon_clicked(event, this.parentNode);"
+title="Favoriting"
+><img src="/Gfx/star_empty_2.png" border="0" alt="Favoriting" width="15" height="15" /></a>
+</span>
+March 31, 2026:
+<b>Wake N Bake Out Like A Lamb Tuesday</b>
+|
+<a href="/playlists/shows/162741">See the playlist</a>
+| Listen: <span style="white-space:nowrap"><a href="/flashplayer.php?version=3&amp;show=162741&amp;archive=286001" onclick="return kdbarchivelink(this.href, 3)"><img class="listen_link_image" src="/flashplayer/playbuttont.gif" alt="Pop-up listen">&nbsp;Pop-up&nbsp;player!</a></span>
+<br>
+<li>
+<span class="KDBFavIcon KDBepisode" id="KDBepisode-162696">
+<a href="http://www.wfmu.org/auth.php?a=fav_icon_clicked&amp;type=episode&amp;id=162696&amp;page_type=playlist+index&amp;page_id=WA&amp;r=http%3A%2F%2Fwfmu.org%2Fplaylists%2FWA"
+onclick="KDBFav.fav_icon_clicked(event, this.parentNode);"
+title="Favoriting"
+><img src="/Gfx/star_empty_2.png" border="0" alt="Favoriting" width="15" height="15" /></a>
+</span>
+March 30, 2026:
+<b>Wake n Bake: Welcome Back, Clay Pigeon!</b>
+|
+<a href="/playlists/shows/162696">See the playlist</a>
+| Listen: <span style="white-space:nowrap"><a href="/flashplayer.php?version=3&amp;show=162696&amp;archive=285953" onclick="return kdbarchivelink(this.href, 3)"><img class="listen_link_image" src="/flashplayer/playbuttont.gif" alt="Pop-up listen">&nbsp;Pop-up&nbsp;player!</a></span>
+<br>
+<li>
+<span class="KDBFavIcon KDBepisode" id="KDBepisode-162602">
+<a href="http://www.wfmu.org/auth.php?a=fav_icon_clicked&amp;type=episode&amp;id=162602&amp;page_type=playlist+index&amp;page_id=WA&amp;r=http%3A%2F%2Fwfmu.org%2Fplaylists%2FWA"
+onclick="KDBFav.fav_icon_clicked(event, this.parentNode);"
+title="Favoriting"
+><img src="/Gfx/star_empty_2.png" border="0" alt="Favoriting" width="15" height="15" /></a>
+</span>
+March 27, 2026:
+<b>EFD Wake Week Day 5. We made it to Friday!</b>
+|
+<a href="/playlists/shows/162602">See the playlist</a>
+| Listen: <span style="white-space:nowrap"><a href="/flashplayer.php?version=3&amp;show=162602&amp;archive=285818" onclick="return kdbarchivelink(this.href, 3)"><img class="listen_link_image" src="/flashplayer/playbuttont.gif" alt="Pop-up listen">&nbsp;Pop-up&nbsp;player!</a></span>
+<br>
+<li>
+<span class="KDBFavIcon KDBepisode" id="KDBepisode-162570">
+<a href="http://www.wfmu.org/auth.php?a=fav_icon_clicked&amp;type=episode&amp;id=162570&amp;page_type=playlist+index&amp;page_id=WA&amp;r=http%3A%2F%2Fwfmu.org%2Fplaylists%2FWA"
+onclick="KDBFav.fav_icon_clicked(event, this.parentNode);"
+title="Favoriting"
+><img src="/Gfx/star_empty_2.png" border="0" alt="Favoriting" width="15" height="15" /></a>
+</span>
+March 26, 2026:
+<b>EFD Wake Week Day 4!</b>
+|
+<a href="/playlists/shows/162570">See the playlist</a>
+| Listen: <span style="white-space:nowrap"><a href="/flashplayer.php?version=3&amp;show=162570&amp;archive=285763" onclick="return kdbarchivelink(this.href, 3)"><img class="listen_link_image" src="/flashplayer/playbuttont.gif" alt="Pop-up listen">&nbsp;Pop-up&nbsp;player!</a></span>
+<br>
+<li>
+<span class="KDBFavIcon KDBepisode" id="KDBepisode-162540">
+<a href="http://www.wfmu.org/auth.php?a=fav_icon_clicked&amp;type=episode&amp;id=162540&amp;page_type=playlist+index&amp;page_id=WA&amp;r=http%3A%2F%2Fwfmu.org%2Fplaylists%2FWA"
+onclick="KDBFav.fav_icon_clicked(event, this.parentNode);"
+title="Favoriting"
+><img src="/Gfx/star_empty_2.png" border="0" alt="Favoriting" width="15" height="15" /></a>
+</span>
+March 25, 2026:
+<b>EFD Wake Week Day 3!</b>
+|
+<a href="/playlists/shows/162540">See the playlist</a>
+| Listen: <span style="white-space:nowrap"><a href="/flashplayer.php?version=3&amp;show=162540&amp;archive=285705" onclick="return kdbarchivelink(this.href, 3)"><img class="listen_link_image" src="/flashplayer/playbuttont.gif" alt="Pop-up listen">&nbsp;Pop-up&nbsp;player!</a></span>
+<br>
+<li>
+<span class="KDBFavIcon KDBepisode" id="KDBepisode-162503">
+<a href="http://www.wfmu.org/auth.php?a=fav_icon_clicked&amp;type=episode&amp;id=162503&amp;page_type=playlist+index&amp;page_id=WA&amp;r=http%3A%2F%2Fwfmu.org%2Fplaylists%2FWA"
+onclick="KDBFav.fav_icon_clicked(event, this.parentNode);"
+title="Favoriting"
+><img src="/Gfx/star_empty_2.png" border="0" alt="Favoriting" width="15" height="15" /></a>
+</span>
+March 24, 2026:
+<b>EFD Wake Week Day 2!</b>
+|
+<a href="/playlists/shows/162503">See the playlist</a>
+| Listen: <span style="white-space:nowrap"><a href="/flashplayer.php?version=3&amp;show=162503&amp;archive=285655" onclick="return kdbarchivelink(this.href, 3)"><img class="listen_link_image" src="/flashplayer/playbuttont.gif" alt="Pop-up listen">&nbsp;Pop-up&nbsp;player!</a></span>
+<br>
+<li>
+<span class="KDBFavIcon KDBepisode" id="KDBepisode-162458">
+<a href="http://www.wfmu.org/auth.php?a=fav_icon_clicked&amp;type=episode&amp;id=162458&amp;page_type=playlist+index&amp;page_id=WA&amp;r=http%3A%2F%2Fwfmu.org%2Fplaylists%2FWA"
+onclick="KDBFav.fav_icon_clicked(event, this.parentNode);"
+title="Favoriting"
+><img src="/Gfx/star_empty_2.png" border="0" alt="Favoriting" width="15" height="15" /></a>
+</span>
+March 23, 2026:
+<b>It begins! EFD kicks of a week of Wake fill-ins!</b>
+|
+<a href="/playlists/shows/162458">See the playlist</a>
+| Listen: <span style="white-space:nowrap"><a href="/flashplayer.php?version=3&amp;show=162458&amp;archive=285601" onclick="return kdbarchivelink(this.href, 3)"><img class="listen_link_image" src="/flashplayer/playbuttont.gif" alt="Pop-up listen">&nbsp;Pop-up&nbsp;player!</a></span>
+<br>
+<li>
+<span class="KDBFavIcon KDBepisode" id="KDBepisode-162379">
+<a href="http://www.wfmu.org/auth.php?a=fav_icon_clicked&amp;type=episode&amp;id=162379&amp;page_type=playlist+index&amp;page_id=WA&amp;r=http%3A%2F%2Fwfmu.org%2Fplaylists%2FWA"
+onclick="KDBFav.fav_icon_clicked(event, this.parentNode);"
+title="Favoriting"
+><img src="/Gfx/star_empty_2.png" border="0" alt="Favoriting" width="15" height="15" /></a>
+</span>
+March 20, 2026:
+<b>Wake N' Bake and Have a Fantastic Friday! (EFD Fills in next week!)</b>
+|
+<a href="/playlists/shows/162379">See the playlist</a>
+| Listen: <span style="white-space:nowrap"><a href="/flashplayer.php?version=3&amp;show=162379&amp;archive=285468" onclick="return kdbarchivelink(this.href, 3)"><img class="listen_link_image" src="/flashplayer/playbuttont.gif" alt="Pop-up listen">&nbsp;Pop-up&nbsp;player!</a></span>
+<br>
+<li>
+<span class="KDBFavIcon KDBepisode" id="KDBepisode-162329">
+<a href="http://www.wfmu.org/auth.php?a=fav_icon_clicked&amp;type=episode&amp;id=162329&amp;page_type=playlist+index&amp;page_id=WA&amp;r=http%3A%2F%2Fwfmu.org%2Fplaylists%2FWA"
+onclick="KDBFav.fav_icon_clicked(event, this.parentNode);"
+title="Favoriting"
+><img src="/Gfx/star_empty_2.png" border="0" alt="Favoriting" width="15" height="15" /></a>
+</span>
+March 19, 2026:
+<b>Wake 'N Bake: Yawn Chairs and Pianist Envy</b>
+|
+<a href="/playlists/shows/162329">See the playlist</a>
+| Listen: <span style="white-space:nowrap"><a href="/flashplayer.php?version=3&amp;show=162329&amp;archive=285413" onclick="return kdbarchivelink(this.href, 3)"><img class="listen_link_image" src="/flashplayer/playbuttont.gif" alt="Pop-up listen">&nbsp;Pop-up&nbsp;player!</a></span>
+<br>
+<li>
+<span class="KDBFavIcon KDBepisode" id="KDBepisode-162306">
+<a href="http://www.wfmu.org/auth.php?a=fav_icon_clicked&amp;type=episode&amp;id=162306&amp;page_type=playlist+index&amp;page_id=WA&amp;r=http%3A%2F%2Fwfmu.org%2Fplaylists%2FWA"
+onclick="KDBFav.fav_icon_clicked(event, this.parentNode);"
+title="Favoriting"
+><img src="/Gfx/star_empty_2.png" border="0" alt="Favoriting" width="15" height="15" /></a>
+</span>
+March 18, 2026:
+<b>Wake N Bake: on this, National Black Pudding Day!</b>
+|
+<a href="/playlists/shows/162306">See the playlist</a>
+| Listen: <span style="white-space:nowrap"><a href="/flashplayer.php?version=3&amp;show=162306&amp;archive=285353" onclick="return kdbarchivelink(this.href, 3)"><img class="listen_link_image" src="/flashplayer/playbuttont.gif" alt="Pop-up listen">&nbsp;Pop-up&nbsp;player!</a></span>
+<br>
+<li>
+<span class="KDBFavIcon KDBepisode" id="KDBepisode-162276">
+<a href="http://www.wfmu.org/auth.php?a=fav_icon_clicked&amp;type=episode&amp;id=162276&amp;page_type=playlist+index&amp;page_id=WA&amp;r=http%3A%2F%2Fwfmu.org%2Fplaylists%2FWA"
+onclick="KDBFav.fav_icon_clicked(event, this.parentNode);"
+title="Favoriting"
+><img src="/Gfx/star_empty_2.png" border="0" alt="Favoriting" width="15" height="15" /></a>
+</span>
+March 17, 2026:
+<b>Wake N Bake St. Patrick's Day Tuesday</b>
+|
+<a href="/playlists/shows/162276">See the playlist</a>
+| Listen: <span style="white-space:nowrap"><a href="/flashplayer.php?version=3&amp;show=162276&amp;archive=285303" onclick="return kdbarchivelink(this.href, 3)"><img class="listen_link_image" src="/flashplayer/playbuttont.gif" alt="Pop-up listen">&nbsp;Pop-up&nbsp;player!</a></span>
+<br>
+<li>
+<span class="KDBFavIcon KDBepisode" id="KDBepisode-162233">
+<a href="http://www.wfmu.org/auth.php?a=fav_icon_clicked&amp;type=episode&amp;id=162233&amp;page_type=playlist+index&amp;page_id=WA&amp;r=http%3A%2F%2Fwfmu.org%2Fplaylists%2FWA"
+onclick="KDBFav.fav_icon_clicked(event, this.parentNode);"
+title="Favoriting"
+><img src="/Gfx/star_empty_2.png" border="0" alt="Favoriting" width="15" height="15" /></a>
+</span>
+March 16, 2026:
+<b>Wake N Bake: Thank You Glisteners!</b>
+|
+<a href="/playlists/shows/162233">See the playlist</a>
+| Listen: <span style="white-space:nowrap"><a href="/flashplayer.php?version=3&amp;show=162233&amp;archive=285253" onclick="return kdbarchivelink(this.href, 3)"><img class="listen_link_image" src="/flashplayer/playbuttont.gif" alt="Pop-up listen">&nbsp;Pop-up&nbsp;player!</a></span>
+<br>
+<li>
+<span class="KDBFavIcon KDBepisode" id="KDBepisode-162154">
+<a href="http://www.wfmu.org/auth.php?a=fav_icon_clicked&amp;type=episode&amp;id=162154&amp;page_type=playlist+index&amp;page_id=WA&amp;r=http%3A%2F%2Fwfmu.org%2Fplaylists%2FWA"
+onclick="KDBFav.fav_icon_clicked(event, this.parentNode);"
+title="Favoriting"
+><img src="/Gfx/star_empty_2.png" border="0" alt="Favoriting" width="15" height="15" /></a>
+</span>
+March 13, 2026:
+<b>Wake n Bake Forever, Love RadioRachel </b>
+|
+<a href="/playlists/shows/162154">See the playlist</a>
+| Listen: <span style="white-space:nowrap"><a href="/flashplayer.php?version=3&amp;show=162154&amp;archive=285123" onclick="return kdbarchivelink(this.href, 3)"><img class="listen_link_image" src="/flashplayer/playbuttont.gif" alt="Pop-up listen">&nbsp;Pop-up&nbsp;player!</a></span>
+<br>
+<li>
+<span class="KDBFavIcon KDBepisode" id="KDBepisode-162116">
+<a href="http://www.wfmu.org/auth.php?a=fav_icon_clicked&amp;type=episode&amp;id=162116&amp;page_type=playlist+index&amp;page_id=WA&amp;r=http%3A%2F%2Fwfmu.org%2Fplaylists%2FWA"
+onclick="KDBFav.fav_icon_clicked(event, this.parentNode);"
+title="Favoriting"
+><img src="/Gfx/star_empty_2.png" border="0" alt="Favoriting" width="15" height="15" /></a>
+</span>
+March 12, 2026:
+<b>Wake 'N Bake: It's About Dan Time! (Dan Bodah, that is)</b>
+|
+<a href="/playlists/shows/162116">See the playlist</a>
+| Listen: <span style="white-space:nowrap"><a href="/flashplayer.php?version=3&amp;show=162116&amp;archive=285066" onclick="return kdbarchivelink(this.href, 3)"><img class="listen_link_image" src="/flashplayer/playbuttont.gif" alt="Pop-up listen">&nbsp;Pop-up&nbsp;player!</a></span>
+<br>
+<li>
+<span class="KDBFavIcon KDBepisode" id="KDBepisode-162091">
+<a href="http://www.wfmu.org/auth.php?a=fav_icon_clicked&amp;type=episode&amp;id=162091&amp;page_type=playlist+index&amp;page_id=WA&amp;r=http%3A%2F%2Fwfmu.org%2Fplaylists%2FWA"
+onclick="KDBFav.fav_icon_clicked(event, this.parentNode);"
+title="Favoriting"
+><img src="/Gfx/star_empty_2.png" border="0" alt="Favoriting" width="15" height="15" /></a>
+</span>
+March 11, 2026:
+<b>Wake N Bake - pledging for luckies with chief Pop Rocker Evan &quot;Funk&quot; Davies!!</b>
+|
+<a href="/playlists/shows/162091">See the playlist</a>
+| Listen: <span style="white-space:nowrap"><a href="/flashplayer.php?version=3&amp;show=162091&amp;archive=285007" onclick="return kdbarchivelink(this.href, 3)"><img class="listen_link_image" src="/flashplayer/playbuttont.gif" alt="Pop-up listen">&nbsp;Pop-up&nbsp;player!</a></span>
+<br>
+<li>
+<span class="KDBFavIcon KDBepisode" id="KDBepisode-162057">
+<a href="http://www.wfmu.org/auth.php?a=fav_icon_clicked&amp;type=episode&amp;id=162057&amp;page_type=playlist+index&amp;page_id=WA&amp;r=http%3A%2F%2Fwfmu.org%2Fplaylists%2FWA"
+onclick="KDBFav.fav_icon_clicked(event, this.parentNode);"
+title="Favoriting"
+><img src="/Gfx/star_empty_2.png" border="0" alt="Favoriting" width="15" height="15" /></a>
+</span>
+March 10, 2026:
+<b>Wake N Bake Tuesday - Marathon Day 9 with co-host Billy Jam!</b>
+|
+<a href="/playlists/shows/162057">See the playlist</a>
+| Listen: <span style="white-space:nowrap"><a href="/flashplayer.php?version=3&amp;show=162057&amp;archive=284956" onclick="return kdbarchivelink(this.href, 3)"><img class="listen_link_image" src="/flashplayer/playbuttont.gif" alt="Pop-up listen">&nbsp;Pop-up&nbsp;player!</a></span>
+<br>
+<li>
+<span class="KDBFavIcon KDBepisode" id="KDBepisode-162017">
+<a href="http://www.wfmu.org/auth.php?a=fav_icon_clicked&amp;type=episode&amp;id=162017&amp;page_type=playlist+index&amp;page_id=WA&amp;r=http%3A%2F%2Fwfmu.org%2Fplaylists%2FWA"
+onclick="KDBFav.fav_icon_clicked(event, this.parentNode);"
+title="Favoriting"
+><img src="/Gfx/star_empty_2.png" border="0" alt="Favoriting" width="15" height="15" /></a>
+</span>
+March 9, 2026:
+<b>Wake &amp; Bake with Clay and FABIO!!!!!</b>
+|
+<a href="/playlists/shows/162017">See the playlist</a>
+| Listen: <span style="white-space:nowrap"><a href="/flashplayer.php?version=3&amp;show=162017&amp;archive=284906" onclick="return kdbarchivelink(this.href, 3)"><img class="listen_link_image" src="/flashplayer/playbuttont.gif" alt="Pop-up listen">&nbsp;Pop-up&nbsp;player!</a></span>
+<br>
+<li>
+<span class="KDBFavIcon KDBepisode" id="KDBepisode-161930">
+<a href="http://www.wfmu.org/auth.php?a=fav_icon_clicked&amp;type=episode&amp;id=161930&amp;page_type=playlist+index&amp;page_id=WA&amp;r=http%3A%2F%2Fwfmu.org%2Fplaylists%2FWA"
+onclick="KDBFav.fav_icon_clicked(event, this.parentNode);"
+title="Favoriting"
+><img src="/Gfx/star_empty_2.png" border="0" alt="Favoriting" width="15" height="15" /></a>
+</span>
+March 6, 2026:
+<b>Wake n Bake n Feed the Pidge w/ co-host Greg from Zone 5 and Nadia too!</b>
+|
+<a href="/playlists/shows/161930">See the playlist</a>
+| Listen: <span style="white-space:nowrap"><a href="/flashplayer.php?version=3&amp;show=161930&amp;archive=284771" onclick="return kdbarchivelink(this.href, 3)"><img class="listen_link_image" src="/flashplayer/playbuttont.gif" alt="Pop-up listen">&nbsp;Pop-up&nbsp;player!</a></span>
+<br>
+<li>
+<span class="KDBFavIcon KDBepisode" id="KDBepisode-161900">
+<a href="http://www.wfmu.org/auth.php?a=fav_icon_clicked&amp;type=episode&amp;id=161900&amp;page_type=playlist+index&amp;page_id=WA&amp;r=http%3A%2F%2Fwfmu.org%2Fplaylists%2FWA"
+onclick="KDBFav.fav_icon_clicked(event, this.parentNode);"
+title="Favoriting"
+><img src="/Gfx/star_empty_2.png" border="0" alt="Favoriting" width="15" height="15" /></a>
+</span>
+March 5, 2026:
+<b>Wake N' Bake Marathon 2026 Day 4 with Co-Host Chinn!!</b>
+|
+<a href="/playlists/shows/161900">See the playlist</a>
+| Listen: <span style="white-space:nowrap"><a href="/flashplayer.php?version=3&amp;show=161900&amp;archive=284719" onclick="return kdbarchivelink(this.href, 3)"><img class="listen_link_image" src="/flashplayer/playbuttont.gif" alt="Pop-up listen">&nbsp;Pop-up&nbsp;player!</a></span>
+<br>
+<li>
+<span class="KDBFavIcon KDBepisode" id="KDBepisode-161859">
+<a href="http://www.wfmu.org/auth.php?a=fav_icon_clicked&amp;type=episode&amp;id=161859&amp;page_type=playlist+index&amp;page_id=WA&amp;r=http%3A%2F%2Fwfmu.org%2Fplaylists%2FWA"
+onclick="KDBFav.fav_icon_clicked(event, this.parentNode);"
+title="Favoriting"
+><img src="/Gfx/star_empty_2.png" border="0" alt="Favoriting" width="15" height="15" /></a>
+</span>
+March 4, 2026:
+<b>Wake N Bake - 'thon Day 3 with co-host Maggie Hertz!</b>
+|
+<a href="/playlists/shows/161859">See the playlist</a>
+| Listen: <span style="white-space:nowrap"><a href="/flashplayer.php?version=3&amp;show=161859&amp;archive=284660" onclick="return kdbarchivelink(this.href, 3)"><img class="listen_link_image" src="/flashplayer/playbuttont.gif" alt="Pop-up listen">&nbsp;Pop-up&nbsp;player!</a></span>
+<br>
+<li>
+<span class="KDBFavIcon KDBepisode" id="KDBepisode-161830">
+<a href="http://www.wfmu.org/auth.php?a=fav_icon_clicked&amp;type=episode&amp;id=161830&amp;page_type=playlist+index&amp;page_id=WA&amp;r=http%3A%2F%2Fwfmu.org%2Fplaylists%2FWA"
+onclick="KDBFav.fav_icon_clicked(event, this.parentNode);"
+title="Favoriting"
+><img src="/Gfx/star_empty_2.png" border="0" alt="Favoriting" width="15" height="15" /></a>
+</span>
+March 3, 2026:
+<b>Wake N Bake Marathon Day 2 Tuesday with co-host Brian D!</b>
+|
+<a href="/playlists/shows/161830">See the playlist</a>
+| Listen: <span style="white-space:nowrap"><a href="/flashplayer.php?version=3&amp;show=161830&amp;archive=284609" onclick="return kdbarchivelink(this.href, 3)"><img class="listen_link_image" src="/flashplayer/playbuttont.gif" alt="Pop-up listen">&nbsp;Pop-up&nbsp;player!</a></span>
+<br>
+<li>
+<span class="KDBFavIcon KDBepisode" id="KDBepisode-161793">
+<a href="http://www.wfmu.org/auth.php?a=fav_icon_clicked&amp;type=episode&amp;id=161793&amp;page_type=playlist+index&amp;page_id=WA&amp;r=http%3A%2F%2Fwfmu.org%2Fplaylists%2FWA"
+onclick="KDBFav.fav_icon_clicked(event, this.parentNode);"
+title="Favoriting"
+><img src="/Gfx/star_empty_2.png" border="0" alt="Favoriting" width="15" height="15" /></a>
+</span>
+March 2, 2026:
+<b>Wake &amp; Bake: The Marathon Begins! With co-host Matt Warwick.</b>
+|
+<a href="/playlists/shows/161793">See the playlist</a>
+| Listen: <span style="white-space:nowrap"><a href="/flashplayer.php?version=3&amp;show=161793&amp;archive=284553" onclick="return kdbarchivelink(this.href, 3)"><img class="listen_link_image" src="/flashplayer/playbuttont.gif" alt="Pop-up listen">&nbsp;Pop-up&nbsp;player!</a></span>
+<br>
+</ul><ul>
+<li>
+<span class="KDBFavIcon KDBepisode" id="KDBepisode-161698">
+<a href="http://www.wfmu.org/auth.php?a=fav_icon_clicked&amp;type=episode&amp;id=161698&amp;page_type=playlist+index&amp;page_id=WA&amp;r=http%3A%2F%2Fwfmu.org%2Fplaylists%2FWA"
+onclick="KDBFav.fav_icon_clicked(event, this.parentNode);"
+title="Favoriting"
+><img src="/Gfx/star_empty_2.png" border="0" alt="Favoriting" width="15" height="15" /></a>
+</span>
+February 27, 2026:
+<b>Wake n Bake n Be Grateful for the Weekend! </b>
+|
+<a href="/playlists/shows/161698">See the playlist</a>
+| Listen: <span style="white-space:nowrap"><a href="/flashplayer.php?version=3&amp;show=161698&amp;archive=284415" onclick="return kdbarchivelink(this.href, 3)"><img class="listen_link_image" src="/flashplayer/playbuttont.gif" alt="Pop-up listen">&nbsp;Pop-up&nbsp;player!</a></span>
+<br>
+<li>
+<span class="KDBFavIcon KDBepisode" id="KDBepisode-161647">
+<a href="http://www.wfmu.org/auth.php?a=fav_icon_clicked&amp;type=episode&amp;id=161647&amp;page_type=playlist+index&amp;page_id=WA&amp;r=http%3A%2F%2Fwfmu.org%2Fplaylists%2FWA"
+onclick="KDBFav.fav_icon_clicked(event, this.parentNode);"
+title="Favoriting"
+><img src="/Gfx/star_empty_2.png" border="0" alt="Favoriting" width="15" height="15" /></a>
+</span>
+February 26, 2026:
+<b>Wake 'N Bake: Tongue Frankenstein and George Mucus</b>
+|
+<a href="/playlists/shows/161647">See the playlist</a>
+| Listen: <span style="white-space:nowrap"><a href="/flashplayer.php?version=3&amp;show=161647&amp;archive=284359" onclick="return kdbarchivelink(this.href, 3)"><img class="listen_link_image" src="/flashplayer/playbuttont.gif" alt="Pop-up listen">&nbsp;Pop-up&nbsp;player!</a></span>
+<br>
+<li>
+<span class="KDBFavIcon KDBepisode" id="KDBepisode-161629">
+<a href="http://www.wfmu.org/auth.php?a=fav_icon_clicked&amp;type=episode&amp;id=161629&amp;page_type=playlist+index&amp;page_id=WA&amp;r=http%3A%2F%2Fwfmu.org%2Fplaylists%2FWA"
+onclick="KDBFav.fav_icon_clicked(event, this.parentNode);"
+title="Favoriting"
+><img src="/Gfx/star_empty_2.png" border="0" alt="Favoriting" width="15" height="15" /></a>
+</span>
+February 25, 2026:
+<b>Wake N Bake - The Still Point of the Turning Week</b>
+|
+<a href="/playlists/shows/161629">See the playlist</a>
+| Listen: <span style="white-space:nowrap"><a href="/flashplayer.php?version=3&amp;show=161629&amp;archive=284299" onclick="return kdbarchivelink(this.href, 3)"><img class="listen_link_image" src="/flashplayer/playbuttont.gif" alt="Pop-up listen">&nbsp;Pop-up&nbsp;player!</a></span>
+<br>
+<li>
+<span class="KDBFavIcon KDBepisode" id="KDBepisode-161597">
+<a href="http://www.wfmu.org/auth.php?a=fav_icon_clicked&amp;type=episode&amp;id=161597&amp;page_type=playlist+index&amp;page_id=WA&amp;r=http%3A%2F%2Fwfmu.org%2Fplaylists%2FWA"
+onclick="KDBFav.fav_icon_clicked(event, this.parentNode);"
+title="Favoriting"
+><img src="/Gfx/star_empty_2.png" border="0" alt="Favoriting" width="15" height="15" /></a>
+</span>
+February 24, 2026:
+<b>Wake N Bake Frosty Tuesday</b>
+|
+<a href="/playlists/shows/161597">See the playlist</a>
+| Listen: <span style="white-space:nowrap"><a href="/flashplayer.php?version=3&amp;show=161597&amp;archive=284244" onclick="return kdbarchivelink(this.href, 3)"><img class="listen_link_image" src="/flashplayer/playbuttont.gif" alt="Pop-up listen">&nbsp;Pop-up&nbsp;player!</a></span>
+<br>
+<li>
+<span class="KDBFavIcon KDBepisode" id="KDBepisode-161560">
+<a href="http://www.wfmu.org/auth.php?a=fav_icon_clicked&amp;type=episode&amp;id=161560&amp;page_type=playlist+index&amp;page_id=WA&amp;r=http%3A%2F%2Fwfmu.org%2Fplaylists%2FWA"
+onclick="KDBFav.fav_icon_clicked(event, this.parentNode);"
+title="Favoriting"
+><img src="/Gfx/star_empty_2.png" border="0" alt="Favoriting" width="15" height="15" /></a>
+</span>
+February 23, 2026:
+<b>Wake &amp; Shovel!</b>
+|
+<a href="/playlists/shows/161560">See the playlist</a>
+| Listen: <span style="white-space:nowrap"><a href="/flashplayer.php?version=3&amp;show=161560&amp;archive=284194" onclick="return kdbarchivelink(this.href, 3)"><img class="listen_link_image" src="/flashplayer/playbuttont.gif" alt="Pop-up listen">&nbsp;Pop-up&nbsp;player!</a></span>
+<br>
+<li>
+<span class="KDBFavIcon KDBepisode" id="KDBepisode-161469">
+<a href="http://www.wfmu.org/auth.php?a=fav_icon_clicked&amp;type=episode&amp;id=161469&amp;page_type=playlist+index&amp;page_id=WA&amp;r=http%3A%2F%2Fwfmu.org%2Fplaylists%2FWA"
+onclick="KDBFav.fav_icon_clicked(event, this.parentNode);"
+title="Favoriting"
+><img src="/Gfx/star_empty_2.png" border="0" alt="Favoriting" width="15" height="15" /></a>
+</span>
+February 20, 2026:
+<b>almost the weekend! EFD fills in for the Pidge!</b>
+|
+<a href="/playlists/shows/161469">See the playlist</a>
+| Listen: <span style="white-space:nowrap"><a href="/flashplayer.php?version=3&amp;show=161469&amp;archive=284065" onclick="return kdbarchivelink(this.href, 3)"><img class="listen_link_image" src="/flashplayer/playbuttont.gif" alt="Pop-up listen">&nbsp;Pop-up&nbsp;player!</a></span>
+<br>
+<li>
+<span class="KDBFavIcon KDBepisode" id="KDBepisode-161424">
+<a href="http://www.wfmu.org/auth.php?a=fav_icon_clicked&amp;type=episode&amp;id=161424&amp;page_type=playlist+index&amp;page_id=WA&amp;r=http%3A%2F%2Fwfmu.org%2Fplaylists%2FWA"
+onclick="KDBFav.fav_icon_clicked(event, this.parentNode);"
+title="Favoriting"
+><img src="/Gfx/star_empty_2.png" border="0" alt="Favoriting" width="15" height="15" /></a>
+</span>
+February 19, 2026:
+<b>Wake 'N Bake: Clothes Anger and Groin Pains</b>
+|
+<a href="/playlists/shows/161424">See the playlist</a>
+| Listen: <span style="white-space:nowrap"><a href="/flashplayer.php?version=3&amp;show=161424&amp;archive=284014" onclick="return kdbarchivelink(this.href, 3)"><img class="listen_link_image" src="/flashplayer/playbuttont.gif" alt="Pop-up listen">&nbsp;Pop-up&nbsp;player!</a></span>
+<br>
+<li>
+<span class="KDBFavIcon KDBepisode" id="KDBepisode-161401">
+<a href="http://www.wfmu.org/auth.php?a=fav_icon_clicked&amp;type=episode&amp;id=161401&amp;page_type=playlist+index&amp;page_id=WA&amp;r=http%3A%2F%2Fwfmu.org%2Fplaylists%2FWA"
+onclick="KDBFav.fav_icon_clicked(event, this.parentNode);"
+title="Favoriting"
+><img src="/Gfx/star_empty_2.png" border="0" alt="Favoriting" width="15" height="15" /></a>
+</span>
+February 18, 2026:
+<b>Wake N Bake - your midweek liferaft</b>
+|
+<a href="/playlists/shows/161401">See the playlist</a>
+| Listen: <span style="white-space:nowrap"><a href="/flashplayer.php?version=3&amp;show=161401&amp;archive=283956" onclick="return kdbarchivelink(this.href, 3)"><img class="listen_link_image" src="/flashplayer/playbuttont.gif" alt="Pop-up listen">&nbsp;Pop-up&nbsp;player!</a></span>
+<br>
+<li>
+<span class="KDBFavIcon KDBepisode" id="KDBepisode-161371">
+<a href="http://www.wfmu.org/auth.php?a=fav_icon_clicked&amp;type=episode&amp;id=161371&amp;page_type=playlist+index&amp;page_id=WA&amp;r=http%3A%2F%2Fwfmu.org%2Fplaylists%2FWA"
+onclick="KDBFav.fav_icon_clicked(event, this.parentNode);"
+title="Favoriting"
+><img src="/Gfx/star_empty_2.png" border="0" alt="Favoriting" width="15" height="15" /></a>
+</span>
+February 17, 2026:
+<b>Wake N Bake on Fat Tuesday</b>
+|
+<a href="/playlists/shows/161371">See the playlist</a>
+| Listen: <span style="white-space:nowrap"><a href="/flashplayer.php?version=3&amp;show=161371&amp;archive=283906" onclick="return kdbarchivelink(this.href, 3)"><img class="listen_link_image" src="/flashplayer/playbuttont.gif" alt="Pop-up listen">&nbsp;Pop-up&nbsp;player!</a></span>
+<br>
+<li>
+<span class="KDBFavIcon KDBepisode" id="KDBepisode-161327">
+<a href="http://www.wfmu.org/auth.php?a=fav_icon_clicked&amp;type=episode&amp;id=161327&amp;page_type=playlist+index&amp;page_id=WA&amp;r=http%3A%2F%2Fwfmu.org%2Fplaylists%2FWA"
+onclick="KDBFav.fav_icon_clicked(event, this.parentNode);"
+title="Favoriting"
+><img src="/Gfx/star_empty_2.png" border="0" alt="Favoriting" width="15" height="15" /></a>
+</span>
+February 16, 2026:
+<b>Wake N Bake - Hope you have the day off to HORSE around!</b>
+|
+<a href="/playlists/shows/161327">See the playlist</a>
+| Listen: <span style="white-space:nowrap"><a href="/flashplayer.php?version=3&amp;show=161327&amp;archive=283856" onclick="return kdbarchivelink(this.href, 3)"><img class="listen_link_image" src="/flashplayer/playbuttont.gif" alt="Pop-up listen">&nbsp;Pop-up&nbsp;player!</a></span>
+<br>
+<li>
+<span class="KDBFavIcon KDBepisode" id="KDBepisode-161245">
+<a href="http://www.wfmu.org/auth.php?a=fav_icon_clicked&amp;type=episode&amp;id=161245&amp;page_type=playlist+index&amp;page_id=WA&amp;r=http%3A%2F%2Fwfmu.org%2Fplaylists%2FWA"
+onclick="KDBFav.fav_icon_clicked(event, this.parentNode);"
+title="Favoriting"
+><img src="/Gfx/star_empty_2.png" border="0" alt="Favoriting" width="15" height="15" /></a>
+</span>
+February 13, 2026:
+<b>Wake n Bake n Call Your Galentines </b>
+|
+<a href="/playlists/shows/161245">See the playlist</a>
+| Listen: <span style="white-space:nowrap"><a href="/flashplayer.php?version=3&amp;show=161245&amp;archive=283723" onclick="return kdbarchivelink(this.href, 3)"><img class="listen_link_image" src="/flashplayer/playbuttont.gif" alt="Pop-up listen">&nbsp;Pop-up&nbsp;player!</a></span>
+<br>
+<li>
+<span class="KDBFavIcon KDBepisode" id="KDBepisode-161195">
+<a href="http://www.wfmu.org/auth.php?a=fav_icon_clicked&amp;type=episode&amp;id=161195&amp;page_type=playlist+index&amp;page_id=WA&amp;r=http%3A%2F%2Fwfmu.org%2Fplaylists%2FWA"
+onclick="KDBFav.fav_icon_clicked(event, this.parentNode);"
+title="Favoriting"
+><img src="/Gfx/star_empty_2.png" border="0" alt="Favoriting" width="15" height="15" /></a>
+</span>
+February 12, 2026:
+<b>Wake 'N Bake: Noam Chimpsky and Unleaded Gas</b>
+|
+<a href="/playlists/shows/161195">See the playlist</a>
+| Listen: <span style="white-space:nowrap"><a href="/flashplayer.php?version=3&amp;show=161195&amp;archive=283668" onclick="return kdbarchivelink(this.href, 3)"><img class="listen_link_image" src="/flashplayer/playbuttont.gif" alt="Pop-up listen">&nbsp;Pop-up&nbsp;player!</a></span>
+<br>
+<li>
+<span class="KDBFavIcon KDBepisode" id="KDBepisode-161176">
+<a href="http://www.wfmu.org/auth.php?a=fav_icon_clicked&amp;type=episode&amp;id=161176&amp;page_type=playlist+index&amp;page_id=WA&amp;r=http%3A%2F%2Fwfmu.org%2Fplaylists%2FWA"
+onclick="KDBFav.fav_icon_clicked(event, this.parentNode);"
+title="Favoriting"
+><img src="/Gfx/star_empty_2.png" border="0" alt="Favoriting" width="15" height="15" /></a>
+</span>
+February 11, 2026:
+<b>Wake N Bake: Just Another Wholesome Wednesday</b>
+|
+<a href="/playlists/shows/161176">See the playlist</a>
+| Listen: <span style="white-space:nowrap"><a href="/flashplayer.php?version=3&amp;show=161176&amp;archive=283609" onclick="return kdbarchivelink(this.href, 3)"><img class="listen_link_image" src="/flashplayer/playbuttont.gif" alt="Pop-up listen">&nbsp;Pop-up&nbsp;player!</a></span>
+<br>
+<li>
+<span class="KDBFavIcon KDBepisode" id="KDBepisode-161144">
+<a href="http://www.wfmu.org/auth.php?a=fav_icon_clicked&amp;type=episode&amp;id=161144&amp;page_type=playlist+index&amp;page_id=WA&amp;r=http%3A%2F%2Fwfmu.org%2Fplaylists%2FWA"
+onclick="KDBFav.fav_icon_clicked(event, this.parentNode);"
+title="Favoriting"
+><img src="/Gfx/star_empty_2.png" border="0" alt="Favoriting" width="15" height="15" /></a>
+</span>
+February 10, 2026:
+<b>Wake N Bake Just Another Terrific Tuesday</b>
+|
+<a href="/playlists/shows/161144">See the playlist</a>
+| Listen: <span style="white-space:nowrap"><a href="/flashplayer.php?version=3&amp;show=161144&amp;archive=283553" onclick="return kdbarchivelink(this.href, 3)"><img class="listen_link_image" src="/flashplayer/playbuttont.gif" alt="Pop-up listen">&nbsp;Pop-up&nbsp;player!</a></span>
+<br>
+<li>
+<span class="KDBFavIcon KDBepisode" id="KDBepisode-161100">
+<a href="http://www.wfmu.org/auth.php?a=fav_icon_clicked&amp;type=episode&amp;id=161100&amp;page_type=playlist+index&amp;page_id=WA&amp;r=http%3A%2F%2Fwfmu.org%2Fplaylists%2FWA"
+onclick="KDBFav.fav_icon_clicked(event, this.parentNode);"
+title="Favoriting"
+><img src="/Gfx/star_empty_2.png" border="0" alt="Favoriting" width="15" height="15" /></a>
+</span>
+February 9, 2026:
+<b>Wake N Bake: Just Another Manic Monday!</b>
+|
+<a href="/playlists/shows/161100">See the playlist</a>
+| Listen: <span style="white-space:nowrap"><a href="/flashplayer.php?version=3&amp;show=161100&amp;archive=283507" onclick="return kdbarchivelink(this.href, 3)"><img class="listen_link_image" src="/flashplayer/playbuttont.gif" alt="Pop-up listen">&nbsp;Pop-up&nbsp;player!</a></span>
+<br>
+<li>
+<span class="KDBFavIcon KDBepisode" id="KDBepisode-161015">
+<a href="http://www.wfmu.org/auth.php?a=fav_icon_clicked&amp;type=episode&amp;id=161015&amp;page_type=playlist+index&amp;page_id=WA&amp;r=http%3A%2F%2Fwfmu.org%2Fplaylists%2FWA"
+onclick="KDBFav.fav_icon_clicked(event, this.parentNode);"
+title="Favoriting"
+><img src="/Gfx/star_empty_2.png" border="0" alt="Favoriting" width="15" height="15" /></a>
+</span>
+February 6, 2026:
+<b>Wake n Bake y Saca más fotos</b>
+|
+<a href="/playlists/shows/161015">See the playlist</a>
+| Listen: <span style="white-space:nowrap"><a href="/flashplayer.php?version=3&amp;show=161015&amp;archive=283375" onclick="return kdbarchivelink(this.href, 3)"><img class="listen_link_image" src="/flashplayer/playbuttont.gif" alt="Pop-up listen">&nbsp;Pop-up&nbsp;player!</a></span>
+<br>
+<li>
+<span class="KDBFavIcon KDBepisode" id="KDBepisode-160972">
+<a href="http://www.wfmu.org/auth.php?a=fav_icon_clicked&amp;type=episode&amp;id=160972&amp;page_type=playlist+index&amp;page_id=WA&amp;r=http%3A%2F%2Fwfmu.org%2Fplaylists%2FWA"
+onclick="KDBFav.fav_icon_clicked(event, this.parentNode);"
+title="Favoriting"
+><img src="/Gfx/star_empty_2.png" border="0" alt="Favoriting" width="15" height="15" /></a>
+</span>
+February 5, 2026:
+<b>Wake 'N Bake: Phlegm Kaddidlehopper and Tennis Balls</b>
+|
+<a href="/playlists/shows/160972">See the playlist</a>
+| Listen: <span style="white-space:nowrap"><a href="/flashplayer.php?version=3&amp;show=160972&amp;archive=283322" onclick="return kdbarchivelink(this.href, 3)"><img class="listen_link_image" src="/flashplayer/playbuttont.gif" alt="Pop-up listen">&nbsp;Pop-up&nbsp;player!</a></span>
+<br>
+<li>
+<span class="KDBFavIcon KDBepisode" id="KDBepisode-160953">
+<a href="http://www.wfmu.org/auth.php?a=fav_icon_clicked&amp;type=episode&amp;id=160953&amp;page_type=playlist+index&amp;page_id=WA&amp;r=http%3A%2F%2Fwfmu.org%2Fplaylists%2FWA"
+onclick="KDBFav.fav_icon_clicked(event, this.parentNode);"
+title="Favoriting"
+><img src="/Gfx/star_empty_2.png" border="0" alt="Favoriting" width="15" height="15" /></a>
+</span>
+February 4, 2026:
+<b>Wake N Bake - Half a Week Onwards</b>
+|
+<a href="/playlists/shows/160953">See the playlist</a>
+| Listen: <span style="white-space:nowrap"><a href="/flashplayer.php?version=3&amp;show=160953&amp;archive=283263" onclick="return kdbarchivelink(this.href, 3)"><img class="listen_link_image" src="/flashplayer/playbuttont.gif" alt="Pop-up listen">&nbsp;Pop-up&nbsp;player!</a></span>
+<br>
+<li>
+<span class="KDBFavIcon KDBepisode" id="KDBepisode-160924">
+<a href="http://www.wfmu.org/auth.php?a=fav_icon_clicked&amp;type=episode&amp;id=160924&amp;page_type=playlist+index&amp;page_id=WA&amp;r=http%3A%2F%2Fwfmu.org%2Fplaylists%2FWA"
+onclick="KDBFav.fav_icon_clicked(event, this.parentNode);"
+title="Favoriting"
+><img src="/Gfx/star_empty_2.png" border="0" alt="Favoriting" width="15" height="15" /></a>
+</span>
+February 3, 2026:
+<b>Wake N Bake Waiting for the Big Thaw..Tuesday</b>
+|
+<a href="/playlists/shows/160924">See the playlist</a>
+| Listen: <span style="white-space:nowrap"><a href="/flashplayer.php?version=3&amp;show=160924&amp;archive=283213" onclick="return kdbarchivelink(this.href, 3)"><img class="listen_link_image" src="/flashplayer/playbuttont.gif" alt="Pop-up listen">&nbsp;Pop-up&nbsp;player!</a></span>
+<br>
+<li>
+<span class="KDBFavIcon KDBepisode" id="KDBepisode-160874">
+<a href="http://www.wfmu.org/auth.php?a=fav_icon_clicked&amp;type=episode&amp;id=160874&amp;page_type=playlist+index&amp;page_id=WA&amp;r=http%3A%2F%2Fwfmu.org%2Fplaylists%2FWA"
+onclick="KDBFav.fav_icon_clicked(event, this.parentNode);"
+title="Favoriting"
+><img src="/Gfx/star_empty_2.png" border="0" alt="Favoriting" width="15" height="15" /></a>
+</span>
+February 2, 2026:
+<b>Wake N Bake To Another Groundhog's Day!</b>
+|
+<a href="/playlists/shows/160874">See the playlist</a>
+| Listen: <span style="white-space:nowrap"><a href="/flashplayer.php?version=3&amp;show=160874&amp;archive=283165" onclick="return kdbarchivelink(this.href, 3)"><img class="listen_link_image" src="/flashplayer/playbuttont.gif" alt="Pop-up listen">&nbsp;Pop-up&nbsp;player!</a></span>
+<br>
+</ul><ul>
+<li>
+<span class="KDBFavIcon KDBepisode" id="KDBepisode-160790">
+<a href="http://www.wfmu.org/auth.php?a=fav_icon_clicked&amp;type=episode&amp;id=160790&amp;page_type=playlist+index&amp;page_id=WA&amp;r=http%3A%2F%2Fwfmu.org%2Fplaylists%2FWA"
+onclick="KDBFav.fav_icon_clicked(event, this.parentNode);"
+title="Favoriting"
+><img src="/Gfx/star_empty_2.png" border="0" alt="Favoriting" width="15" height="15" /></a>
+</span>
+January 30, 2026:
+<b>Wake n Bake n melt the ice </b>
+|
+<a href="/playlists/shows/160790">See the playlist</a>
+| Listen: <span style="white-space:nowrap"><a href="/flashplayer.php?version=3&amp;show=160790&amp;archive=283025" onclick="return kdbarchivelink(this.href, 3)"><img class="listen_link_image" src="/flashplayer/playbuttont.gif" alt="Pop-up listen">&nbsp;Pop-up&nbsp;player!</a></span>
+<br>
+<li>
+<span class="KDBFavIcon KDBepisode" id="KDBepisode-160728">
+<a href="http://www.wfmu.org/auth.php?a=fav_icon_clicked&amp;type=episode&amp;id=160728&amp;page_type=playlist+index&amp;page_id=WA&amp;r=http%3A%2F%2Fwfmu.org%2Fplaylists%2FWA"
+onclick="KDBFav.fav_icon_clicked(event, this.parentNode);"
+title="Favoriting"
+><img src="/Gfx/star_empty_2.png" border="0" alt="Favoriting" width="15" height="15" /></a>
+</span>
+January 29, 2026:
+<b>Wake 'N Bake: Vein Newton and Pepperidge Forearm</b>
+|
+<a href="/playlists/shows/160728">See the playlist</a>
+| Listen: <span style="white-space:nowrap"><a href="/flashplayer.php?version=3&amp;show=160728&amp;archive=282972" onclick="return kdbarchivelink(this.href, 3)"><img class="listen_link_image" src="/flashplayer/playbuttont.gif" alt="Pop-up listen">&nbsp;Pop-up&nbsp;player!</a></span>
+<br>
+<li>
+<span class="KDBFavIcon KDBepisode" id="KDBepisode-160718">
+<a href="http://www.wfmu.org/auth.php?a=fav_icon_clicked&amp;type=episode&amp;id=160718&amp;page_type=playlist+index&amp;page_id=WA&amp;r=http%3A%2F%2Fwfmu.org%2Fplaylists%2FWA"
+onclick="KDBFav.fav_icon_clicked(event, this.parentNode);"
+title="Favoriting"
+><img src="/Gfx/star_empty_2.png" border="0" alt="Favoriting" width="15" height="15" /></a>
+</span>
+January 28, 2026:
+<b>Wake N Bake - Wednesdays Going Steady</b>
+|
+<a href="/playlists/shows/160718">See the playlist</a>
+| Listen: <span style="white-space:nowrap"><a href="/flashplayer.php?version=3&amp;show=160718&amp;archive=282915" onclick="return kdbarchivelink(this.href, 3)"><img class="listen_link_image" src="/flashplayer/playbuttont.gif" alt="Pop-up listen">&nbsp;Pop-up&nbsp;player!</a></span>
+<br>
+<li>
+<span class="KDBFavIcon KDBepisode" id="KDBepisode-160687">
+<a href="http://www.wfmu.org/auth.php?a=fav_icon_clicked&amp;type=episode&amp;id=160687&amp;page_type=playlist+index&amp;page_id=WA&amp;r=http%3A%2F%2Fwfmu.org%2Fplaylists%2FWA"
+onclick="KDBFav.fav_icon_clicked(event, this.parentNode);"
+title="Favoriting"
+><img src="/Gfx/star_empty_2.png" border="0" alt="Favoriting" width="15" height="15" /></a>
+</span>
+January 27, 2026:
+<b>Wake N Bake Frozen Solid Tuesday</b>
+|
+<a href="/playlists/shows/160687">See the playlist</a>
+| Listen: <span style="white-space:nowrap"><a href="/flashplayer.php?version=3&amp;show=160687&amp;archive=282857" onclick="return kdbarchivelink(this.href, 3)"><img class="listen_link_image" src="/flashplayer/playbuttont.gif" alt="Pop-up listen">&nbsp;Pop-up&nbsp;player!</a></span>
+<br>
+<li>
+<span class="KDBFavIcon KDBepisode" id="KDBepisode-160643">
+<a href="http://www.wfmu.org/auth.php?a=fav_icon_clicked&amp;type=episode&amp;id=160643&amp;page_type=playlist+index&amp;page_id=WA&amp;r=http%3A%2F%2Fwfmu.org%2Fplaylists%2FWA"
+onclick="KDBFav.fav_icon_clicked(event, this.parentNode);"
+title="Favoriting"
+><img src="/Gfx/star_empty_2.png" border="0" alt="Favoriting" width="15" height="15" /></a>
+</span>
+January 26, 2026:
+<b>Wake N Bake: Snowpocalypse NOW!</b>
+|
+<a href="/playlists/shows/160643">See the playlist</a>
+| Listen: <span style="white-space:nowrap"><a href="/flashplayer.php?version=3&amp;show=160643&amp;archive=282807" onclick="return kdbarchivelink(this.href, 3)"><img class="listen_link_image" src="/flashplayer/playbuttont.gif" alt="Pop-up listen">&nbsp;Pop-up&nbsp;player!</a></span>
+<br>
+<li>
+<span class="KDBFavIcon KDBepisode" id="KDBepisode-160549">
+<a href="http://www.wfmu.org/auth.php?a=fav_icon_clicked&amp;type=episode&amp;id=160549&amp;page_type=playlist+index&amp;page_id=WA&amp;r=http%3A%2F%2Fwfmu.org%2Fplaylists%2FWA"
+onclick="KDBFav.fav_icon_clicked(event, this.parentNode);"
+title="Favoriting"
+><img src="/Gfx/star_empty_2.png" border="0" alt="Favoriting" width="15" height="15" /></a>
+</span>
+January 23, 2026:
+<b>Wake n Bake and Grab a Shovel, Help a Neighbor!!</b>
+|
+<a href="/playlists/shows/160549">See the playlist</a>
+| Listen: <span style="white-space:nowrap"><a href="/flashplayer.php?version=3&amp;show=160549&amp;archive=282674" onclick="return kdbarchivelink(this.href, 3)"><img class="listen_link_image" src="/flashplayer/playbuttont.gif" alt="Pop-up listen">&nbsp;Pop-up&nbsp;player!</a></span>
+<br>
+<li>
+<span class="KDBFavIcon KDBepisode" id="KDBepisode-160491">
+<a href="http://www.wfmu.org/auth.php?a=fav_icon_clicked&amp;type=episode&amp;id=160491&amp;page_type=playlist+index&amp;page_id=WA&amp;r=http%3A%2F%2Fwfmu.org%2Fplaylists%2FWA"
+onclick="KDBFav.fav_icon_clicked(event, this.parentNode);"
+title="Favoriting"
+><img src="/Gfx/star_empty_2.png" border="0" alt="Favoriting" width="15" height="15" /></a>
+</span>
+January 22, 2026:
+<b>Wake 'N Bake: Demographic Research: &quot;We're Losing The Nutley Housewives&quot;</b>
+|
+<a href="/playlists/shows/160491">See the playlist</a>
+| Listen: <span style="white-space:nowrap"><a href="/flashplayer.php?version=3&amp;show=160491&amp;archive=282622" onclick="return kdbarchivelink(this.href, 3)"><img class="listen_link_image" src="/flashplayer/playbuttont.gif" alt="Pop-up listen">&nbsp;Pop-up&nbsp;player!</a></span>
+<br>
+<li>
+<span class="KDBFavIcon KDBepisode" id="KDBepisode-160473">
+<a href="http://www.wfmu.org/auth.php?a=fav_icon_clicked&amp;type=episode&amp;id=160473&amp;page_type=playlist+index&amp;page_id=WA&amp;r=http%3A%2F%2Fwfmu.org%2Fplaylists%2FWA"
+onclick="KDBFav.fav_icon_clicked(event, this.parentNode);"
+title="Favoriting"
+><img src="/Gfx/star_empty_2.png" border="0" alt="Favoriting" width="15" height="15" /></a>
+</span>
+January 21, 2026:
+<b>Wake n Bake and PUT ON A HAT, IT'S FREEZING!!!</b>
+|
+<a href="/playlists/shows/160473">See the playlist</a>
+| Listen: <span style="white-space:nowrap"><a href="/flashplayer.php?version=3&amp;show=160473&amp;archive=282564" onclick="return kdbarchivelink(this.href, 3)"><img class="listen_link_image" src="/flashplayer/playbuttont.gif" alt="Pop-up listen">&nbsp;Pop-up&nbsp;player!</a></span>
+<br>
+<li>
+<span class="KDBFavIcon KDBepisode" id="KDBepisode-160441">
+<a href="http://www.wfmu.org/auth.php?a=fav_icon_clicked&amp;type=episode&amp;id=160441&amp;page_type=playlist+index&amp;page_id=WA&amp;r=http%3A%2F%2Fwfmu.org%2Fplaylists%2FWA"
+onclick="KDBFav.fav_icon_clicked(event, this.parentNode);"
+title="Favoriting"
+><img src="/Gfx/star_empty_2.png" border="0" alt="Favoriting" width="15" height="15" /></a>
+</span>
+January 20, 2026:
+<b>Wake N Bake Way Too Cold Tuesday</b>
+|
+<a href="/playlists/shows/160441">See the playlist</a>
+| Listen: <span style="white-space:nowrap"><a href="/flashplayer.php?version=3&amp;show=160441&amp;archive=282512" onclick="return kdbarchivelink(this.href, 3)"><img class="listen_link_image" src="/flashplayer/playbuttont.gif" alt="Pop-up listen">&nbsp;Pop-up&nbsp;player!</a></span>
+<br>
+<li>
+<span class="KDBFavIcon KDBepisode" id="KDBepisode-160399">
+<a href="http://www.wfmu.org/auth.php?a=fav_icon_clicked&amp;type=episode&amp;id=160399&amp;page_type=playlist+index&amp;page_id=WA&amp;r=http%3A%2F%2Fwfmu.org%2Fplaylists%2FWA"
+onclick="KDBFav.fav_icon_clicked(event, this.parentNode);"
+title="Favoriting"
+><img src="/Gfx/star_empty_2.png" border="0" alt="Favoriting" width="15" height="15" /></a>
+</span>
+January 19, 2026:
+<b>Wake N Bake For MLK!</b>
+|
+<a href="/playlists/shows/160399">See the playlist</a>
+| Listen: <span style="white-space:nowrap"><a href="/flashplayer.php?version=3&amp;show=160399&amp;archive=282461" onclick="return kdbarchivelink(this.href, 3)"><img class="listen_link_image" src="/flashplayer/playbuttont.gif" alt="Pop-up listen">&nbsp;Pop-up&nbsp;player!</a></span>
+<br>
+<li>
+<span class="KDBFavIcon KDBepisode" id="KDBepisode-160320">
+<a href="http://www.wfmu.org/auth.php?a=fav_icon_clicked&amp;type=episode&amp;id=160320&amp;page_type=playlist+index&amp;page_id=WA&amp;r=http%3A%2F%2Fwfmu.org%2Fplaylists%2FWA"
+onclick="KDBFav.fav_icon_clicked(event, this.parentNode);"
+title="Favoriting"
+><img src="/Gfx/star_empty_2.png" border="0" alt="Favoriting" width="15" height="15" /></a>
+</span>
+January 16, 2026:
+<b>Wake n Bake n Resist </b>
+|
+<a href="/playlists/shows/160320">See the playlist</a>
+| Listen: <span style="white-space:nowrap"><a href="/flashplayer.php?version=3&amp;show=160320&amp;archive=282335" onclick="return kdbarchivelink(this.href, 3)"><img class="listen_link_image" src="/flashplayer/playbuttont.gif" alt="Pop-up listen">&nbsp;Pop-up&nbsp;player!</a></span>
+<br>
+<li>
+<span class="KDBFavIcon KDBepisode" id="KDBepisode-160268">
+<a href="http://www.wfmu.org/auth.php?a=fav_icon_clicked&amp;type=episode&amp;id=160268&amp;page_type=playlist+index&amp;page_id=WA&amp;r=http%3A%2F%2Fwfmu.org%2Fplaylists%2FWA"
+onclick="KDBFav.fav_icon_clicked(event, this.parentNode);"
+title="Favoriting"
+><img src="/Gfx/star_empty_2.png" border="0" alt="Favoriting" width="15" height="15" /></a>
+</span>
+January 15, 2026:
+<b>Wake 'N Bake: Tink Pinkle and Parsley Rage</b>
+|
+<a href="/playlists/shows/160268">See the playlist</a>
+| Listen: <span style="white-space:nowrap"><a href="/flashplayer.php?version=3&amp;show=160268&amp;archive=282279" onclick="return kdbarchivelink(this.href, 3)"><img class="listen_link_image" src="/flashplayer/playbuttont.gif" alt="Pop-up listen">&nbsp;Pop-up&nbsp;player!</a></span>
+<br>
+<li>
+<span class="KDBFavIcon KDBepisode" id="KDBepisode-160248">
+<a href="http://www.wfmu.org/auth.php?a=fav_icon_clicked&amp;type=episode&amp;id=160248&amp;page_type=playlist+index&amp;page_id=WA&amp;r=http%3A%2F%2Fwfmu.org%2Fplaylists%2FWA"
+onclick="KDBFav.fav_icon_clicked(event, this.parentNode);"
+title="Favoriting"
+><img src="/Gfx/star_empty_2.png" border="0" alt="Favoriting" width="15" height="15" /></a>
+</span>
+January 14, 2026:
+<b>Wake N Bake: happy Old New Year (Julian calendar)</b>
+|
+<a href="/playlists/shows/160248">See the playlist</a>
+| Listen: <span style="white-space:nowrap"><a href="/flashplayer.php?version=3&amp;show=160248&amp;archive=282225" onclick="return kdbarchivelink(this.href, 3)"><img class="listen_link_image" src="/flashplayer/playbuttont.gif" alt="Pop-up listen">&nbsp;Pop-up&nbsp;player!</a></span>
+<br>
+<li>
+<span class="KDBFavIcon KDBepisode" id="KDBepisode-160222">
+<a href="http://www.wfmu.org/auth.php?a=fav_icon_clicked&amp;type=episode&amp;id=160222&amp;page_type=playlist+index&amp;page_id=WA&amp;r=http%3A%2F%2Fwfmu.org%2Fplaylists%2FWA"
+onclick="KDBFav.fav_icon_clicked(event, this.parentNode);"
+title="Favoriting"
+><img src="/Gfx/star_empty_2.png" border="0" alt="Favoriting" width="15" height="15" /></a>
+</span>
+January 13, 2026:
+<b>Wake N Bake So Much Too Much Tuesday</b>
+|
+<a href="/playlists/shows/160222">See the playlist</a>
+| Listen: <span style="white-space:nowrap"><a href="/flashplayer.php?version=3&amp;show=160222&amp;archive=282179" onclick="return kdbarchivelink(this.href, 3)"><img class="listen_link_image" src="/flashplayer/playbuttont.gif" alt="Pop-up listen">&nbsp;Pop-up&nbsp;player!</a></span>
+<br>
+<li>
+<span class="KDBFavIcon KDBepisode" id="KDBepisode-160175">
+<a href="http://www.wfmu.org/auth.php?a=fav_icon_clicked&amp;type=episode&amp;id=160175&amp;page_type=playlist+index&amp;page_id=WA&amp;r=http%3A%2F%2Fwfmu.org%2Fplaylists%2FWA"
+onclick="KDBFav.fav_icon_clicked(event, this.parentNode);"
+title="Favoriting"
+><img src="/Gfx/star_empty_2.png" border="0" alt="Favoriting" width="15" height="15" /></a>
+</span>
+January 12, 2026:
+<b>Wake N Bake for Bob Weir!</b>
+|
+<a href="/playlists/shows/160175">See the playlist</a>
+| Listen: <span style="white-space:nowrap"><a href="/flashplayer.php?version=3&amp;show=160175&amp;archive=282127" onclick="return kdbarchivelink(this.href, 3)"><img class="listen_link_image" src="/flashplayer/playbuttont.gif" alt="Pop-up listen">&nbsp;Pop-up&nbsp;player!</a></span>
+<br>
+<li>
+<span class="KDBFavIcon KDBepisode" id="KDBepisode-160094">
+<a href="http://www.wfmu.org/auth.php?a=fav_icon_clicked&amp;type=episode&amp;id=160094&amp;page_type=playlist+index&amp;page_id=WA&amp;r=http%3A%2F%2Fwfmu.org%2Fplaylists%2FWA"
+onclick="KDBFav.fav_icon_clicked(event, this.parentNode);"
+title="Favoriting"
+><img src="/Gfx/star_empty_2.png" border="0" alt="Favoriting" width="15" height="15" /></a>
+</span>
+January 9, 2026:
+<b>Wake n Bake n Fight the Power </b>
+|
+<a href="/playlists/shows/160094">See the playlist</a>
+| Listen: <span style="white-space:nowrap"><a href="/flashplayer.php?version=3&amp;show=160094&amp;archive=281993" onclick="return kdbarchivelink(this.href, 3)"><img class="listen_link_image" src="/flashplayer/playbuttont.gif" alt="Pop-up listen">&nbsp;Pop-up&nbsp;player!</a></span>
+<br>
+<li>
+<span class="KDBFavIcon KDBepisode" id="KDBepisode-160042">
+<a href="http://www.wfmu.org/auth.php?a=fav_icon_clicked&amp;type=episode&amp;id=160042&amp;page_type=playlist+index&amp;page_id=WA&amp;r=http%3A%2F%2Fwfmu.org%2Fplaylists%2FWA"
+onclick="KDBFav.fav_icon_clicked(event, this.parentNode);"
+title="Favoriting"
+><img src="/Gfx/star_empty_2.png" border="0" alt="Favoriting" width="15" height="15" /></a>
+</span>
+January 8, 2026:
+<b>Wake 'N Bake: Color Blandness and Snow PEEs</b>
+|
+<a href="/playlists/shows/160042">See the playlist</a>
+| Listen: <span style="white-space:nowrap"><a href="/flashplayer.php?version=3&amp;show=160042&amp;archive=281939" onclick="return kdbarchivelink(this.href, 3)"><img class="listen_link_image" src="/flashplayer/playbuttont.gif" alt="Pop-up listen">&nbsp;Pop-up&nbsp;player!</a></span>
+<br>
+<li>
+<span class="KDBFavIcon KDBepisode" id="KDBepisode-160020">
+<a href="http://www.wfmu.org/auth.php?a=fav_icon_clicked&amp;type=episode&amp;id=160020&amp;page_type=playlist+index&amp;page_id=WA&amp;r=http%3A%2F%2Fwfmu.org%2Fplaylists%2FWA"
+onclick="KDBFav.fav_icon_clicked(event, this.parentNode);"
+title="Favoriting"
+><img src="/Gfx/star_empty_2.png" border="0" alt="Favoriting" width="15" height="15" /></a>
+</span>
+January 7, 2026:
+<b>Wake N Bake: the first Wednesday of the rest of your life</b>
+|
+<a href="/playlists/shows/160020">See the playlist</a>
+| Listen: <span style="white-space:nowrap"><a href="/flashplayer.php?version=3&amp;show=160020&amp;archive=281879" onclick="return kdbarchivelink(this.href, 3)"><img class="listen_link_image" src="/flashplayer/playbuttont.gif" alt="Pop-up listen">&nbsp;Pop-up&nbsp;player!</a></span>
+<br>
+<li>
+<span class="KDBFavIcon KDBepisode" id="KDBepisode-159991">
+<a href="http://www.wfmu.org/auth.php?a=fav_icon_clicked&amp;type=episode&amp;id=159991&amp;page_type=playlist+index&amp;page_id=WA&amp;r=http%3A%2F%2Fwfmu.org%2Fplaylists%2FWA"
+onclick="KDBFav.fav_icon_clicked(event, this.parentNode);"
+title="Favoriting"
+><img src="/Gfx/star_empty_2.png" border="0" alt="Favoriting" width="15" height="15" /></a>
+</span>
+January 6, 2026:
+<b>Wake N Bake Go Team Wake Tuesday</b>
+|
+<a href="/playlists/shows/159991">See the playlist</a>
+| Listen: <span style="white-space:nowrap"><a href="/flashplayer.php?version=3&amp;show=159991&amp;archive=281835" onclick="return kdbarchivelink(this.href, 3)"><img class="listen_link_image" src="/flashplayer/playbuttont.gif" alt="Pop-up listen">&nbsp;Pop-up&nbsp;player!</a></span>
+<br>
+<li>
+<span class="KDBFavIcon KDBepisode" id="KDBepisode-159946">
+<a href="http://www.wfmu.org/auth.php?a=fav_icon_clicked&amp;type=episode&amp;id=159946&amp;page_type=playlist+index&amp;page_id=WA&amp;r=http%3A%2F%2Fwfmu.org%2Fplaylists%2FWA"
+onclick="KDBFav.fav_icon_clicked(event, this.parentNode);"
+title="Favoriting"
+><img src="/Gfx/star_empty_2.png" border="0" alt="Favoriting" width="15" height="15" /></a>
+</span>
+January 5, 2026:
+<b>Wake N Bake Bird Day!</b>
+|
+<a href="/playlists/shows/159946">See the playlist</a>
+| Listen: <span style="white-space:nowrap"><a href="/flashplayer.php?version=3&amp;show=159946&amp;archive=281787" onclick="return kdbarchivelink(this.href, 3)"><img class="listen_link_image" src="/flashplayer/playbuttont.gif" alt="Pop-up listen">&nbsp;Pop-up&nbsp;player!</a></span>
+<br>
+<li>
+<span class="KDBFavIcon KDBepisode" id="KDBepisode-159857">
+<a href="http://www.wfmu.org/auth.php?a=fav_icon_clicked&amp;type=episode&amp;id=159857&amp;page_type=playlist+index&amp;page_id=WA&amp;r=http%3A%2F%2Fwfmu.org%2Fplaylists%2FWA"
+onclick="KDBFav.fav_icon_clicked(event, this.parentNode);"
+title="Favoriting"
+><img src="/Gfx/star_empty_2.png" border="0" alt="Favoriting" width="15" height="15" /></a>
+</span>
+January 2, 2026:
+<b>Wake n Bake n Embrace the New Year! </b>
+|
+<a href="/playlists/shows/159857">See the playlist</a>
+| Listen: <span style="white-space:nowrap"><a href="/flashplayer.php?version=3&amp;show=159857&amp;archive=281654" onclick="return kdbarchivelink(this.href, 3)"><img class="listen_link_image" src="/flashplayer/playbuttont.gif" alt="Pop-up listen">&nbsp;Pop-up&nbsp;player!</a></span>
+<br>
+<li>
+<span class="KDBFavIcon KDBepisode" id="KDBepisode-159819">
+<a href="http://www.wfmu.org/auth.php?a=fav_icon_clicked&amp;type=episode&amp;id=159819&amp;page_type=playlist+index&amp;page_id=WA&amp;r=http%3A%2F%2Fwfmu.org%2Fplaylists%2FWA"
+onclick="KDBFav.fav_icon_clicked(event, this.parentNode);"
+title="Favoriting"
+><img src="/Gfx/star_empty_2.png" border="0" alt="Favoriting" width="15" height="15" /></a>
+</span>
+January 1, 2026:
+<b>happy new year! </b>
+|
+<a href="/playlists/shows/159819">See the playlist</a>
+| Listen: <span style="white-space:nowrap"><a href="/flashplayer.php?version=3&amp;show=159819&amp;archive=281604" onclick="return kdbarchivelink(this.href, 3)"><img class="listen_link_image" src="/flashplayer/playbuttont.gif" alt="Pop-up listen">&nbsp;Pop-up&nbsp;player!</a></span>
+<br>
+</ul>
+<a href="/playlists/WA2025">2025 playlists</a> |
+<a href="/playlists/WA2024">2024 playlists</a> |
+<a href="/playlists/WA2023">2023 playlists</a> |
+<a href="/playlists/WA2022">2022 playlists</a> |
+<a href="/playlists/WA2021">2021 playlists</a> |
+<a href="/playlists/WA2020">2020 playlists</a> |
+<a href="/playlists/WA2019">2019 playlists</a> |
+<a href="/playlists/WA2018">2018 playlists</a> |
+<a href="/playlists/WA2017">2017 playlists</a> |
+<br>
+</div>
+<div class="everything">
+<br><center>
+<font size="-1">
+<p>
+<span class="rsslinkstitle">RSS feeds<span class="rsslinksprogramtitle"> for Wake with Clay Pigeon</span>:</span>
+<span class="rsslinkslinks">
+<a href="/playlistfeed/WA.xml"><img src="/Gfx/feed-icon-14x14.png" border=0 height=14 width=14 alt="RSS">Playlists&nbsp;feed</a> | <a href="/archivefeed/mp3/WA.xml"><img src="/Gfx/feed-icon-14x14.png" border=0 height=14 width=14 alt="RSS">MP3&nbsp;archives&nbsp;feed</a>
+</span>
+</p>
+|
+<a href="/email.php?id=202&amp;return=http%3A%2F%2Fwfmu.org%2Fplaylists%2FWA">E-mail Clay Pigeon</a>
+| <a href="/playlists">Other WFMU Playlists</a> |
+<a href="/artistkeywords.php/WA">All artists played by Wake with Clay Pigeon</a> |
+</font>
+<hr>
+<font size="1">
+<a href="/audiostream.shtml" title="Broadcasting live on the net!">Listen&nbsp;on&nbsp;the&nbsp;Internet</a> |
+<a href="/reachout.html" title="Email lists for the entire staff, pledging and much more">Contact&nbsp;Us</a> |
+<a href="/onair.html" title="The meat of the matter">Music&nbsp;&amp;&nbsp;Programs</a> |
+<a href="/" title="WFMU Home Page">WFMU&nbsp;Home&nbsp;Page</a> |
+<a href="/marathon/" title="Support freeform radio">Support&nbsp;Us</a> |
+<a href="/faq.html" title="You got questions? We got answers!">FAQ</a><br><br>
+Live Audio Streams for WFMU:
+<a href="http://www.radiorethink.com/tuner/?stationCode=wfmu&amp;stream=hi" onclick="window.open(this.href,'kdbflashplayerwindow','width=425,height=800,scrollbars=no,resizable=yes,toolbar=no,directories=no,location=no,menubar=no,status=no'); return false;">Pop-up</a>
+|
+<a href="http://wfmu.org/wfmu_aac.pls"">128k AAC</a>
+|
+<a href="http://wfmu.org/wfmu_mp3.pls"">128k MP3</a>
+|
+<a href="http://wfmu.org/wfmu32.pls"">32k MP3</a>
+<span class="navigation_other_more">
+&nbsp;&nbsp;&nbsp;(More streams:
+<a href="#" onclick="var x1=document.getElementsByClassName('navigation_other_streams'); var x2=document.getElementsByClassName('navigation_other_more'); for (var i=0; i<x1.length; i++) { x1[i].style.display='block'; x2[i].style.display='none';}; return false">[+]</a>)
+</span>
+<noscript>
+(Enable Javascript to see more streams!)
+</noscript>
+<div class="navigation_other_streams" style="display:none">
+Give the Drummer Radio:
+<a href="http://www.radiorethink.com/tuner/?stationCode=wfmugtd&amp;stream=hi" onclick="window.open(this.href,'kdbflashplayerwindow','width=425,height=800,scrollbars=no,resizable=yes,toolbar=no,directories=no,location=no,menubar=no,status=no'); return false;">Pop-up</a>
+|
+<a href="http://wfmu.org/wfmu_drummer.pls"">128k MP3</a>
+<br>
+Rock'N'Soul Radio:
+<a href="http://www.radiorethink.com/tuner/?stationCode=wfmurnsi&amp;stream=hi" onclick="window.open(this.href,'kdbflashplayerwindow','width=425,height=800,scrollbars=no,resizable=yes,toolbar=no,directories=no,location=no,menubar=no,status=no'); return false;">Pop-up</a>
+|
+<a href="http://wfmu.org/wfmu_rock.pls"">128k MP3</a>
+<br>
+Sheena's Jungle Room:
+<a href="http://www.radiorethink.com/tuner/?stationCode=wfmusjr&amp;stream=hi" onclick="window.open(this.href,'kdbflashplayerwindow','width=425,height=800,scrollbars=no,resizable=yes,toolbar=no,directories=no,location=no,menubar=no,status=no'); return false;">Pop-up</a>
+|
+<a href="http://wfmu.org/sheena.pls"">128k MP3</a>
+<br>
+</div>
+<!--Generated by KenzoDB ( https://kenzodb.com ), written 2000-2023 by Ken Garson-->
+</font>
+<hr>
+</div>
+<div class="everything" align="right">
+<h6>(C) 2026 WFMU.
+<a href="/artistkeywords.php/WA" class="invis">&nbsp;</a>
+Generated by <strong><a href="https://kenzodb.com/" style="text-decoration:none" target="_blank">KenzoDB</a></strong>, written 2000-2026 by <a href="https://kenzodb.com/contact" target="_blank">Ken Garson</a>
+</h6>
+<br>
+</div>
+<script type="text/javascript">function highslide_attach(selector_prefix = ""){jQuery(selector_prefix + " a.highslide").attr("onclick", "return hs.expand(this)").not("[title]").attr("title", "Click to enlarge");}highslide_attach();</script><!-- async google analytics code MA 2011-02-25 -->
+<script type="text/javascript">
+var _gaq = _gaq || [];
+_gaq.push(['_setAccount', 'UA-446006-1']);
+_gaq.push(['_trackPageview']);
+_gaq.push(['_trackPageLoadTime']);
+(function() {
+var ga = document.createElement('script'); ga.type = 'text/javascript'; ga.async = true;
+ga.src = ('https:' == document.location.protocol ? 'https://ssl' : 'http://www') + '.google-analytics.com/ga.js';
+var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(ga, s);
+})();
+</script>
+<div class="layout-sm-md">
+<div id="footer-comments-link" class="is-live" onclick="KDBPComm.view_switch('comments');">
+<i class="fa fa-comments" aria-hidden="true"></i>
+<span>
+<span class="live-indicator">To Comments!</span>
+</span>
+</div>
+</div>
+</div> <!-- songs_except_comments 3 -->
+</div> <!-- .songs -->
+</div> <!--wrapper-->
+</body>
+</html>
