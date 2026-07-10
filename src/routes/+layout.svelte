@@ -124,6 +124,12 @@
     <div class="p-info">
       {#if player.current}
         <div class="p-title">
+          <button
+            class="pfav"
+            class:on={player.current.episode.favourite}
+            onclick={bookmarkShow}
+            title="Save this episode"
+          ><Icon name="save" filled={player.current.episode.favourite} /></button>
           <a href={"/show/" + player.current.episode.show_id}>{player.current.showName}</a>
           <span class="p-date">{player.current.episode.air_date ?? ""}</span>
           {#if player.queue.length > 1}
@@ -131,6 +137,13 @@
           {/if}
         </div>
         <div class="p-track">
+          <button
+            class="pfav"
+            class:on={currentTrack?.favourite}
+            onclick={bookmarkSong}
+            disabled={!currentTrack}
+            title={currentTrack ? "Star this song" : "No song info yet"}
+          ><Icon name="star" filled={currentTrack?.favourite ?? false} /></button>
           {#if currentTrack}
             ♪ {currentTrack.artist ?? "?"} — {currentTrack.title ?? "?"}
           {:else if player.error}
@@ -151,31 +164,14 @@
             disabled={!player.duration}
           />
           <span class="p-time">{fmtTime(player.duration)}</span>
+          <div class="p-volume">
+            <Icon name={volumeIcon} size="24px" />
+            <input type="range" min="0" max="1" step="0.02" value={player.volume} oninput={onVolume} />
+          </div>
         </div>
       {:else}
         <div class="p-track idle">Nothing playing — pick a show.</div>
       {/if}
-    </div>
-    {#if player.current}
-      <div class="p-bookmarks">
-        <button
-          class="bm"
-          class:on={currentTrack?.favourite}
-          onclick={bookmarkSong}
-          disabled={!currentTrack}
-          title={currentTrack ? "Star this song" : "No current song"}
-        ><Icon name="star" filled={currentTrack?.favourite} /> song</button>
-        <button
-          class="bm"
-          class:on={player.current.episode.favourite}
-          onclick={bookmarkShow}
-          title="Save this episode"
-        ><Icon name="save" filled={player.current.episode.favourite} /> show</button>
-      </div>
-    {/if}
-    <div class="p-volume">
-      <Icon name={volumeIcon} size="24px" />
-      <input type="range" min="0" max="1" step="0.02" value={player.volume} oninput={onVolume} />
     </div>
   </header>
 
@@ -403,34 +399,27 @@
     min-width: 48px;
     text-align: center;
   }
-  .p-bookmarks {
-    display: flex;
-    gap: 6px;
-    flex: 0 0 auto;
-  }
-  .bm {
-    background: var(--c-surface2);
-    color: var(--c-dim);
+  .pfav {
+    background: none;
     border: none;
-    border-radius: 16px;
-    padding: 6px 10px;
-    font-size: 12px;
-    font-weight: 600;
+    color: var(--c-dim);
     cursor: pointer;
-    white-space: nowrap;
+    padding: 2px 3px;
+    border-radius: 4px;
     display: inline-flex;
     align-items: center;
-    gap: 5px;
+    vertical-align: middle;
+    flex: 0 0 auto;
   }
-  .bm:hover:not(:disabled) {
+  .pfav:hover:not(:disabled) {
     color: var(--c-gold);
   }
-  .bm.on {
-    color: var(--c-gold);
-  }
-  .bm:disabled {
-    opacity: 0.4;
+  .pfav:disabled {
+    opacity: 0.35;
     cursor: default;
+  }
+  .pfav.on {
+    color: var(--c-gold);
   }
   .fav-error {
     position: fixed;
@@ -449,6 +438,8 @@
     display: flex;
     align-items: center;
     gap: 6px;
+    margin-left: auto;
+    flex-shrink: 0;
     color: var(--c-dim);
   }
   .p-volume input {
