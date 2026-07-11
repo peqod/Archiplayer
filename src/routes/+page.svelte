@@ -167,7 +167,7 @@
     🎲 Random
   </button>
   <button class="ghost" onclick={() => load(true)} disabled={refreshing}>
-    {refreshing ? "Refreshing…" : "↻ Refresh catalog"}
+    {#if refreshing}Refreshing…{:else}<Icon name="refresh" /> Refresh catalog{/if}
   </button>
 </div>
 
@@ -226,7 +226,7 @@
       </a>
       <div class="row-actions">
         <button class="rbtn play" onclick={(e) => playAll(show, e)} title="Play all archives, oldest first">
-          {busyShow === show.id ? "…" : "▶ Play all"}
+          {#if busyShow === show.id}…{:else}<Icon name="play" /> Play all{/if}
         </button>
         <button class="rbtn star" class:on={show.favourite} onclick={(e) => toggleFav(show, e)} title="Favourite">
           <Icon name="star" filled={show.favourite} />

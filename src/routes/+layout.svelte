@@ -131,11 +131,11 @@
     <!-- svelte-ignore a11y_media_has_caption -->
     <audio bind:this={audioEl} preload="none"></audio>
     <div class="p-controls">
-      <button class="pbtn" onclick={() => player.prev()} disabled={!player.current} title="Previous / restart">⏮</button>
+      <button class="pbtn" onclick={() => player.prev()} disabled={!player.current} title="Previous / restart"><Icon name="prev" /></button>
       <button class="pbtn main" onclick={() => player.toggle()} disabled={!player.current} title="Play/pause">
-        {#if player.loading}…{:else if player.playing}⏸{:else}▶{/if}
+        {#if player.loading}…{:else if player.playing}<Icon name="playing" />{:else}<Icon name="play" />{/if}
       </button>
-      <button class="pbtn" onclick={() => player.next()} disabled={!player.current || player.queueIndex >= player.queue.length - 1} title="Next in queue">⏭</button>
+      <button class="pbtn" onclick={() => player.next()} disabled={!player.current || player.queueIndex >= player.queue.length - 1} title="Next in queue"><Icon name="next" /></button>
     </div>
     <div class="p-info">
       {#if player.current}
@@ -237,6 +237,14 @@
     --c-gold: #ffdd87;
     --c-danger: #c4453c;
     --c-line: #d8483f;
+
+    /* Sizing tokens (presets). Change here = global; override locally on any element
+       (inline style, modifier class, or <Icon size=…>) for per-place custom values. */
+    --icon-size: 1.2em;      /* glyph size inside buttons; cascades into <Icon> */
+    --pbtn-size: 32px;        /* transport secondary buttons (prev / next) */
+    --pbtn-main-size: 46px;   /* transport main play/pause button */
+    --pctl-gap: 8px;          /* gap between transport buttons */
+    --player-gap: 18px;       /* gap between player sections */
   }
   :global(*) {
     box-sizing: border-box;
@@ -320,7 +328,7 @@
     flex: 0 0 auto;
     display: flex;
     align-items: center;
-    gap: 18px;
+    gap: var(--player-gap);
     padding: 10px 20px;
     background: var(--c-surface);
   }
@@ -329,7 +337,7 @@
   }
   .p-controls {
     display: flex;
-    gap: 6px;
+    gap: var(--pctl-gap);
     align-items: center;
   }
   .pbtn {
@@ -337,17 +345,26 @@
     color: var(--c-text);
     border: none;
     border-radius: 50%;
-    width: 36px;
-    height: 36px;
+    width: var(--pbtn-size);
+    height: var(--pbtn-size);
     cursor: pointer;
     font-size: 14px;
   }
   .pbtn.main {
-    width: 46px;
-    height: 46px;
+    width: var(--pbtn-main-size);
+    height: var(--pbtn-main-size);
     background: var(--c-accent);
     color: var(--c-on-accent);
     font-size: 18px;
+  }
+  /* Optical-centre the play/playing triangle in the round main button. */
+  .pbtn.main :global(svg.icon) {
+    transform: translateX(2px);
+  }
+  .pbtn.main :global(svg.icon) {
+    width: 22px;
+    height: 22px;
+    transform: translateX(3px);   /* optical-centre the triangle */
   }
   .pbtn:disabled {
     opacity: 0.4;

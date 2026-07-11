@@ -222,12 +222,12 @@
       </div>
     </div>
     <div class="actions">
-      <button class="primary" onclick={playAllChrono} disabled={!playableCount}>▶ Play all (oldest first)</button>
+      <button class="primary" onclick={playAllChrono} disabled={!playableCount}><Icon name="play" /> Play all (oldest first)</button>
       <button class="ghost fav" class:on={show.favourite} onclick={favShow}>
         <Icon name="star" filled={show.favourite} /> {show.favourite ? "Favourited" : "Favourite"}
       </button>
       <button class="ghost" onclick={() => load(true)} disabled={refreshing}>
-        {refreshing ? "Refreshing…" : "↻ Refresh"}
+        {#if refreshing}Refreshing…{:else}<Icon name="refresh" /> Refresh{/if}
       </button>
     </div>
   </div>
@@ -249,7 +249,7 @@
             disabled={!ep.has_audio}
             title={ep.has_audio ? "Play this episode" : "No audio archive"}
           >
-            {ep.has_audio ? "▶" : "–"}
+            {#if ep.has_audio}<Icon name="play" />{:else}–{/if}
           </button>
           <div class="ep-main" role="button" tabindex="0"
             onclick={() => togglePlaylist(ep)}
@@ -269,7 +269,7 @@
             {/if}
           </div>
           <div class="ep-actions">
-            <button class="mini" onclick={() => playFromHere(ep)} disabled={!ep.has_audio} title="Play from this episode onward">⏩</button>
+            <button class="mini" onclick={() => playFromHere(ep)} disabled={!ep.has_audio} title="Play from this episode onward"><Icon name="next" /></button>
             <button class="mini" class:on={ep.favourite} onclick={() => favEpisode(ep)} title="Save episode"><Icon name="save" filled={ep.favourite} /></button>
             <button
               class="mini"
@@ -301,7 +301,7 @@
                     onclick={() => playTrack(ep, t)}
                     disabled={!ep.has_audio}
                     title={t.start_sec !== null ? `Play at ${fmtTime(t.start_sec)}` : "Play episode (no timestamp)"}
-                  >▶</button>
+                  ><Icon name="play" /></button>
                   <span class="ttime">{t.start_sec !== null ? fmtTime(t.start_sec) : "–"}</span>
                   <span class="tartist">{t.artist ?? ""}</span>
                   <span class="ttitle">{t.title ?? ""}</span>
@@ -458,6 +458,10 @@
   .playbtn:disabled {
     opacity: 0.35;
     cursor: default;
+  }
+  /* Optical-centre the play triangle in the round episode button. */
+  .playbtn :global(svg.icon) {
+    transform: translateX(2px);
   }
   .ep-main {
     flex: 1 1 auto;

@@ -5,13 +5,27 @@
     filled = false,
     size,
   }: {
-    name: "star" | "save" | "download" | "volume-loud" | "volume-quiet" | "volume-mute";
+    name:
+      | "star"
+      | "save"
+      | "download"
+      | "play"
+      | "pause"
+      | "playing"
+      | "next"
+      | "prev"
+      | "refresh"
+      | "volume-loud"
+      | "volume-quiet"
+      | "volume-mute";
     filled?: boolean;
     size?: string;
   } = $props();
 
   // Default glyph runs ~35% larger than the cap height for better presence.
-  const box = $derived(size ?? "1.35em");
+  // Follows a cascading --icon-size var so any ancestor can rescale icons; an explicit
+  // `size` prop still wins per-instance.
+  const box = $derived(size ?? "var(--icon-size, 1.35em)");
 </script>
 
 {#if name === "star"}
@@ -32,6 +46,42 @@
   <svg class="icon" style="width:{box};height:{box}" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
     <path fill-rule="evenodd" clip-rule="evenodd" d="M12 15.9853L15.182 12.8033L14.1213 11.7427L12.75 13.114L12.75 5.25L11.25 5.25L11.25 13.114L9.8787 11.7427L8.81804 12.8033L12 15.9853ZM12 13.864L12 13.864L12.0001 13.864L12 13.864Z" fill="currentColor" />
     <path d="M18 17.25L18 18.75L6 18.75L6 17.25L18 17.25Z" fill="currentColor" />
+  </svg>
+{:else if name === "play"}
+  <svg class="icon" style="width:{box};height:{box}" viewBox="0 0 500 501" fill="currentColor" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+    <g transform="matrix(1,0,0,1,-2597.157561,-1197.938257)"><g transform="matrix(1,0,0,1,680.600271,0)">
+      <path d="M1916.557,1698.134L1916.557,1197.938L2413.805,1448.036L1916.557,1698.134ZM1955.724,1634.593L2326.638,1448.036L1955.724,1261.479L1955.724,1634.593Z" />
+    </g></g>
+  </svg>
+{:else if name === "pause"}
+  <svg class="icon" style="width:{box};height:{box}" viewBox="0 0 498 501" fill="currentColor" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+    <g transform="matrix(1,0,0,1,-1916.557289,-1197.938257)"><g transform="matrix(0.359859,0,0,1,1495.577341,0)">
+      <path d="M1670.043,1197.938L1670.043,1698.134L1169.847,1698.134L1169.847,1197.938L1670.043,1197.938ZM2551.63,1197.938L2551.63,1698.134L2051.435,1698.134L2051.435,1197.938L2551.63,1197.938Z" />
+    </g></g>
+  </svg>
+{:else if name === "playing"}
+  <svg class="icon" style="width:{box};height:{box}" viewBox="0 0 500 501" fill="currentColor" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+    <g transform="matrix(1,0,0,1,-2597.157561,-654.733829)"><g transform="matrix(1,0,0,1,680.600271,-543.204428)">
+      <path d="M1916.557,1698.134L2413.805,1448.036L1916.557,1197.938L1916.557,1698.134Z" />
+    </g></g>
+  </svg>
+{:else if name === "next"}
+  <svg class="icon" style="width:{box};height:{box}" viewBox="0 0 511 324" fill="currentColor" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+    <g transform="matrix(1,0,0,1,-1916.557289,-751.886127)"><g transform="matrix(0.855133,0,0,1,277.646458,-543.204428)">
+      <path d="M1916.557,1619.089L1916.557,1295.091L2253.942,1448.036L1916.557,1619.089ZM2176.423,1523.447L2325.164,1448.036L2176.423,1380.608L2176.423,1295.091L2513.808,1448.036L2176.423,1619.089L2176.423,1523.447Z" />
+    </g></g>
+  </svg>
+{:else if name === "prev"}
+  <svg class="icon" style="width:{box};height:{box};transform:scaleX(-1)" viewBox="0 0 511 324" fill="currentColor" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+    <g transform="matrix(1,0,0,1,-1916.557289,-751.886127)"><g transform="matrix(0.855133,0,0,1,277.646458,-543.204428)">
+      <path d="M1916.557,1619.089L1916.557,1295.091L2253.942,1448.036L1916.557,1619.089ZM2176.423,1523.447L2325.164,1448.036L2176.423,1380.608L2176.423,1295.091L2513.808,1448.036L2176.423,1619.089L2176.423,1523.447Z" />
+    </g></g>
+  </svg>
+{:else if name === "refresh"}
+  <svg class="icon" style="width:{box};height:{box}" viewBox="0 0 485 432" fill="currentColor" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+    <g transform="matrix(1,0,0,1,-1171.741322,-689.860545)"><g transform="matrix(0,-0.855347,-0.855347,-0,2134.747424,2196.246387)">
+      <path d="M1494.198,622.141C1361.898,629.834 1256.984,739.559 1256.984,873.788C1256.984,1012.914 1369.936,1125.866 1509.062,1125.866C1648.188,1125.866 1761.141,1012.914 1761.141,873.788C1761.141,866.496 1760.824,859.207 1760.192,851.942L1694.392,857.666C1694.859,863.027 1695.092,868.406 1695.092,873.788C1695.092,976.461 1611.735,1059.818 1509.062,1059.818C1406.39,1059.818 1323.032,976.461 1323.032,873.788C1323.032,784.077 1386.533,709.198 1471.039,691.647L1450.194,754.206L1676.827,721.803L1514.925,559.938L1494.198,622.141Z" />
+    </g></g>
   </svg>
 {:else}
   <svg class="icon" style="width:{box};height:{box}" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">

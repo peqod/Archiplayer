@@ -267,7 +267,7 @@
               onclick={() => playFavEpisode(f.episode.id, f.show_name)}
               disabled={!f.episode.has_audio}
               title="Play"
-            >▶</button>
+            ><Icon name="play" /></button>
             <span>{f.show_name} — {f.episode.air_date ?? ""}</span>
             {#if f.episode.title}<span class="muted ellip">{f.episode.title}</span>{/if}
             <button class="mini" onclick={() => unfav("episode", String(f.episode.id))} title="Remove"><Icon name="star" filled /></button>
@@ -285,7 +285,7 @@
               class="linkish"
               onclick={() => playFavEpisode(f.track.episode_id, f.show_name, f.track.start_sec)}
               title={f.track.start_sec !== null ? `Play at ${fmtTime(f.track.start_sec)}` : "Play episode"}
-            >▶</button>
+            ><Icon name="play" /></button>
             <span class="ellip">
               <b>{f.track.artist ?? "?"}</b> — {f.track.title ?? "?"}
             </span>
@@ -332,7 +332,7 @@
             onclick={() => playDownload(row)}
             disabled={!row.show_id || row.download.status !== "done"}
             title="Play offline copy"
-          >▶</button>
+          ><Icon name="play" /></button>
           <div class="dl-info">
             <div class="dl-title">
               {#if row.show_name}
