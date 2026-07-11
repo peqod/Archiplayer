@@ -100,13 +100,13 @@
   // prev/next-episode buttons can walk the show. Falls back to a lone-episode queue.
   async function queueShowAt(ep: Episode, startSec: number | null) {
     if (!show) return;
-    const chrono = [...episodes].reverse().filter((e) => e.has_audio);
-    const idx = chrono.findIndex((e) => e.id === ep.id);
+    const list = episodes.filter((e) => e.has_audio); // newest → oldest (visual order)
+    const idx = list.findIndex((e) => e.id === ep.id);
     if (idx < 0) {
       await player.playEpisode(ep, show.name, startSec);
       return;
     }
-    const items: QueueItem[] = chrono.map((e) => ({ episode: e, showName: show!.name }));
+    const items: QueueItem[] = list.map((e) => ({ episode: e, showName: show!.name }));
     await player.playQueue(items, idx, startSec);
   }
 
@@ -133,12 +133,12 @@
   }
 
   async function playFromHere(ep: Episode) {
-    // queue: this episode then everything after it chronologically
+    // queue: this episode then everything below it (older, down the list)
     if (!show) return;
-    const chrono = [...episodes].reverse().filter((e) => e.has_audio);
-    const idx = chrono.findIndex((e) => e.id === ep.id);
+    const list = episodes.filter((e) => e.has_audio); // newest → oldest (visual order)
+    const idx = list.findIndex((e) => e.id === ep.id);
     if (idx < 0) return;
-    const items: QueueItem[] = chrono
+    const items: QueueItem[] = list
       .slice(idx)
       .map((e) => ({ episode: e, showName: show!.name }));
     await player.playQueue(items);
@@ -197,11 +197,10 @@
     }
   }
 
-  async function playAllChrono() {
+  async function playAll() {
     if (!show) return;
-    const items: QueueItem[] = [...episodes]
-      .reverse()
-      .filter((e) => e.has_audio)
+    const items: QueueItem[] = episodes
+      .filter((e) => e.has_audio) // newest → oldest (visual order)
       .map((e) => ({ episode: e, showName: show!.name }));
     if (items.length) await player.playQueue(items);
   }
@@ -236,7 +235,7 @@
       </div>
     </div>
     <div class="actions">
-      <button class="primary" onclick={playAllChrono} disabled={!playableCount}><Icon name="play" /> Play all (oldest first)</button>
+      <button class="primary" onclick={playAll} disabled={!playableCount}><Icon name="play" /> Play all (newest first)</button>
       <button class="ghost fav" class:on={show.favourite} onclick={favShow}>
         <Icon name="star" filled={show.favourite} /> {show.favourite ? "Favourited" : "Favourite"}
       </button>
