@@ -131,11 +131,15 @@
     <!-- svelte-ignore a11y_media_has_caption -->
     <audio bind:this={audioEl} preload="none"></audio>
     <div class="p-controls">
-      <button class="pbtn" onclick={() => player.prev()} disabled={!player.current} title="Previous / restart"><Icon name="prev" /></button>
+      <button class="pbtn" onclick={() => player.prevEpisode()} disabled={!player.current} title="Previous episode / restart"><Icon name="prev-ep" /></button>
+      <button class="pbtn" onclick={() => player.prevTrack()} disabled={!player.tracks.length} title="Previous song"><Icon name="prev" /></button>
+      <button class="pbtn skip" onclick={() => player.skip(-15)} disabled={!player.current} title="Back 15 seconds">«15</button>
       <button class="pbtn main" onclick={() => player.toggle()} disabled={!player.current} title="Play/pause">
         {#if player.loading}…{:else if player.playing}<Icon name="playing" />{:else}<Icon name="play" />{/if}
       </button>
-      <button class="pbtn" onclick={() => player.next()} disabled={!player.current || player.queueIndex >= player.queue.length - 1} title="Next in queue"><Icon name="next" /></button>
+      <button class="pbtn skip" onclick={() => player.skip(15)} disabled={!player.current} title="Forward 15 seconds">15»</button>
+      <button class="pbtn" onclick={() => player.nextTrack()} disabled={!player.tracks.length} title="Next song"><Icon name="next" /></button>
+      <button class="pbtn" onclick={() => player.nextEpisode()} disabled={!player.current || player.queueIndex >= player.queue.length - 1} title="Next episode"><Icon name="next-ep" /></button>
     </div>
     <div class="p-info">
       {#if player.current}
@@ -365,6 +369,12 @@
     width: 22px;
     height: 22px;
     transform: translateX(3px);   /* optical-centre the triangle */
+  }
+  .pbtn.skip {
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    font-variant-numeric: tabular-nums;
   }
   .pbtn:disabled {
     opacity: 0.4;

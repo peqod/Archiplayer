@@ -63,7 +63,7 @@ class Player {
     });
     el.addEventListener("ended", () => {
       this.flushListen(true);
-      this.next();
+      this.nextEpisode();
     });
     el.addEventListener("loadedmetadata", () => {
       if (this.pendingSeek !== null) {
@@ -180,6 +180,46 @@ class Player {
     if (this.audio?.paused) this.audio.play();
   }
 
+  // Jump the playhead by a relative amount (e.g. −15 / +15 seconds).
+  skip(delta: number) {
+    if (!this.audio) return;
+    this.seek(this.currentTime + delta);
+  }
+
+  // Skip to the start of the next timestamped track in the current episode.
+  nextTrack() {
+    if (!this.tracks.length) return;
+    for (let i = this.currentTrackIndex + 1; i < this.tracks.length; i++) {
+      const s = this.tracks[i].start_sec;
+      if (s !== null) {
+        this.seek(s);
+        if (this.audio?.paused) this.audio.play();
+        return;
+      }
+    }
+  }
+
+  // Skip to the previous track start. If we're already a few seconds into the
+  // current track, restart it instead (mirrors the prev-episode "restart" feel).
+  prevTrack() {
+    if (!this.tracks.length) return;
+    const idx = this.currentTrackIndex;
+    const curStart = idx >= 0 ? this.tracks[idx].start_sec : null;
+    if (curStart !== null && this.currentTime - curStart > 3) {
+      this.seek(curStart);
+      return;
+    }
+    for (let i = idx - 1; i >= 0; i--) {
+      const s = this.tracks[i].start_sec;
+      if (s !== null) {
+        this.seek(s);
+        if (this.audio?.paused) this.audio.play();
+        return;
+      }
+    }
+    this.seek(curStart ?? 0);
+  }
+
   setVolume(v: number) {
     this.volume = Math.max(0, Math.min(1, v));
     this.muted = false;
@@ -208,7 +248,7 @@ class Player {
     if (t) t.favourite = fav;
   }
 
-  async next() {
+  async nextEpisode() {
     if (this.queueIndex < this.queue.length - 1) {
       this.queueIndex += 1;
       await this.loadCurrent();
@@ -217,7 +257,7 @@ class Player {
     }
   }
 
-  async prev() {
+  async prevEpisode() {
     if (this.currentTime > 10) {
       this.seek(0);
       return;

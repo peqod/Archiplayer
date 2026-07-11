@@ -14,6 +14,8 @@
       | "playing"
       | "next"
       | "prev"
+      | "next-ep"
+      | "prev-ep"
       | "refresh"
       | "volume-loud"
       | "volume-quiet"
@@ -75,6 +77,18 @@
   <svg class="icon" style="width:{box};height:{box};transform:scaleX(-1)" viewBox="0 0 511 324" fill="currentColor" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
     <g transform="matrix(1,0,0,1,-1916.557289,-751.886127)"><g transform="matrix(0.855133,0,0,1,277.646458,-543.204428)">
       <path d="M1916.557,1619.089L1916.557,1295.091L2253.942,1448.036L1916.557,1619.089ZM2176.423,1523.447L2325.164,1448.036L2176.423,1380.608L2176.423,1295.091L2513.808,1448.036L2176.423,1619.089L2176.423,1523.447Z" />
+    </g></g>
+  </svg>
+{:else if name === "next-ep"}
+  <svg class="icon" style="width:{box};height:{box}" viewBox="0 0 390 324" fill="currentColor" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+    <g transform="matrix(1,0,0,1,-1916.557289,-340.237111)"><g transform="matrix(0,1,-1,0,2992.441462,-1576.320178)">
+      <path d="M2084.576,763.926L2240.555,1075.884L1916.557,1075.884L2072.536,763.926L1916.557,763.926L1916.557,686.554L2240.555,686.554L2240.555,763.926L2084.576,763.926Z" />
+    </g></g>
+  </svg>
+{:else if name === "prev-ep"}
+  <svg class="icon" style="width:{box};height:{box};transform:scaleX(-1)" viewBox="0 0 390 324" fill="currentColor" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+    <g transform="matrix(1,0,0,1,-1916.557289,-340.237111)"><g transform="matrix(0,1,-1,0,2992.441462,-1576.320178)">
+      <path d="M2084.576,763.926L2240.555,1075.884L1916.557,1075.884L2072.536,763.926L1916.557,763.926L1916.557,686.554L2240.555,686.554L2240.555,763.926L2084.576,763.926Z" />
     </g></g>
   </svg>
 {:else if name === "refresh"}

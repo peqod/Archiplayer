@@ -96,13 +96,27 @@
     }
   }
 
+  // Play `ep` inside a queue of the whole show (oldest → newest) so the transport's
+  // prev/next-episode buttons can walk the show. Falls back to a lone-episode queue.
+  async function queueShowAt(ep: Episode, startSec: number | null) {
+    if (!show) return;
+    const chrono = [...episodes].reverse().filter((e) => e.has_audio);
+    const idx = chrono.findIndex((e) => e.id === ep.id);
+    if (idx < 0) {
+      await player.playEpisode(ep, show.name, startSec);
+      return;
+    }
+    const items: QueueItem[] = chrono.map((e) => ({ episode: e, showName: show!.name }));
+    await player.playQueue(items, idx, startSec);
+  }
+
   async function playEpisode(ep: Episode) {
     if (!show) return;
     try {
       // Resume where the listener left off (unless finished — then start over).
       const resume =
         !ep.completed && ep.resume_sec && ep.resume_sec > 5 ? ep.resume_sec : null;
-      await player.playEpisode(ep, show.name, resume);
+      await queueShowAt(ep, resume);
     } catch (e) {
       error = String(e);
     }
@@ -136,7 +150,7 @@
       player.seekToTrack(track);
       return;
     }
-    await player.playEpisode(ep, show.name, track.start_sec);
+    await queueShowAt(ep, track.start_sec);
   }
 
   async function favEpisode(ep: Episode) {
