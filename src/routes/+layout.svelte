@@ -14,16 +14,18 @@
   let { children } = $props();
   let audioEl: HTMLAudioElement;
   let favError = $state<string | null>(null);
-  // Player-only collapse: hide <main> and shrink the window to just the player + tabs.
+  // Player-only collapse: hide <main> and shorten the window to the player + tabs.
+  // Width remains user-controlled so the responsive player can still be resized.
   let collapsed = $state(false);
   let navEl: HTMLElement;
   let headerEl: HTMLElement;
-  let expandedWidth = 0;
   let expandedHeight = 0; // remembered logical height to restore on expand
   // Mirrors the CSS mini-mode breakpoint so volume can fold to a popover.
   let mini = $state(false);
   let volOpen = $state(false);
   let applyingWindowSize = false;
+  let windowSizeQueued = false;
+  let collapseTransitioning = false;
 
   if (typeof window !== "undefined") {
     theme.load();
@@ -37,63 +39,67 @@
   }
 
   async function applyWindowSize() {
-    if (applyingWindowSize) return;
+    if (applyingWindowSize) {
+      // ResizeObserver can fire while a native setSize call is still resolving.
+      // Keep one trailing measurement instead of losing the final reflow.
+      windowSizeQueued = true;
+      return;
+    }
     applyingWindowSize = true;
     try {
       const win = getCurrentWindow();
       const scale = await win.scaleFactor();
       const physical = await win.innerSize();
       if (collapsed) {
-        // Tauri setSize targets the client area. Only resize when the measured
-        // content actually differs, otherwise ResizeObserver would feed itself.
+        // Collapse only the library area. Preserve the current width so users can
+        // keep resizing the compact player through its responsive breakpoints.
         const compact = Math.ceil((headerEl?.offsetHeight ?? 0) + (navEl?.offsetHeight ?? 0));
-        const compactWidth = 324;
-        const width = Math.round(compactWidth * scale);
         const height = Math.round(compact * scale);
-        if (
-          compact > 0 &&
-          (Math.abs(physical.width - width) > 1 || Math.abs(physical.height - height) > 1)
-        ) {
-          await win.setSize(new PhysicalSize(width, height));
+        if (compact > 0 && Math.abs(physical.height - height) > 1) {
+          await win.setSize(new PhysicalSize(physical.width, height));
         }
       } else {
-        // Restore the exact pre-collapse client size. A restored collapsed session
-        // has no in-memory size, so use a comfortable library default.
-        const targetWidth = expandedWidth > 0 ? expandedWidth : 1100;
+        // Restore only the pre-collapse height. A restored collapsed session has
+        // no in-memory height, so use a comfortable library default.
         const targetHeight = expandedHeight > 0 ? expandedHeight : 860;
-        const width = Math.round(targetWidth * scale);
         const height = Math.round(targetHeight * scale);
-        if (
-          Math.abs(physical.width - width) > 1 ||
-          Math.abs(physical.height - height) > 1
-        ) {
-          await win.setSize(new PhysicalSize(width, height));
+        if (Math.abs(physical.height - height) > 1) {
+          await win.setSize(new PhysicalSize(physical.width, height));
         }
       }
     } catch {
       /* not in Tauri / no window perms — button still hides the library */
     } finally {
       applyingWindowSize = false;
+      if (windowSizeQueued) {
+        windowSizeQueued = false;
+        void applyWindowSize();
+      }
     }
   }
 
   async function toggleCollapse() {
-    if (!collapsed) {
-      // about to collapse — remember the current height to restore later
-      try {
-        const win = getCurrentWindow();
-        const scale = await win.scaleFactor();
-        const size = (await win.innerSize()).toLogical(scale);
-        expandedWidth = size.width;
-        expandedHeight = size.height;
-      } catch {
-        /* ignore */
+    if (collapseTransitioning) return;
+    collapseTransitioning = true;
+    try {
+      if (!collapsed) {
+        // About to collapse: remember only the height. Width stays user-controlled.
+        try {
+          const win = getCurrentWindow();
+          const scale = await win.scaleFactor();
+          const size = (await win.innerSize()).toLogical(scale);
+          expandedHeight = size.height;
+        } catch {
+          /* ignore */
+        }
       }
+      collapsed = !collapsed;
+      localStorage.setItem("ap.collapsed", collapsed ? "1" : "0");
+      await tick();
+      await applyWindowSize();
+    } finally {
+      collapseTransitioning = false;
     }
-    collapsed = !collapsed;
-    localStorage.setItem("ap.collapsed", collapsed ? "1" : "0");
-    await tick();
-    await applyWindowSize();
   }
 
   function isActive(path: string): boolean {
@@ -665,21 +671,54 @@
     color: var(--c-accent);
   }
 
-  /* Mini mode: below the point where the full transport + volume row overflows, stack the
-     player into one column and scale key elements down ~25%, then stop. */
+  /* Compact mode keeps one stacked composition and scales it continuously from the
+     roomy 760px endpoint down to the native 324px minimum window width. */
   @media (max-width: 760px) {
     .player {
       flex-direction: column;
       align-items: stretch;
-      gap: 8px;
-      padding: 8px 12px;
-      /* Rescale via the sizing tokens — cascades through controls + icons. */
-      --pbtn-size: 28px;
-      --pbtn-main-size: 42px;
-      --pctl-gap: 6px;
-      --player-gap: 10px;
-      --icon-size: 0.95em;
-      --transport-width: 246px;
+      gap: var(--mini-player-gap);
+      padding: var(--mini-pad-top) var(--mini-pad-inline) var(--mini-pad-bottom);
+
+      /* Each clamp is linear between 324px and 760px. Keeping the endpoints here
+         makes the intended minimum and intermediate compositions explicit. */
+      --pbtn-size: clamp(32px, calc(29.028px + 0.917vw), 36px);
+      --pbtn-main-size: clamp(46px, calc(41.541px + 1.376vw), 52px);
+      --pctl-gap: clamp(6px, calc(4.514px + 0.459vw), 8px);
+      --player-gap: clamp(14px, calc(11.028px + 0.917vw), 18px);
+      --icon-size: clamp(11.4px, calc(8.428px + 0.917vw), 15.4px);
+      --transport-width: clamp(274px, calc(232.385px + 12.844vw), 330px);
+      --mini-player-gap: var(--player-gap);
+      --mini-pad-top: clamp(18px, calc(16.514px + 0.459vw), 20px);
+      --mini-pad-inline: clamp(12px, calc(7.541px + 1.376vw), 18px);
+      --mini-pad-bottom: clamp(8px, calc(5.028px + 0.917vw), 12px);
+      --mini-control-font: clamp(12px, calc(10.514px + 0.459vw), 14px);
+      --mini-main-font: clamp(14px, calc(12.514px + 0.459vw), 16px);
+      --mini-main-icon: clamp(22px, calc(19.028px + 0.917vw), 26px);
+      --mini-title-font: clamp(12px, calc(10.514px + 0.459vw), 14px);
+      --mini-track-font: clamp(11px, calc(9.514px + 0.459vw), 13px);
+      --mini-meta-margin: clamp(3px, calc(2.257px + 0.229vw), 4px);
+      --mini-skip-font: clamp(9px, calc(7.514px + 0.459vw), 11px);
+      --mini-scrub-gap: clamp(8px, calc(6.514px + 0.459vw), 10px);
+      --mini-scrub-height: clamp(28px, calc(25.028px + 0.917vw), 32px);
+      --mini-volume-column: clamp(28px, calc(25.028px + 0.917vw), 32px);
+      --mini-time-font: clamp(11px, calc(10.257px + 0.229vw), 12px);
+      --mini-time-width: clamp(40px, calc(34.055px + 1.835vw), 48px);
+      --mini-volume-width: clamp(36px, calc(33.028px + 0.917vw), 40px);
+      --mini-volume-height: clamp(130px, calc(110.679px + 5.963vw), 156px);
+      --mini-volume-pad-top: clamp(7px, calc(6.257px + 0.229vw), 8px);
+      --mini-volume-pad-inline: clamp(5px, calc(4.257px + 0.229vw), 6px);
+      --mini-volume-pad-bottom: clamp(34px, calc(31.028px + 0.917vw), 38px);
+      --mini-volume-button: var(--mini-volume-column);
+      --mini-volume-slider: clamp(88px, calc(73.138px + 4.587vw), 108px);
+      --mini-volume-track-inset: clamp(6px, calc(4.514px + 0.459vw), 8px);
+      --mini-volume-track: clamp(5px, calc(4.257px + 0.229vw), 6px);
+      --mini-volume-thumb: clamp(13px, calc(11.514px + 0.459vw), 15px);
+      --mini-volume-input: clamp(84px, calc(69.138px + 4.587vw), 104px);
+    }
+    .player.inactive {
+      gap: clamp(8px, calc(5.028px + 0.917vw), 12px);
+      padding-top: clamp(10px, calc(7.028px + 0.917vw), 14px);
     }
     .p-controls {
       justify-content: center;
@@ -689,20 +728,22 @@
     }
     /* Hardcoded (non-token) sizes that won't follow the tokens. */
     .pbtn {
-      font-size: 12px;
+      font-size: var(--mini-control-font);
     }
     .pbtn.main {
-      font-size: 14px;
+      font-size: var(--mini-main-font);
     }
     .pbtn.main :global(svg.icon) {
-      width: 20px;
-      height: 20px;
+      width: var(--mini-main-icon);
+      height: var(--mini-main-icon);
     }
     .p-title {
-      font-size: 12px;
+      margin-bottom: var(--mini-meta-margin);
+      font-size: var(--mini-title-font);
     }
     .p-track {
-      font-size: 11px;
+      margin-bottom: var(--mini-meta-margin);
+      font-size: var(--mini-track-font);
     }
     /* Treat the compact player as one centred composition: transport, metadata,
        and scrubber share the same axis. */
@@ -719,16 +760,16 @@
     }
     /* Shrink the «15 / 15» skip buttons so they stop overflowing. */
     .pbtn.skip {
-      font-size: 9px;
+      font-size: var(--mini-skip-font);
       letter-spacing: -0.04em;
     }
     .p-scrub {
       display: grid;
-      grid-template-columns: auto minmax(0, 1fr) auto 28px;
+      grid-template-columns: auto minmax(0, 1fr) auto var(--mini-volume-column);
       align-items: center;
-      gap: 8px;
+      gap: var(--mini-scrub-gap);
       position: relative;
-      min-height: 28px;
+      min-height: var(--mini-scrub-height);
       width: 100%;
     }
     .p-scrub > input[type="range"] {
@@ -739,14 +780,14 @@
       margin-left: 0;
       grid-column: 4;
       justify-self: end;
-      min-width: 28px;
+      min-width: var(--mini-volume-column);
     }
     .player.volumeOpen .p-scrub {
       padding-right: 0;
     }
     .p-time {
-      font-size: 11px;
-      min-width: 40px;
+      font-size: var(--mini-time-font);
+      min-width: var(--mini-time-width);
     }
     /* Mini volume is custom-painted; the transparent native range on top keeps
        pointer and keyboard behavior without relying on WebView range styling. */
@@ -754,12 +795,13 @@
       position: absolute;
       right: -4px;
       bottom: -4px;
-      width: 36px;
-      height: 108px;
+      width: var(--mini-volume-width);
+      height: var(--mini-volume-height);
       display: flex;
       justify-content: center;
       align-items: flex-start;
-      padding: 7px 5px 34px;
+      padding: var(--mini-volume-pad-top) var(--mini-volume-pad-inline)
+        var(--mini-volume-pad-bottom);
       background: var(--c-surface);
       border: 1px solid var(--c-border);
       border-radius: 7px;
@@ -769,8 +811,8 @@
       z-index: 20;
     }
     .p-volume.open .pvol-btn {
-      width: 28px;
-      height: 28px;
+      width: var(--mini-volume-button);
+      height: var(--mini-volume-button);
       padding: 2px;
       justify-content: center;
       position: relative;
@@ -779,14 +821,14 @@
     .vol-slider {
       position: relative;
       width: 24px;
-      height: 66px;
+      height: var(--mini-volume-slider);
     }
     .vol-track {
       position: absolute;
-      top: 6px;
-      bottom: 6px;
+      top: var(--mini-volume-track-inset);
+      bottom: var(--mini-volume-track-inset);
       left: 50%;
-      width: 5px;
+      width: var(--mini-volume-track);
       overflow: visible;
       transform: translateX(-50%);
       background: var(--c-border);
@@ -806,8 +848,8 @@
       position: absolute;
       bottom: var(--volume-level);
       left: 50%;
-      width: 13px;
-      height: 13px;
+      width: var(--mini-volume-thumb);
+      height: var(--mini-volume-thumb);
       transform: translate(-50%, 50%);
       background: var(--c-accent);
       border: 2px solid var(--c-surface);
@@ -819,7 +861,7 @@
       top: 50%;
       left: 50%;
       z-index: 2;
-      width: 66px;
+      width: var(--mini-volume-input);
       height: 24px;
       margin: 0;
       opacity: 0;
@@ -860,41 +902,6 @@
     }
   }
   @media (max-width: 420px) {
-    .player {
-      gap: 14px;
-      padding: 18px 12px 8px;
-      --pbtn-size: 32px;
-      --pbtn-main-size: 46px;
-      --pctl-gap: 6px;
-      --transport-width: 274px;
-    }
-    .player.inactive {
-      gap: 8px;
-      padding-top: 10px;
-    }
-    .pbtn.main :global(svg.icon) {
-      width: 22px;
-      height: 22px;
-    }
-    .p-title {
-      margin-bottom: 3px;
-    }
-    .p-track {
-      margin-bottom: 3px;
-    }
-    .p-volume.open {
-      min-width: 28px;
-    }
-    .p-volume.open .vol-pop {
-      height: 130px;
-      padding-top: 7px;
-    }
-    .p-volume.open .vol-slider {
-      height: 88px;
-    }
-    .p-volume.open .vol-v {
-      width: 84px;
-    }
     .brand-name,
     .brand-sub {
       display: none;
