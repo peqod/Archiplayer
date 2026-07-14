@@ -8,9 +8,8 @@
   import { theme } from "$lib/theme.svelte";
   import Icon from "$lib/Icon.svelte";
   import { page } from "$app/stores";
-  import { goto } from "$app/navigation";
   import { tick } from "svelte";
-  import { getCurrentWindow, LogicalSize } from "@tauri-apps/api/window";
+  import { getCurrentWindow, PhysicalSize } from "@tauri-apps/api/window";
 
   let { children } = $props();
   let audioEl: HTMLAudioElement;
@@ -23,11 +22,12 @@
   // Mirrors the CSS mini-mode breakpoint so volume can fold to a popover.
   let mini = $state(false);
   let volOpen = $state(false);
+  let applyingWindowSize = false;
 
   if (typeof window !== "undefined") {
     theme.load();
     collapsed = localStorage.getItem("ap.collapsed") === "1";
-    const mq = window.matchMedia("(max-width: 600px)");
+    const mq = window.matchMedia("(max-width: 760px)");
     mini = mq.matches;
     mq.addEventListener("change", (e) => {
       mini = e.matches;
@@ -36,21 +36,31 @@
   }
 
   async function applyWindowSize() {
+    if (applyingWindowSize) return;
+    applyingWindowSize = true;
     try {
       const win = getCurrentWindow();
       const scale = await win.scaleFactor();
-      const cur = (await win.innerSize()).toLogical(scale);
+      const physical = await win.innerSize();
+      const cur = physical.toLogical(scale);
       if (collapsed) {
-        // fit the window to just the player + tabs
+        // Tauri setSize targets the client area. Only resize when the measured
+        // content actually differs, otherwise ResizeObserver would feed itself.
         const compact = Math.ceil((headerEl?.offsetHeight ?? 0) + (navEl?.offsetHeight ?? 0));
-        if (compact > 0) await win.setSize(new LogicalSize(cur.width, compact));
+        if (compact > 0 && Math.abs(cur.height - compact) > 1) {
+          await win.setSize(new PhysicalSize(physical.width, Math.round(compact * scale)));
+        }
       } else {
         // restore the pre-collapse height (or a sensible default if we started collapsed)
         const target = expandedHeight > 0 ? expandedHeight : 860;
-        if (cur.height < target) await win.setSize(new LogicalSize(cur.width, target));
+        if (cur.height < target - 1) {
+          await win.setSize(new PhysicalSize(physical.width, Math.round(target * scale)));
+        }
       }
     } catch {
       /* not in Tauri / no window perms — button still hides the library */
+    } finally {
+      applyingWindowSize = false;
     }
   }
 
@@ -75,26 +85,30 @@
     return path === "/" ? $page.url.pathname === "/" : $page.url.pathname.startsWith(path);
   }
 
-  // Clicking a tab toggles player-only: already on that view → collapse the
-  // bottom part; otherwise navigate there and make sure the library is expanded.
-  async function navTo(path: string) {
+  // Native links handle navigation. Clicking the active tab only toggles player-only;
+  // another tab expands the shell while its normal link event continues.
+  function onNavClick(event: MouseEvent, path: string) {
     if (isActive(path)) {
-      await toggleCollapse();
+      event.preventDefault();
+      void toggleCollapse();
       return;
     }
-    await goto(path);
-    if (collapsed) await toggleCollapse();
+    if (collapsed) void toggleCollapse();
   }
 
   $effect(() => {
     if (audioEl) player.attach(audioEl);
   });
 
-  // On startup, if we restored a collapsed state, shrink the window to match.
+  // Keep compact sizing synchronized when playback adds metadata/scrubbing rows or
+  // fonts finish loading. This also performs the initial restored-state resize.
   $effect(() => {
-    if (collapsed && headerEl && navEl) {
-      applyWindowSize();
-    }
+    if (!collapsed || !headerEl || !navEl || typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(() => void applyWindowSize());
+    observer.observe(headerEl);
+    observer.observe(navEl);
+    void applyWindowSize();
+    return () => observer.disconnect();
   });
 
   const volumeIcon = $derived(
@@ -296,13 +310,13 @@
         href="/"
         class:active={isActive("/")}
         title={isActive("/") && !collapsed ? "Collapse to player only" : "Shows"}
-        onclick={(e) => { e.preventDefault(); navTo("/"); }}
+        onclick={(event) => onNavClick(event, "/")}
       >Shows</a>
       <a
         href="/profile"
         class:active={isActive("/profile")}
         title={isActive("/profile") && !collapsed ? "Collapse to player only" : "Profile"}
-        onclick={(e) => { e.preventDefault(); navTo("/profile"); }}
+        onclick={(event) => onNavClick(event, "/profile")}
       >Profile</a>
     </div>
   </nav>
@@ -606,9 +620,9 @@
     color: var(--c-accent);
   }
 
-  /* Mini mode: below the point where the row overflows (~544px), stack the
+  /* Mini mode: below the point where the full transport + volume row overflows, stack the
      player into one column and scale key elements down ~25%, then stop. */
-  @media (max-width: 600px) {
+  @media (max-width: 760px) {
     .player {
       flex-direction: column;
       align-items: stretch;
@@ -623,7 +637,8 @@
     }
     .p-controls {
       justify-content: center;
-      flex-wrap: wrap;
+      flex-wrap: nowrap;
+      width: 100%;
     }
     /* Hardcoded (non-token) sizes that won't follow the tokens. */
     .pbtn {
@@ -652,7 +667,15 @@
       letter-spacing: -0.04em;
     }
     .p-scrub {
-      flex-wrap: wrap;
+      flex-wrap: nowrap;
+      gap: 8px;
+    }
+    .p-scrub > input[type="range"] {
+      min-width: 0;
+      width: 100%;
+    }
+    .p-scrub .p-volume {
+      margin-left: 0;
     }
     .p-time {
       font-size: 11px;
@@ -661,11 +684,12 @@
     /* Volume folds into a click-to-open vertical popover. */
     .vol-pop {
       position: absolute;
-      top: calc(100% + 6px);
+      top: auto;
+      bottom: calc(100% + 6px);
       right: 0;
       display: flex;
       justify-content: center;
-      padding: 10px 8px;
+      padding: 8px 7px;
       background: var(--c-surface2);
       border: 1px solid var(--c-border);
       border-radius: 8px;
@@ -675,7 +699,7 @@
       writing-mode: vertical-lr;
       direction: rtl;
       width: 8px;
-      height: 96px;
+      height: 60px;
       accent-color: var(--c-accent);
       cursor: pointer;
     }
@@ -709,6 +733,7 @@
     }
     .nav-links {
       gap: 10px;
+      margin-left: auto;
     }
     .nav-links a {
       padding: 3px 8px;
