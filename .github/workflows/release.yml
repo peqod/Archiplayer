@@ -1,0 +1,70 @@
+name: Release
+
+on:
+  push:
+    tags: ["v[0-9]+.[0-9]+.[0-9]+"]
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: windows-latest
+            args: --bundles nsis
+          - platform: ubuntu-22.04
+            args: --bundles appimage,deb
+          - platform: macos-latest
+            args: --target universal-apple-darwin --bundles dmg
+    runs-on: ${{ matrix.platform }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.platform == 'macos-latest' && 'x86_64-apple-darwin,aarch64-apple-darwin' || '' }}
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+      - name: Install Linux system dependencies
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+      - run: npm ci
+      - name: Verify release versions
+        run: node scripts/verify-release-version.mjs ${{ github.ref_name }}
+      - uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: Archiplayer ${{ github.ref_name }}
+          releaseBody: |
+            Cross-platform Archiplayer release.
+
+            These community builds are currently unsigned. Read the installation notes on the project site before opening them.
+          releaseDraft: true
+          prerelease: false
+          args: ${{ matrix.args }}
+
+  checksums:
+    needs: publish
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Add checksums to the draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          mkdir release-assets
+          gh release download "$TAG" --dir release-assets
+          cd release-assets
+          sha256sum * > SHA256SUMS.txt
+          gh release upload "$TAG" SHA256SUMS.txt --clobber

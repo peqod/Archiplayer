@@ -1,0 +1,36 @@
+name: Bug report
+description: Report a reproducible Archiplayer problem
+title: "[Bug]: "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: Thanks for helping improve Archiplayer. Do not attach your personal database or downloaded audio.
+  - type: input
+    id: version
+    attributes:
+      label: Archiplayer version
+      placeholder: v0.1.0 or commit hash
+    validations:
+      required: true
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      options: [Windows, macOS Intel, macOS Apple Silicon, Linux AppImage, Linux DEB, Source build]
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: Tell us exactly what you did and what happened.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected result
+    validations:
+      required: true
+

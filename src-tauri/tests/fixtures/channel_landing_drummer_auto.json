@@ -1,0 +1,8 @@
+{
+  "changes": {
+    "nowplaying": {
+      "hash": "fixture",
+      "content": "<div class=\"nowplaying_playlist_link\"></div><div class=\"nowplaying_program_title\">&quot;Illaiyaraaja - Yennadi Meenakshi feat. S.P. Balasubrahmanyam&quot;</div><div class=\"nowplaying_live_song\">on GTD Radio Stream</div>"
+    }
+  }
+}

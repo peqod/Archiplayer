@@ -15,14 +15,24 @@
   let { children } = $props();
   let audioEl: HTMLAudioElement;
   let favError = $state<string | null>(null);
+  // Player-only collapse: hide <main> and shrink the window to just the player + tabs.
   let collapsed = $state(false);
   let navEl: HTMLElement;
   let headerEl: HTMLElement;
   let expandedHeight = 0; // remembered logical height to restore on expand
+  // Mirrors the CSS mini-mode breakpoint so volume can fold to a popover.
+  let mini = $state(false);
+  let volOpen = $state(false);
 
   if (typeof window !== "undefined") {
     theme.load();
     collapsed = localStorage.getItem("ap.collapsed") === "1";
+    const mq = window.matchMedia("(max-width: 600px)");
+    mini = mq.matches;
+    mq.addEventListener("change", (e) => {
+      mini = e.matches;
+      volOpen = false; // leaving/entering mini closes any open volume popover
+    });
   }
 
   async function applyWindowSize() {
@@ -65,8 +75,8 @@
     return path === "/" ? $page.url.pathname === "/" : $page.url.pathname.startsWith(path);
   }
 
-  // Clicking a tab toggles player-only: already on that view → collapse;
-  // otherwise navigate there and make sure the library is expanded.
+  // Clicking a tab toggles player-only: already on that view → collapse the
+  // bottom part; otherwise navigate there and make sure the library is expanded.
   async function navTo(path: string) {
     if (isActive(path)) {
       await toggleCollapse();
@@ -98,6 +108,11 @@
   function onVolume(e: Event) {
     player.setVolume(Number((e.target as HTMLInputElement).value));
   }
+  // Desktop: icon toggles mute. Mini: icon opens the folded vertical slider.
+  function onVolClick() {
+    if (mini) volOpen = !volOpen;
+    else player.toggleMute();
+  }
 
   const currentTrack = $derived(
     player.currentTrackIndex >= 0 ? player.tracks[player.currentTrackIndex] : null,
@@ -124,17 +139,55 @@
       favError = String(e);
     }
   }
+
+  async function bookmarkLiveEpisode() {
+    const ep = player.liveEpisode?.episode;
+    if (!ep) return;
+    try {
+      const fav = await api.toggleFavourite("episode", String(ep.id));
+      player.setLiveEpisodeFavourite(fav);
+    } catch (e) {
+      favError = String(e);
+    }
+  }
+
+  async function bookmarkLiveSong() {
+    const t = currentTrack;
+    if (!t) return;
+    try {
+      const fav = await api.toggleFavourite("track", String(t.id));
+      player.setTrackFavourite(t.id, fav);
+    } catch (e) {
+      favError = String(e);
+    }
+  }
 </script>
 
+{#snippet volumeControl()}
+  <div class="p-volume">
+    <button class="pvol-btn" onclick={onVolClick} title={mini ? "Volume" : player.muted ? "Unmute" : "Mute"}>
+      <Icon name={volumeIcon} size="24px" />
+    </button>
+    {#if !mini}
+      <input type="range" min="0" max="1" step="0.02" value={player.volume} oninput={onVolume} />
+    {:else if volOpen}
+      <button class="vol-backdrop" aria-label="Close volume" onclick={() => (volOpen = false)}></button>
+      <div class="vol-pop">
+        <input class="vol-v" type="range" min="0" max="1" step="0.02" value={player.volume} oninput={onVolume} />
+      </div>
+    {/if}
+  </div>
+{/snippet}
+
 <div class="app">
-  <header class="player" class:inactive={!player.current} bind:this={headerEl}>
+  <header class="player" class:inactive={!player.current && !player.live} bind:this={headerEl}>
     <!-- svelte-ignore a11y_media_has_caption -->
     <audio bind:this={audioEl} preload="none"></audio>
     <div class="p-controls">
       <button class="pbtn" onclick={() => player.prevEpisode()} disabled={!player.current} title="Previous episode / restart"><Icon name="prev-ep" /></button>
       <button class="pbtn" onclick={() => player.prevTrack()} disabled={!player.tracks.length} title="Previous song"><Icon name="prev" /></button>
       <button class="pbtn skip" onclick={() => player.skip(-15)} disabled={!player.current} title="Back 15 seconds">«15</button>
-      <button class="pbtn main" onclick={() => player.toggle()} disabled={!player.current} title="Play/pause">
+      <button class="pbtn main" onclick={() => player.toggle()} disabled={!player.current && !player.live} title="Play/pause">
         {#if player.loading}…{:else if player.playing}<Icon name="playing" />{:else}<Icon name="play" />{/if}
       </button>
       <button class="pbtn skip" onclick={() => player.skip(15)} disabled={!player.current} title="Forward 15 seconds">15»</button>
@@ -184,12 +237,47 @@
             disabled={!player.duration}
           />
           <span class="p-time">{fmtTime(player.duration)}</span>
-          <div class="p-volume">
-            <button class="pvol-btn" onclick={() => player.toggleMute()} title={player.muted ? "Unmute" : "Mute"}>
-              <Icon name={volumeIcon} size="24px" />
-            </button>
-            <input type="range" min="0" max="1" step="0.02" value={player.volume} oninput={onVolume} />
-          </div>
+          {@render volumeControl()}
+        </div>
+      {:else if player.live}
+        <div class="p-title">
+          <button
+            class="pfav"
+            class:on={player.liveEpisode?.episode.favourite}
+            onclick={bookmarkLiveEpisode}
+            disabled={!player.liveEpisode}
+            title="Save this live episode"
+          ><Icon name="save" filled={player.liveEpisode?.episode.favourite ?? false} /></button>
+          <span class="live-badge">● LIVE</span>
+          {player.liveEpisode?.showName ?? player.live.name}
+          {#if player.liveEpisode?.episode.air_date}
+            <span class="p-date">{player.liveEpisode.episode.air_date}</span>
+          {/if}
+        </div>
+        <div class="p-track">
+          <button
+            class="pfav"
+            class:on={currentTrack?.favourite}
+            onclick={bookmarkLiveSong}
+            disabled={!currentTrack}
+            title={currentTrack ? "Star this song" : "Song has not been persisted yet"}
+          ><Icon name="star" filled={currentTrack?.favourite ?? false} /></button>
+          {#if currentTrack}
+            ♪ {currentTrack.artist ?? "?"} — {currentTrack.title ?? "?"}
+          {:else if player.liveSong}
+            ♪ {player.liveSong.artist ?? "?"} — {player.liveSong.title ?? "?"}
+          {:else if player.error}
+            <span class="err">{player.error}</span>
+          {:else if player.livePlaylistError}
+            <span class="err">{player.livePlaylistError}</span>
+          {:else}
+            {player.live.tagline}
+          {/if}
+        </div>
+        <div class="p-scrub">
+          <span class="p-time live-clock">{player.loading ? "Connecting…" : "Streaming live"}</span>
+          <div class="live-fill"></div>
+          {@render volumeControl()}
         </div>
       {:else}
         <div class="p-track idle">Nothing playing — pick a show.</div>
@@ -274,6 +362,7 @@
     display: flex;
     flex-direction: column;
     height: 100vh;
+    overflow: hidden; /* shell never scrolls — only <main> does */
   }
   nav {
     display: flex;
@@ -416,6 +505,28 @@
   .err {
     color: var(--c-danger);
   }
+  .live-badge {
+    color: var(--c-line);
+    font-weight: 800;
+    font-size: 11px;
+    letter-spacing: 0.06em;
+    margin-right: 6px;
+    vertical-align: 1px;
+    animation: live-blink 2s ease-in-out infinite;
+  }
+  @keyframes live-blink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.45; }
+  }
+  .live-clock {
+    min-width: auto;
+    text-align: left;
+    color: var(--c-accent);
+    font-weight: 600;
+  }
+  .live-fill {
+    flex: 1 1 auto;
+  }
   .p-scrub {
     display: flex;
     align-items: center;
@@ -475,6 +586,7 @@
     margin-left: auto;
     flex-shrink: 0;
     color: var(--c-dim);
+    position: relative;
   }
   .p-volume input {
     width: 90px;
@@ -492,5 +604,114 @@
   }
   .pvol-btn:hover {
     color: var(--c-accent);
+  }
+
+  /* Mini mode: below the point where the row overflows (~544px), stack the
+     player into one column and scale key elements down ~25%, then stop. */
+  @media (max-width: 600px) {
+    .player {
+      flex-direction: column;
+      align-items: stretch;
+      gap: 8px;
+      padding: 8px 12px;
+      /* Rescale via the sizing tokens — cascades through controls + icons. */
+      --pbtn-size: 24px;
+      --pbtn-main-size: 34px;
+      --pctl-gap: 6px;
+      --player-gap: 10px;
+      --icon-size: 0.95em;
+    }
+    .p-controls {
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+    /* Hardcoded (non-token) sizes that won't follow the tokens. */
+    .pbtn {
+      font-size: 12px;
+    }
+    .pbtn.main {
+      font-size: 14px;
+    }
+    .pbtn.main :global(svg.icon) {
+      width: 17px;
+      height: 17px;
+    }
+    .p-title {
+      font-size: 12px;
+    }
+    .p-track {
+      font-size: 11px;
+    }
+    /* Center the stacked info + scrub under the controls. */
+    .p-info {
+      text-align: center;
+    }
+    /* Shrink the «15 / 15» skip buttons so they stop overflowing. */
+    .pbtn.skip {
+      font-size: 9px;
+      letter-spacing: -0.04em;
+    }
+    .p-scrub {
+      flex-wrap: wrap;
+    }
+    .p-time {
+      font-size: 11px;
+      min-width: 40px;
+    }
+    /* Volume folds into a click-to-open vertical popover. */
+    .vol-pop {
+      position: absolute;
+      top: calc(100% + 6px);
+      right: 0;
+      display: flex;
+      justify-content: center;
+      padding: 10px 8px;
+      background: var(--c-surface2);
+      border: 1px solid var(--c-border);
+      border-radius: 8px;
+      z-index: 20;
+    }
+    .p-volume .vol-v {
+      writing-mode: vertical-lr;
+      direction: rtl;
+      width: 8px;
+      height: 96px;
+      accent-color: var(--c-accent);
+      cursor: pointer;
+    }
+    .vol-backdrop {
+      position: fixed;
+      inset: 0;
+      background: transparent;
+      border: none;
+      padding: 0;
+      z-index: 19;
+      cursor: default;
+    }
+
+    /* Compact the nav so the tabs stay readable. */
+    nav {
+      gap: 12px;
+      padding: 8px 12px;
+    }
+    .brand {
+      gap: 6px;
+    }
+    .brand-logo {
+      width: 26px;
+      height: 26px;
+    }
+    .brand-name {
+      font-size: 13px;
+    }
+    .brand-sub {
+      display: none;
+    }
+    .nav-links {
+      gap: 10px;
+    }
+    .nav-links a {
+      padding: 3px 8px;
+    }
   }
 </style>

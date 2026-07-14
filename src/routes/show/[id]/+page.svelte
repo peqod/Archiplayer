@@ -11,6 +11,7 @@
   import { listen } from "@tauri-apps/api/event";
   import { openUrl } from "@tauri-apps/plugin-opener";
   import Icon from "$lib/Icon.svelte";
+  import TrackRow from "$lib/TrackRow.svelte";
   import { onMount } from "svelte";
 
   function openWfmu(e: MouseEvent) {
@@ -98,16 +99,20 @@
 
   // Play `ep` inside a queue of the whole show (oldest → newest) so the transport's
   // prev/next-episode buttons can walk the show. Falls back to a lone-episode queue.
-  async function queueShowAt(ep: Episode, startSec: number | null) {
+  async function queueShowAt(
+    ep: Episode,
+    startSec: number | null,
+    startTrackSec: number | null = null,
+  ) {
     if (!show) return;
     const list = episodes.filter((e) => e.has_audio); // newest → oldest (visual order)
     const idx = list.findIndex((e) => e.id === ep.id);
     if (idx < 0) {
-      await player.playEpisode(ep, show.name, startSec);
+      await player.playEpisode(ep, show.name, startSec, startTrackSec);
       return;
     }
     const items: QueueItem[] = list.map((e) => ({ episode: e, showName: show!.name }));
-    await player.playQueue(items, idx, startSec);
+    await player.playQueue(items, idx, startSec, startTrackSec);
   }
 
   async function playEpisode(ep: Episode) {
@@ -150,7 +155,7 @@
       player.seekToTrack(track);
       return;
     }
-    await queueShowAt(ep, track.start_sec);
+    await queueShowAt(ep, null, track.start_sec);
   }
 
   async function favEpisode(ep: Episode) {
@@ -305,24 +310,13 @@
           {:else}
             <div class="tracks">
               {#each tracks as t, i (t.id)}
-                <div
-                  class="track"
-                  class:now={player.current?.episode.id === ep.id && player.currentTrackIndex === i}
-                >
-                  <button
-                    class="tplay"
-                    onclick={() => playTrack(ep, t)}
-                    disabled={!ep.has_audio}
-                    title={t.start_sec !== null ? `Play at ${fmtTime(t.start_sec)}` : "Play episode (no timestamp)"}
-                  ><Icon name="play" /></button>
-                  <span class="ttime">{t.start_sec !== null ? fmtTime(t.start_sec) : "–"}</span>
-                  <span class="tartist">{t.artist ?? ""}</span>
-                  <span class="ttitle">{t.title ?? ""}</span>
-                  <span class="talbum">{t.album ?? ""}</span>
-                  <button class="mini" class:on={t.favourite} onclick={() => favTrack(ep, t)} title="Star song">
-                    <Icon name="star" filled={t.favourite} />
-                  </button>
-                </div>
+                <TrackRow
+                  track={t}
+                  current={player.current?.episode.id === ep.id && player.currentTrackIndex === i}
+                  playable={ep.has_audio}
+                  onplay={() => playTrack(ep, t)}
+                  onfavourite={() => favTrack(ep, t)}
+                />
               {/each}
             </div>
           {/if}
@@ -561,57 +555,5 @@
     border-top: 1px solid var(--c-surface2);
     margin-top: 2px;
     padding: 6px 0 8px;
-  }
-  .track {
-    display: grid;
-    grid-template-columns: 30px 64px 220px 1fr 220px 30px;
-    align-items: center;
-    gap: 8px;
-    padding: 3px 6px;
-    border-radius: 6px;
-    font-size: 13px;
-  }
-  .track:hover {
-    background: var(--c-surface);
-  }
-  .track.now {
-    background: var(--c-surface2);
-    color: var(--c-gold);
-  }
-  .tplay {
-    background: none;
-    border: none;
-    color: var(--c-dim);
-    cursor: pointer;
-    padding: 2px;
-  }
-  .tplay:hover:not(:disabled) {
-    color: var(--c-accent);
-  }
-  .tplay:disabled {
-    opacity: 0.3;
-  }
-  .ttime {
-    color: var(--c-dim);
-    font-variant-numeric: tabular-nums;
-    font-size: 12px;
-  }
-  .tartist {
-    font-weight: 600;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-  .ttitle {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-  .talbum {
-    color: var(--c-dim);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    text-align: right;
   }
 </style>

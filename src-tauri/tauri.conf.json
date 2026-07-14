@@ -20,7 +20,7 @@
       }
     ],
     "security": {
-      "csp": null,
+      "csp": "default-src 'self' customprotocol: asset:; connect-src ipc: http://ipc.localhost https://wfmu.org https://www.wfmu.org https://*.wfmu.org https://*.amazonaws.com; img-src 'self' data:; media-src 'self' asset: http://asset.localhost https://*.wfmu.org https://*.amazonaws.com; style-src 'self' 'unsafe-inline'; script-src 'self'",
       "assetProtocol": {
         "enable": true,
         "scope": ["$APPDATA/downloads/**", "$APPDATA/downloads/*"]

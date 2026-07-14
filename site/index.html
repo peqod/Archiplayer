@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#f4f1e9">
+    <meta name="description" content="Archiplayer is a local-first desktop browser and player for the WFMU archives.">
+    <meta property="og:title" content="Archiplayer — radio archives, without the cloud">
+    <meta property="og:description" content="Browse, search, play, favourite and download decades of WFMU radio. Your library stays on your computer.">
+    <meta property="og:type" content="website">
+    <title>Archiplayer — WFMU archive player</title>
+    <link rel="icon" href="img/logo.gif">
+    <link rel="stylesheet" href="styles.css">
+    <script src="site.js" defer></script>
+  </head>
+  <body>
+    <svg width="0" height="0" class="sprite" aria-hidden="true" focusable="false">
+      <symbol id="i-dl" viewBox="0 0 24 24">
+        <path fill-rule="evenodd" clip-rule="evenodd" d="M12 15.9853L15.182 12.8033L14.1213 11.7427L12.75 13.114L12.75 5.25L11.25 5.25L11.25 13.114L9.8787 11.7427L8.81804 12.8033L12 15.9853ZM12 13.864L12 13.864L12.0001 13.864L12 13.864Z"/>
+        <path d="M18 17.25L18 18.75L6 18.75L6 17.25L18 17.25Z"/>
+      </symbol>
+    </svg>
+    <a class="skip" href="#main">Skip to content</a>
+    <header class="nav wrap">
+      <a class="wordmark" href="#top" aria-label="Archiplayer home">
+        <img class="mark" src="img/logo.gif" alt="" width="26" height="26"><span>ARCHIPLAYER</span>
+      </a>
+      <nav aria-label="Primary navigation">
+        <a href="#features">Features</a>
+        <a href="#install">Install</a>
+        <a data-repo-link href="https://github.com/">GitHub &#8599;</a>
+      </nav>
+    </header>
+
+    <main id="main">
+      <section class="hero wrap" id="top">
+        <p class="label"><span class="eyebrow">LOCAL-FIRST &middot; OPEN SOURCE</span></p>
+        <h1>Freeform radio.<br><em>Filed beautifully.</em></h1>
+        <p class="lede">A fast desktop library for decades of WFMU broadcasts. Search the catalogue, follow playlists, save favourites and take episodes offline&mdash;without an account or a cloud.</p>
+        <ul class="actions">
+          <li><a class="button primary" data-download-link href="#install"><svg class="ico" aria-hidden="true"><use href="#i-dl"></use></svg> Download for your computer</a></li>
+          <li><a class="button quiet" data-repo-link href="https://github.com/">View the source &#8599;</a></li>
+        </ul>
+        <p class="release-note" data-release-note>Free community builds for Windows, macOS and Linux.</p>
+
+        <figure>
+          <img src="img/app-show.png" width="1045" height="883"
+               alt="The Archiplayer desktop app: a player bar with transport controls across the top, then a WFMU show page (&ldquo;On The Grid&rdquo;) listing episodes by date.">
+          <figcaption>Browsing a show&rsquo;s episodes. The player stays pinned across the top.</figcaption>
+        </figure>
+      </section>
+
+      <section class="statement wrap">
+        <p class="label">RADIO SHOULD FEEL LIKE DISCOVERY.</p>
+        <blockquote style="margin:0;font-size:22px;line-height:1.3;">
+          &ldquo;The archive is enormous. The interface doesn&rsquo;t have to be.&rdquo;
+        </blockquote>
+      </section>
+
+      <section class="features wrap" id="features">
+        <p class="label">01 / What it does</p>
+        <h2>Your own listening room.</h2>
+        <div class="cols cols-4">
+          <div class="cell"><span class="glyph">&#8981;</span><h3>Find the signal</h3><p>Browse every current and defunct show. Search DJs instantly and search tracks as playlists enter your local cache.</p></div>
+          <div class="cell"><span class="glyph">&#9654;</span><h3>Play the archive</h3><p>Queue whole shows, single episodes or jump straight to a track&rsquo;s timestamp. Resume where you stopped.</p></div>
+          <div class="cell"><span class="glyph">&#8595;</span><h3>Keep it offline</h3><p>Download episodes for travel and slow connections. Choose where the files live; delete them whenever you like.</p></div>
+          <div class="cell"><span class="glyph">&#9733;</span><h3>Make it yours</h3><p>Favourite shows, episodes and songs. Listening history and stats stay in one SQLite file on your machine.</p></div>
+        </div>
+
+        <div class="shots">
+          <figure>
+            <img src="img/app-collapsed.png" width="489" height="207"
+                 alt="Archiplayer collapsed to a compact bar showing only the player controls and the Shows/Profile tabs.">
+            <figcaption>Click the active tab to collapse to a compact player.</figcaption>
+          </figure>
+          <figure>
+            <img src="img/app-themes.png" width="1019" height="322"
+                 alt="Archiplayer&rsquo;s Customize panel: five colour-scheme presets and per-colour swatches, all saved locally.">
+            <figcaption>Pick a colour scheme, or tweak any colour. Saved locally.</figcaption>
+          </figure>
+        </div>
+      </section>
+
+      <section class="principles wrap">
+        <div class="cols cols-3">
+          <div class="cell principle"><b>NO LOGIN</b><span>Your taste is not a growth metric.</span></div>
+          <div class="cell principle"><b>NO CLOUD</b><span>Your library stays on your computer.</span></div>
+          <div class="cell principle"><b>NO CRAWLING</b><span>Cache-first and polite to WFMU.</span></div>
+        </div>
+      </section>
+
+      <section class="install wrap" id="install">
+        <p class="label">02 / Get Archiplayer</p>
+        <h2>Pick your machine.</h2>
+        <p class="lede">These early community builds are unsigned. The source is public, but Windows and macOS will ask you to confirm that you trust the app.</p>
+        <div class="cols cols-3">
+          <div class="cell platform" data-platform="windows"><img class="os" src="img/os-windows.svg" alt="" width="30" height="30"><h3>Windows</h3><p>Windows 10 or later &middot; x64</p><a data-asset="windows" data-repo-link href="https://github.com/"><svg class="ico" aria-hidden="true"><use href="#i-dl"></use></svg> Download .exe</a><details><summary>SmartScreen instructions</summary><p>Choose <b>More info</b>, verify that the download came from this repository, then choose <b>Run anyway</b>.</p></details></div>
+          <div class="cell platform" data-platform="mac"><img class="os" src="img/os-mac.svg" alt="" width="30" height="30"><h3>macOS</h3><p>Intel + Apple Silicon &middot; universal</p><a data-asset="mac" data-repo-link href="https://github.com/"><svg class="ico" aria-hidden="true"><use href="#i-dl"></use></svg> Download .dmg</a><details><summary>Gatekeeper instructions</summary><p>Move Archiplayer to Applications. Control-click it and choose <b>Open</b>, then confirm once.</p></details></div>
+          <div class="cell platform" data-platform="linux"><img class="os" src="img/os-linux.svg" alt="" width="30" height="30"><h3>Linux</h3><p>Debian/Ubuntu or AppImage &middot; x64</p><a data-asset="linux" data-repo-link href="https://github.com/"><svg class="ico" aria-hidden="true"><use href="#i-dl"></use></svg> Linux downloads</a><details><summary>AppImage instructions</summary><p>Mark the file executable, then run it: <code>chmod +x Archiplayer*.AppImage</code></p></details></div>
+        </div>
+        <div class="source-build">
+          <div>
+            <p class="label">BUILD IT YOURSELF</p>
+            <h3>One source. Three desktops.</h3>
+            <p>Prefer not to run an unsigned binary? Follow the audited, copyable build walkthrough in the repository.</p>
+          </div>
+          <a class="button quiet" data-source-link href="https://github.com/">Open build guide &#8599;</a>
+        </div>
+      </section>
+    </main>
+
+    <footer class="wrap">
+      <div class="footer-grid">
+        <div>
+          <a class="wordmark" href="#top"><img class="mark" src="img/logo.gif" alt="" width="26" height="26"><span>ARCHIPLAYER</span></a>
+          <p>An independent, open-source listener for the public WFMU archives.</p>
+        </div>
+        <div><b>PROJECT</b><a data-repo-link href="https://github.com/">Source</a><a data-issues-link href="https://github.com/">Issues</a><a data-releases-link href="https://github.com/">Releases</a></div>
+        <div><b>WFMU</b><a href="https://wfmu.org/" rel="noreferrer">Listen live &#8599;</a><a href="https://pledge.wfmu.org/donate" rel="noreferrer">Donate to WFMU &#8599;</a></div>
+      </div>
+      <div class="fineprint"><span>Archiplayer is not affiliated with WFMU.</span><span>Built with Rust, Tauri and Svelte.</span></div>
+    </footer>
+  </body>
+</html>

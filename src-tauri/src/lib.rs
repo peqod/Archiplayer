@@ -3,12 +3,28 @@ pub mod db;
 pub mod downloads;
 pub mod wfmu;
 
-use std::sync::Mutex;
+use std::{
+    collections::{HashMap, HashSet},
+    sync::{Mutex, MutexGuard},
+    time::Instant,
+};
 use tauri::Manager;
 
 pub struct AppState {
     pub db: Mutex<db::Db>,
     pub fetcher: wfmu::Fetcher,
+    /// Episode ids currently being written. Prevents two UI actions from sharing a .part file.
+    pub active_downloads: Mutex<HashSet<i64>>,
+    pub live_schedule_cache:
+        tokio::sync::Mutex<HashMap<String, (Instant, Vec<wfmu::ParsedLiveProgram>)>>,
+}
+
+impl AppState {
+    pub fn db(&self) -> Result<MutexGuard<'_, db::Db>, String> {
+        self.db
+            .lock()
+            .map_err(|_| "database lock poisoned".to_string())
+    }
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -23,6 +39,8 @@ pub fn run() {
             app.manage(AppState {
                 db: Mutex::new(database),
                 fetcher: wfmu::Fetcher::new(),
+                active_downloads: Mutex::new(HashSet::new()),
+                live_schedule_cache: tokio::sync::Mutex::new(HashMap::new()),
             });
             Ok(())
         })
@@ -30,6 +48,8 @@ pub fn run() {
             commands::get_catalog,
             commands::get_show,
             commands::get_playlist,
+            commands::get_live_status,
+            commands::get_live_page,
             commands::resolve_audio,
             commands::toggle_favourite,
             commands::list_favourites,

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { api, type Show, type TrackHit } from "$lib/api";
+  import { api, LIVE_STREAMS, type Show, type TrackHit } from "$lib/api";
   import { player, type QueueItem } from "$lib/player.svelte";
   import { goto } from "$app/navigation";
   import Icon from "$lib/Icon.svelte";
@@ -148,11 +148,12 @@
         error = "That episode has no audio archive.";
         return;
       }
-      await player.playEpisode(ep, hit.show_name, hit.track.start_sec);
+      await player.playEpisode(ep, hit.show_name, null, hit.track.start_sec);
     } catch (err) {
       error = String(err);
     }
   }
+
 </script>
 
 <div class="head">
@@ -173,6 +174,31 @@
 
 {#if error}
   <div class="error">{error} <button class="ghost" onclick={() => (error = null)}>✕</button></div>
+{/if}
+
+{#if !query}
+  <div class="live">
+    <span class="live-label"><span class="live-dot"></span> Listen Live Now</span>
+    <div class="live-streams">
+      {#each LIVE_STREAMS as s}
+        <a
+          class="live-card"
+          class:on={player.live?.id === s.id}
+          href={"/live/" + s.id}
+          onclick={() => void player.playLive(s)}
+          title={(player.live?.id === s.id && player.playing ? "Pause" : "Play") + " " + s.name + " and open live details"}
+        >
+          <span class="lc-play" aria-hidden="true">
+            <Icon name={player.live?.id === s.id && player.playing ? "pause" : "play"} />
+          </span>
+          <span class="lc-text">
+            <span class="lc-name">{s.name}</span>
+            <span class="lc-tag">{s.tagline}</span>
+          </span>
+        </a>
+      {/each}
+    </div>
+  </div>
 {/if}
 
 {#if !query}
@@ -298,6 +324,89 @@
     padding: 8px 12px;
     border-radius: 8px;
     margin-bottom: 12px;
+  }
+  .live {
+    margin-bottom: 18px;
+  }
+  .live-label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--c-dim);
+    margin-bottom: 8px;
+  }
+  .live-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--c-line);
+    animation: live-pulse 2s infinite;
+  }
+  @keyframes live-pulse {
+    0% { box-shadow: 0 0 0 0 rgba(216, 72, 63, 0.5); }
+    70% { box-shadow: 0 0 0 6px rgba(216, 72, 63, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(216, 72, 63, 0); }
+  }
+  .live-streams {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+    gap: 8px;
+  }
+  .live-card {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    text-align: left;
+    background: var(--c-surface);
+    border: 1px solid var(--c-border);
+    border-radius: 10px;
+    padding: 9px 12px;
+    color: var(--c-text);
+    text-decoration: none;
+    cursor: pointer;
+  }
+  .live-card:hover,
+  .live-card:focus-within {
+    border-color: var(--c-accent);
+  }
+  .live-card.on {
+    border-color: var(--c-accent);
+    background: var(--c-surface2);
+  }
+  .lc-play {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: var(--c-accent);
+    color: var(--c-on-accent);
+    flex: 0 0 auto;
+  }
+  .lc-text {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    flex: 1 1 auto;
+  }
+  .lc-name {
+    font-weight: 700;
+    font-size: 14px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .lc-tag {
+    font-size: 12px;
+    color: var(--c-dim);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
   .alpha {
     display: flex;

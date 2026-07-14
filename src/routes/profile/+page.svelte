@@ -133,11 +133,15 @@
     }
   }
 
-  async function playFavEpisode(episodeId: number, showName: string, startSec: number | null = null) {
+  async function playFavEpisode(
+    episodeId: number,
+    showName: string,
+    startTrackSec: number | null = null,
+  ) {
     try {
       const eps = favs?.episodes.find((f) => f.episode.id === episodeId)?.episode;
       if (eps) {
-        await player.playEpisode(eps, showName, startSec);
+        await player.playEpisode(eps, showName, null, startTrackSec);
         return;
       }
       // favourite track: episode not in favourites list — fetch via its show
@@ -145,7 +149,7 @@
       if (t) {
         const detail = await api.getShow(t.show_id);
         const ep = detail.episodes.find((e) => e.id === episodeId);
-        if (ep) await player.playEpisode(ep, t.show_name, startSec);
+        if (ep) await player.playEpisode(ep, t.show_name, null, startTrackSec);
       }
     } catch (e) {
       error = String(e);

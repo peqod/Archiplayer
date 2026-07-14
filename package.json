@@ -5,9 +5,11 @@
   "type": "module",
   "scripts": {
     "dev": "vite dev",
+    "dev:windows": "powershell -NoProfile -ExecutionPolicy Bypass -Command \". .\\build-env.ps1; npm run tauri dev\"",
     "build": "vite build",
     "preview": "vite preview",
     "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
+    "test:player": "node --experimental-strip-types tests/playback-transition.test.mjs",
     "check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
     "tauri": "tauri"
   },

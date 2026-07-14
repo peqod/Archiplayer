@@ -26,6 +26,7 @@ export interface Episode {
   resume_sec: number | null;
   duration_sec: number | null;
   completed: boolean;
+  offset_sec: number | null;
 }
 
 export interface Track {
@@ -38,6 +39,8 @@ export interface Track {
   label: string | null;
   comments: string | null;
   start_sec: number | null;
+  source_id: string | null;
+  played_at: number | null;
   favourite: boolean;
 }
 
@@ -49,6 +52,7 @@ export interface ShowDetail {
 export interface AudioSource {
   url: string;
   local: boolean;
+  offset_sec: number;
 }
 
 export interface TrackHit {
@@ -123,12 +127,103 @@ export interface DownloadRow {
   has_audio: boolean;
 }
 
+export interface LiveStream {
+  id: string;
+  name: string;
+  tagline: string;
+  url: string;
+  status_source: LiveStatusSource;
+}
+
+export type LiveStatusSource =
+  | { kind: "channel"; channel_id: number }
+  | { kind: "homepage" };
+
+export interface LiveSong {
+  artist: string | null;
+  title: string | null;
+}
+
+export interface LiveStatus {
+  episode: Episode;
+  show_name: string;
+  current_song: LiveSong | null;
+  tracks: Track[];
+  current_track_id: number | null;
+  playlist_needs_load: boolean;
+}
+
+export interface LiveProgram {
+  show_id: string | null;
+  name: string;
+  host: string | null;
+  description: string | null;
+  starts_at: string | null;
+  ends_at: string | null;
+}
+
+export interface LivePage {
+  tracks: Track[];
+  current_track_id: number | null;
+  current_show: LiveProgram | null;
+  upcoming_shows: LiveProgram[];
+  history_source: "radio_rethink" | "local_cache";
+  warning: string | null;
+  updated_at: number;
+}
+
+// WFMU's 24/7 live channels. URLs come from wfmu.org's .pls playlists; the https
+// form works and is already covered by the app CSP (media-src https://*.wfmu.org),
+// so they play through the same <audio> element as archives — no backend round-trip.
+export const LIVE_STREAMS: LiveStream[] = [
+  {
+    id: "freeform",
+    name: "WFMU 91.1",
+    tagline: "Freeform radio the way it oughta be",
+    url: "https://stream0.wfmu.org/freeform-128k",
+    status_source: { kind: "homepage" },
+  },
+  {
+    id: "drummer",
+    name: "Give the Drummer Radio",
+    tagline: "WFMU's eclectic web-only channel",
+    url: "https://stream0.wfmu.org/drummer",
+    status_source: { kind: "channel", channel_id: 4 },
+  },
+  {
+    id: "rocknsoul",
+    name: "Rock'n'Soul Ichiban",
+    tagline: "Vintage rock & soul 45s, round the clock",
+    url: "https://stream0.wfmu.org/rocknsoul",
+    status_source: { kind: "channel", channel_id: 6 },
+  },
+  {
+    id: "sheena",
+    name: "Sheena's Jungle Room",
+    tagline: "Wild rock'n'roll, garage & exotica",
+    url: "https://stream0.wfmu.org/sheena",
+    status_source: { kind: "channel", channel_id: 8 },
+  },
+];
+
 export const api = {
   getCatalog: (refresh = false) => invoke<Show[]>("get_catalog", { refresh }),
   getShow: (showId: string, refresh = false) =>
     invoke<ShowDetail>("get_show", { showId, refresh }),
   getPlaylist: (episodeId: number, refresh = false) =>
     invoke<Track[]>("get_playlist", { episodeId, refresh }),
+  getLiveStatus: (
+    streamId: string,
+    statusSource: LiveStatusSource,
+    fallbackName: string,
+  ) =>
+    invoke<LiveStatus>("get_live_status", {
+      streamId,
+      statusSource,
+      fallbackName,
+    }),
+  getLivePage: (streamId: string, refresh = false) =>
+    invoke<LivePage>("get_live_page", { streamId, refresh }),
   resolveAudio: (episodeId: number) =>
     invoke<AudioSource>("resolve_audio", { episodeId }),
   toggleFavourite: (kind: "show" | "episode" | "track", refId: string) =>

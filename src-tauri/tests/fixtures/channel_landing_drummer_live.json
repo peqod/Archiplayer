@@ -1,0 +1,8 @@
+{
+  "changes": {
+    "nowplaying": {
+      "hash": "fixture",
+      "content": "<div class=\"nowplaying_playlist_link\"><a href=\"/playlists/shows/166500\">OPEN PLAYLIST AND CHAT</a></div><div class=\"nowplaying_program_title\">&quot;Contagious Orgasm&quot; by Heart Station</div><div class=\"nowplaying_live_song\">on <a href=\"/playlists/WL\">Wound Liquor with Olleh</a></div>"
+    }
+  }
+}

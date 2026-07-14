@@ -67,13 +67,39 @@ pub async fn download_episode(
     app: AppHandle,
     state: State<'_, AppState>,
 ) -> Result<String, String> {
+    {
+        let mut active = state
+            .active_downloads
+            .lock()
+            .map_err(|_| "download state lock poisoned".to_string())?;
+        if !active.insert(episode_id) {
+            return Err("this episode is already downloading".into());
+        }
+    }
+    let result = download_episode_inner(episode_id, app, state.clone()).await;
+    if let Ok(mut active) = state.active_downloads.lock() {
+        active.remove(&episode_id);
+    }
+    result
+}
+
+async fn download_episode_inner(
+    episode_id: i64,
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> Result<String, String> {
     // Resolve source URL (cached or via m3u) and destination path.
     let source = crate::commands::resolve_audio(episode_id, state.clone()).await?;
     if source.local {
         return Ok(source.url); // already downloaded
     }
     // Destination directory: user-configured, or the default under app data.
-    let configured = { state.db.lock().unwrap().get_setting("download_dir").ok().flatten() };
+    let configured = {
+        state
+            .db()?
+            .get_setting("download_dir")
+            .map_err(|e| e.to_string())?
+    };
     let dir = match configured {
         Some(d) if !d.trim().is_empty() => std::path::PathBuf::from(d),
         _ => app
@@ -87,15 +113,28 @@ pub async fn download_episode(
         .map_err(|e| format!("mkdir failed: {e}"))?;
     // Meaningful filename: "Show - Air date - Title.mp3" (sanitised), falling back to the id.
     let filename = {
-        let parts = state.db.lock().unwrap().episode_filename_parts(episode_id).ok();
+        let parts = state.db()?.episode_filename_parts(episode_id).ok();
         match parts {
-            Some((show, air, title)) => {
-                sanitize_filename(&build_name(&show, air.as_deref(), title.as_deref(), episode_id))
-            }
+            Some((show, air, title)) => sanitize_filename(&build_name(
+                &show,
+                air.as_deref(),
+                title.as_deref(),
+                episode_id,
+            )),
             None => episode_id.to_string(),
         }
     };
-    let dest = dir.join(format!("{filename}.mp3"));
+    let extension = reqwest::Url::parse(&source.url)
+        .ok()
+        .and_then(|url| {
+            std::path::Path::new(url.path())
+                .extension()
+                .and_then(|ext| ext.to_str())
+                .map(str::to_ascii_lowercase)
+        })
+        .filter(|ext| matches!(ext.as_str(), "mp3" | "mp4" | "m4a" | "aac"))
+        .unwrap_or_else(|| "mp3".to_string());
+    let dest = dir.join(format!("{filename}.{extension}"));
     let dest_str = dest.to_string_lossy().to_string();
 
     let resp = state
@@ -110,7 +149,7 @@ pub async fn download_episode(
     }
     let total = resp.content_length().unwrap_or(0) as i64;
     {
-        let db = state.db.lock().unwrap();
+        let db = state.db()?;
         db.upsert_download(episode_id, &dest_str, 0, total, "downloading")
             .map_err(|e| e.to_string())?;
     }
@@ -129,8 +168,9 @@ pub async fn download_episode(
             Err(e) => {
                 let msg = format!("download interrupted: {e}");
                 {
-                    let db = state.db.lock().unwrap();
-                    let _ = db.upsert_download(episode_id, &dest_str, bytes, total, "error");
+                    if let Ok(db) = state.db() {
+                        let _ = db.upsert_download(episode_id, &dest_str, bytes, total, "error");
+                    }
                 }
                 emit(
                     &app,
@@ -153,8 +193,9 @@ pub async fn download_episode(
         if last_emit.elapsed().as_millis() > 300 {
             last_emit = std::time::Instant::now();
             {
-                let db = state.db.lock().unwrap();
-                let _ = db.upsert_download(episode_id, &dest_str, bytes, total, "downloading");
+                if let Ok(db) = state.db() {
+                    let _ = db.upsert_download(episode_id, &dest_str, bytes, total, "downloading");
+                }
             }
             emit(
                 &app,
@@ -175,7 +216,7 @@ pub async fn download_episode(
         .map_err(|e| format!("finalize failed: {e}"))?;
 
     {
-        let db = state.db.lock().unwrap();
+        let db = state.db()?;
         db.upsert_download(episode_id, &dest_str, bytes, bytes.max(total), "done")
             .map_err(|e| e.to_string())?;
     }
@@ -190,4 +231,16 @@ pub async fn download_episode(
         },
     );
     Ok(dest_str)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{build_name, sanitize_filename};
+
+    #[test]
+    fn download_names_are_portable_and_distinct() {
+        assert_eq!(sanitize_filename("Show: A/B?"), "Show- A-B-");
+        assert!(build_name("Show", None, None, 42).contains("42"));
+        assert!(sanitize_filename("...   ").starts_with("download"));
+    }
 }
