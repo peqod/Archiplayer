@@ -14,7 +14,8 @@
   let { children } = $props();
   let audioEl: HTMLAudioElement;
   let favError = $state<string | null>(null);
-  // Player-only collapse: hide <main> and shorten the window to the player + tabs.
+  // Player-only collapse shortens the window to the player + tabs. The routed
+  // content remains mounted underneath, so manually enlarging the window reveals it.
   // Width remains user-controlled so the responsive player can still be resized.
   let collapsed = $state(false);
   let navEl: HTMLElement;
@@ -372,11 +373,9 @@
     </div>
   </nav>
 
-  {#if !collapsed}
-    <main>
-      {@render children()}
-    </main>
-  {/if}
+  <main>
+    {@render children()}
+  </main>
   {#if favError}<button class="fav-error" onclick={() => (favError = null)}>{favError} ✕</button>{/if}
 </div>
 
@@ -902,22 +901,34 @@
     }
   }
   @media (max-width: 420px) {
-    .brand-name,
-    .brand-sub {
-      display: none;
-    }
     nav {
-      gap: 44px;
-      padding: 10px 18px;
+      gap: 8px;
+      padding: 8px;
+    }
+    .brand {
+      gap: 4px;
     }
     .brand-logo {
-      width: 32px;
-      height: 32px;
+      width: 24px;
+      height: 24px;
+    }
+    .brand-name {
+      display: inline;
+      font-size: 12px;
+    }
+    .brand-sub {
+      display: inline;
+      font-size: 10px;
     }
     .nav-links {
-      flex: 0 0 auto;
-      gap: 44px;
-      justify-content: flex-start;
+      min-width: 0;
+      gap: 4px;
+      flex: 1 1 auto;
+      justify-content: space-evenly;
+    }
+    .nav-links a {
+      padding: 3px 5px;
+      font-size: 13px;
     }
   }
 </style>
