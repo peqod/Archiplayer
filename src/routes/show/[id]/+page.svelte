@@ -117,6 +117,10 @@
 
   async function playEpisode(ep: Episode) {
     if (!show) return;
+    if (player.current?.episode.id === ep.id) {
+      player.toggle();
+      return;
+    }
     try {
       // Resume where the listener left off (unless finished — then start over).
       const resume =
@@ -152,6 +156,14 @@
   async function playTrack(ep: Episode, track: Track) {
     if (!show) return;
     if (player.current?.episode.id === ep.id) {
+      const activeTrack =
+        player.currentTrackIndex >= 0
+          ? player.tracks[player.currentTrackIndex]
+          : null;
+      if (activeTrack?.id === track.id) {
+        player.toggle();
+        return;
+      }
       player.seekToTrack(track);
       return;
     }
@@ -263,11 +275,20 @@
           {/if}
           <button
             class="playbtn"
+            class:playing={player.current?.episode.id === ep.id && player.playing}
             onclick={() => playEpisode(ep)}
             disabled={!ep.has_audio}
-            title={ep.has_audio ? "Play this episode" : "No audio archive"}
+            title={!ep.has_audio
+              ? "No audio archive"
+              : player.current?.episode.id === ep.id
+                ? player.playing ? "Pause episode" : "Resume episode"
+                : "Play this episode"}
           >
-            {#if ep.has_audio}<Icon name="play" />{:else}–{/if}
+            {#if ep.has_audio}
+              <Icon
+                name={player.current?.episode.id === ep.id && player.playing ? "pause" : "play"}
+              />
+            {:else}–{/if}
           </button>
           <div class="ep-main" role="button" tabindex="0"
             onclick={() => togglePlaylist(ep)}
@@ -309,10 +330,11 @@
             <div class="tracks muted">No playlist recorded for this episode.</div>
           {:else}
             <div class="tracks">
-              {#each tracks as t, i (t.id)}
+              {#each tracks as t (t.id)}
                 <TrackRow
                   track={t}
-                  current={player.current?.episode.id === ep.id && player.currentTrackIndex === i}
+                  current={player.current?.episode.id === ep.id && player.tracks[player.currentTrackIndex]?.id === t.id}
+                  playing={player.playing}
                   playable={ep.has_audio}
                   onplay={() => playTrack(ep, t)}
                   onfavourite={() => favTrack(ep, t)}
@@ -415,11 +437,16 @@
     display: flex;
     flex-direction: column;
     gap: 4px;
+    min-width: 0;
+    max-width: 100%;
   }
   .ep {
     background: var(--c-surface);
     border-radius: 8px;
     padding: 4px 8px;
+    min-width: 0;
+    max-width: 100%;
+    overflow: hidden;
   }
   .ep.current {
     outline: 1px solid var(--c-accent);
@@ -469,6 +496,9 @@
   /* Optical-centre the play triangle in the round episode button. */
   .playbtn :global(svg.icon) {
     transform: translateX(2px);
+  }
+  .playbtn.playing :global(svg.icon) {
+    transform: none;
   }
   .ep-main {
     flex: 1 1 auto;
@@ -555,5 +585,44 @@
     border-top: 1px solid var(--c-surface2);
     margin-top: 2px;
     padding: 6px 0 8px;
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  @media (max-width: 760px) {
+    .ep-row {
+      display: grid;
+      grid-template-columns: 32px minmax(0, 1fr);
+      column-gap: 8px;
+      row-gap: 0;
+      align-items: start;
+      padding: 4px 0;
+    }
+    .playbtn {
+      grid-column: 1;
+      grid-row: 1 / span 2;
+      margin-top: 2px;
+    }
+    .ep-main {
+      grid-column: 2;
+      grid-row: 1;
+      width: 100%;
+      padding: 2px 0 4px;
+      gap: 4px 8px;
+    }
+    .ep-date {
+      flex: 0 0 auto;
+    }
+    .ep-title {
+      flex: 1 1 120px;
+      min-width: 0;
+      max-width: 100%;
+    }
+    .ep-actions {
+      grid-column: 2;
+      grid-row: 2;
+      justify-content: flex-end;
+      min-width: 0;
+    }
   }
 </style>

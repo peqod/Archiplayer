@@ -18,6 +18,7 @@
   let collapsed = $state(false);
   let navEl: HTMLElement;
   let headerEl: HTMLElement;
+  let expandedWidth = 0;
   let expandedHeight = 0; // remembered logical height to restore on expand
   // Mirrors the CSS mini-mode breakpoint so volume can fold to a popover.
   let mini = $state(false);
@@ -42,19 +43,31 @@
       const win = getCurrentWindow();
       const scale = await win.scaleFactor();
       const physical = await win.innerSize();
-      const cur = physical.toLogical(scale);
       if (collapsed) {
         // Tauri setSize targets the client area. Only resize when the measured
         // content actually differs, otherwise ResizeObserver would feed itself.
         const compact = Math.ceil((headerEl?.offsetHeight ?? 0) + (navEl?.offsetHeight ?? 0));
-        if (compact > 0 && Math.abs(cur.height - compact) > 1) {
-          await win.setSize(new PhysicalSize(physical.width, Math.round(compact * scale)));
+        const compactWidth = 324;
+        const width = Math.round(compactWidth * scale);
+        const height = Math.round(compact * scale);
+        if (
+          compact > 0 &&
+          (Math.abs(physical.width - width) > 1 || Math.abs(physical.height - height) > 1)
+        ) {
+          await win.setSize(new PhysicalSize(width, height));
         }
       } else {
-        // restore the pre-collapse height (or a sensible default if we started collapsed)
-        const target = expandedHeight > 0 ? expandedHeight : 860;
-        if (cur.height < target - 1) {
-          await win.setSize(new PhysicalSize(physical.width, Math.round(target * scale)));
+        // Restore the exact pre-collapse client size. A restored collapsed session
+        // has no in-memory size, so use a comfortable library default.
+        const targetWidth = expandedWidth > 0 ? expandedWidth : 1100;
+        const targetHeight = expandedHeight > 0 ? expandedHeight : 860;
+        const width = Math.round(targetWidth * scale);
+        const height = Math.round(targetHeight * scale);
+        if (
+          Math.abs(physical.width - width) > 1 ||
+          Math.abs(physical.height - height) > 1
+        ) {
+          await win.setSize(new PhysicalSize(width, height));
         }
       }
     } catch {
@@ -70,7 +83,9 @@
       try {
         const win = getCurrentWindow();
         const scale = await win.scaleFactor();
-        expandedHeight = (await win.innerSize()).toLogical(scale).height;
+        const size = (await win.innerSize()).toLogical(scale);
+        expandedWidth = size.width;
+        expandedHeight = size.height;
       } catch {
         /* ignore */
       }
@@ -178,23 +193,53 @@
 </script>
 
 {#snippet volumeControl()}
-  <div class="p-volume">
-    <button class="pvol-btn" onclick={onVolClick} title={mini ? "Volume" : player.muted ? "Unmute" : "Mute"}>
+  <div class="p-volume" class:open={mini && volOpen}>
+    <button
+      class="pvol-btn"
+      type="button"
+      aria-label={mini ? "Volume" : player.muted ? "Unmute" : "Mute"}
+      aria-expanded={mini ? volOpen : undefined}
+      onclick={onVolClick}
+      title={mini ? "Volume" : player.muted ? "Unmute" : "Mute"}
+    >
       <Icon name={volumeIcon} size="24px" />
     </button>
     {#if !mini}
       <input type="range" min="0" max="1" step="0.02" value={player.volume} oninput={onVolume} />
     {:else if volOpen}
-      <button class="vol-backdrop" aria-label="Close volume" onclick={() => (volOpen = false)}></button>
-      <div class="vol-pop">
-        <input class="vol-v" type="range" min="0" max="1" step="0.02" value={player.volume} oninput={onVolume} />
+      <div
+        class="vol-pop"
+        style={`--volume-level: ${(player.muted ? 0 : player.volume) * 100}%`}
+      >
+        <div class="vol-slider">
+          <span class="vol-track" aria-hidden="true">
+            <span class="vol-fill"></span>
+            <span class="vol-thumb"></span>
+          </span>
+          <input
+            class="vol-v"
+            aria-label="Volume"
+            aria-orientation="vertical"
+            type="range"
+            min="0"
+            max="1"
+            step="0.02"
+            value={player.volume}
+            oninput={onVolume}
+          />
+        </div>
       </div>
     {/if}
   </div>
 {/snippet}
 
 <div class="app">
-  <header class="player" class:inactive={!player.current && !player.live} bind:this={headerEl}>
+  <header
+    class="player"
+    class:inactive={!player.current && !player.live}
+    class:volumeOpen={mini && volOpen}
+    bind:this={headerEl}
+  >
     <!-- svelte-ignore a11y_media_has_caption -->
     <audio bind:this={audioEl} preload="none"></audio>
     <div class="p-controls">
@@ -629,16 +674,18 @@
       gap: 8px;
       padding: 8px 12px;
       /* Rescale via the sizing tokens — cascades through controls + icons. */
-      --pbtn-size: 24px;
-      --pbtn-main-size: 34px;
+      --pbtn-size: 28px;
+      --pbtn-main-size: 42px;
       --pctl-gap: 6px;
       --player-gap: 10px;
       --icon-size: 0.95em;
+      --transport-width: 246px;
     }
     .p-controls {
       justify-content: center;
       flex-wrap: nowrap;
-      width: 100%;
+      width: min(100%, var(--transport-width));
+      margin-inline: auto;
     }
     /* Hardcoded (non-token) sizes that won't follow the tokens. */
     .pbtn {
@@ -648,8 +695,8 @@
       font-size: 14px;
     }
     .pbtn.main :global(svg.icon) {
-      width: 17px;
-      height: 17px;
+      width: 20px;
+      height: 20px;
     }
     .p-title {
       font-size: 12px;
@@ -657,8 +704,17 @@
     .p-track {
       font-size: 11px;
     }
-    /* Center the stacked info + scrub under the controls. */
+    /* Treat the compact player as one centred composition: transport, metadata,
+       and scrubber share the same axis. */
     .p-info {
+      text-align: center;
+      position: relative;
+      width: min(100%, var(--transport-width));
+      margin-inline: auto;
+    }
+    .p-title,
+    .p-track {
+      width: 100%;
       text-align: center;
     }
     /* Shrink the «15 / 15» skip buttons so they stop overflowing. */
@@ -667,8 +723,13 @@
       letter-spacing: -0.04em;
     }
     .p-scrub {
-      flex-wrap: nowrap;
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr) auto 28px;
+      align-items: center;
       gap: 8px;
+      position: relative;
+      min-height: 28px;
+      width: 100%;
     }
     .p-scrub > input[type="range"] {
       min-width: 0;
@@ -676,41 +737,98 @@
     }
     .p-scrub .p-volume {
       margin-left: 0;
+      grid-column: 4;
+      justify-self: end;
+      min-width: 28px;
+    }
+    .player.volumeOpen .p-scrub {
+      padding-right: 0;
     }
     .p-time {
       font-size: 11px;
       min-width: 40px;
     }
-    /* Volume folds into a click-to-open vertical popover. */
+    /* Mini volume is custom-painted; the transparent native range on top keeps
+       pointer and keyboard behavior without relying on WebView range styling. */
     .vol-pop {
       position: absolute;
-      top: auto;
-      bottom: calc(100% + 6px);
-      right: 0;
+      right: -4px;
+      bottom: -4px;
+      width: 36px;
+      height: 108px;
       display: flex;
       justify-content: center;
-      padding: 8px 7px;
-      background: var(--c-surface2);
+      align-items: flex-start;
+      padding: 7px 5px 34px;
+      background: var(--c-surface);
       border: 1px solid var(--c-border);
-      border-radius: 8px;
+      border-radius: 7px;
+      z-index: 1;
+    }
+    .p-volume.open {
       z-index: 20;
     }
-    .p-volume .vol-v {
-      writing-mode: vertical-lr;
-      direction: rtl;
-      width: 8px;
-      height: 60px;
-      accent-color: var(--c-accent);
-      cursor: pointer;
+    .p-volume.open .pvol-btn {
+      width: 28px;
+      height: 28px;
+      padding: 2px;
+      justify-content: center;
+      position: relative;
+      z-index: 2;
     }
-    .vol-backdrop {
-      position: fixed;
-      inset: 0;
-      background: transparent;
-      border: none;
-      padding: 0;
-      z-index: 19;
-      cursor: default;
+    .vol-slider {
+      position: relative;
+      width: 24px;
+      height: 66px;
+    }
+    .vol-track {
+      position: absolute;
+      top: 6px;
+      bottom: 6px;
+      left: 50%;
+      width: 5px;
+      overflow: visible;
+      transform: translateX(-50%);
+      background: var(--c-border);
+      border-radius: 999px;
+      pointer-events: none;
+    }
+    .vol-fill {
+      position: absolute;
+      right: 0;
+      bottom: 0;
+      left: 0;
+      height: var(--volume-level);
+      background: var(--c-accent);
+      border-radius: inherit;
+    }
+    .vol-thumb {
+      position: absolute;
+      bottom: var(--volume-level);
+      left: 50%;
+      width: 13px;
+      height: 13px;
+      transform: translate(-50%, 50%);
+      background: var(--c-accent);
+      border: 2px solid var(--c-surface);
+      border-radius: 50%;
+      box-shadow: 0 0 0 1px var(--c-border);
+    }
+    .p-volume .vol-v {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      z-index: 2;
+      width: 66px;
+      height: 24px;
+      margin: 0;
+      opacity: 0;
+      transform: translate(-50%, -50%) rotate(-90deg);
+      cursor: pointer;
+      touch-action: none;
+    }
+    .vol-slider:focus-within .vol-track {
+      box-shadow: 0 0 0 2px var(--c-surface), 0 0 0 4px var(--c-accent);
     }
 
     /* Compact the nav so the tabs stay readable. */
@@ -733,10 +851,66 @@
     }
     .nav-links {
       gap: 10px;
-      margin-left: auto;
+      margin-left: 0;
+      flex: 1 1 auto;
+      justify-content: space-evenly;
     }
     .nav-links a {
       padding: 3px 8px;
+    }
+  }
+  @media (max-width: 420px) {
+    .player {
+      gap: 14px;
+      padding: 18px 12px 8px;
+      --pbtn-size: 32px;
+      --pbtn-main-size: 46px;
+      --pctl-gap: 6px;
+      --transport-width: 274px;
+    }
+    .player.inactive {
+      gap: 8px;
+      padding-top: 10px;
+    }
+    .pbtn.main :global(svg.icon) {
+      width: 22px;
+      height: 22px;
+    }
+    .p-title {
+      margin-bottom: 3px;
+    }
+    .p-track {
+      margin-bottom: 3px;
+    }
+    .p-volume.open {
+      min-width: 28px;
+    }
+    .p-volume.open .vol-pop {
+      height: 130px;
+      padding-top: 7px;
+    }
+    .p-volume.open .vol-slider {
+      height: 88px;
+    }
+    .p-volume.open .vol-v {
+      width: 84px;
+    }
+    .brand-name,
+    .brand-sub {
+      display: none;
+    }
+    nav {
+      gap: 44px;
+      padding: 10px 18px;
+    }
+    .brand-logo {
+      width: 32px;
+      height: 32px;
+    }
+    .nav-links {
+      flex: 0 0 auto;
+      gap: 44px;
+      justify-content: flex-start;
     }
   }
 </style>
