@@ -244,7 +244,6 @@
   <header
     class="player"
     class:inactive={!player.current && !player.live}
-    class:volumeOpen={mini && volOpen}
     bind:this={headerEl}
   >
     <!-- svelte-ignore a11y_media_has_caption -->
@@ -262,7 +261,7 @@
     </div>
     <div class="p-info">
       {#if player.current}
-        <div class="p-title">
+        <div class="p-title ellipsis">
           <button
             class="pfav"
             class:on={player.current.episode.favourite}
@@ -275,7 +274,7 @@
             <span class="p-queue">{player.queueIndex + 1}/{player.queue.length}</span>
           {/if}
         </div>
-        <div class="p-track">
+        <div class="p-track ellipsis">
           <button
             class="pfav"
             class:on={currentTrack?.favourite}
@@ -306,7 +305,7 @@
           {@render volumeControl()}
         </div>
       {:else if player.live}
-        <div class="p-title">
+        <div class="p-title ellipsis">
           <button
             class="pfav"
             class:on={player.liveEpisode?.episode.favourite}
@@ -320,7 +319,7 @@
             <span class="p-date">{player.liveEpisode.episode.air_date}</span>
           {/if}
         </div>
-        <div class="p-track">
+        <div class="p-track ellipsis">
           <button
             class="pfav"
             class:on={currentTrack?.favourite}
@@ -422,6 +421,12 @@
   :global(button) {
     font-family: inherit;
   }
+  /* Single-line truncation utility (shared across the player, show list and track rows). */
+  :global(.ellipsis) {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
   .app {
     display: flex;
     flex-direction: column;
@@ -514,14 +519,16 @@
     color: var(--c-on-accent);
     font-size: 18px;
   }
-  /* Optical-centre the play/playing triangle in the round main button. */
-  .pbtn.main :global(svg.icon) {
-    transform: translateX(2px);
-  }
   .pbtn.main :global(svg.icon) {
     width: 22px;
     height: 22px;
-    transform: translateX(3px);   /* optical-centre the triangle */
+  }
+  /* Optically centre the right-pointing play/playing triangles wherever they render
+     (header, track rows, show + profile pages). A percentage keeps the shift proportional
+     across icon sizes. */
+  :global(.icon-play),
+  :global(.icon-playing) {
+    transform: translateX(12%);
   }
   .pbtn.skip {
     font-size: 12px;
@@ -540,9 +547,6 @@
   .p-title {
     font-weight: 700;
     font-size: 14px;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
   }
   .p-date {
     color: var(--c-dim);
@@ -558,9 +562,6 @@
   .p-track {
     font-size: 13px;
     color: var(--c-dim);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
   }
   .p-track.idle {
     color: var(--c-dim);
@@ -676,7 +677,7 @@
     .player {
       flex-direction: column;
       align-items: stretch;
-      gap: var(--mini-player-gap);
+      gap: var(--player-gap);
       padding: var(--mini-pad-top) var(--mini-pad-inline) var(--mini-pad-bottom);
 
       /* Each clamp is linear between 324px and 760px. Keeping the endpoints here
@@ -687,7 +688,6 @@
       --player-gap: clamp(14px, calc(11.028px + 0.917vw), 18px);
       --icon-size: clamp(11.4px, calc(8.428px + 0.917vw), 15.4px);
       --transport-width: clamp(274px, calc(232.385px + 12.844vw), 330px);
-      --mini-player-gap: var(--player-gap);
       --mini-pad-top: clamp(18px, calc(16.514px + 0.459vw), 20px);
       --mini-pad-inline: clamp(12px, calc(7.541px + 1.376vw), 18px);
       --mini-pad-bottom: clamp(8px, calc(5.028px + 0.917vw), 12px);
@@ -708,7 +708,6 @@
       --mini-volume-pad-top: clamp(7px, calc(6.257px + 0.229vw), 8px);
       --mini-volume-pad-inline: clamp(5px, calc(4.257px + 0.229vw), 6px);
       --mini-volume-pad-bottom: clamp(34px, calc(31.028px + 0.917vw), 38px);
-      --mini-volume-button: var(--mini-volume-column);
       --mini-volume-slider: clamp(88px, calc(73.138px + 4.587vw), 108px);
       --mini-volume-track-inset: clamp(6px, calc(4.514px + 0.459vw), 8px);
       --mini-volume-track: clamp(5px, calc(4.257px + 0.229vw), 6px);
@@ -725,7 +724,7 @@
       width: min(100%, var(--transport-width));
       margin-inline: auto;
     }
-    /* Hardcoded (non-token) sizes that won't follow the tokens. */
+    /* Font sizes track the compact tokens above. */
     .pbtn {
       font-size: var(--mini-control-font);
     }
@@ -781,9 +780,6 @@
       justify-self: end;
       min-width: var(--mini-volume-column);
     }
-    .player.volumeOpen .p-scrub {
-      padding-right: 0;
-    }
     .p-time {
       font-size: var(--mini-time-font);
       min-width: var(--mini-time-width);
@@ -810,8 +806,8 @@
       z-index: 20;
     }
     .p-volume.open .pvol-btn {
-      width: var(--mini-volume-button);
-      height: var(--mini-volume-button);
+      width: var(--mini-volume-column);
+      height: var(--mini-volume-column);
       padding: 2px;
       justify-content: center;
       position: relative;

@@ -35,9 +35,9 @@
           : "Live track"}
   ><Icon name={current && playing ? "pause" : "play"} /></button>
   <span class="ttime">{timeLabel ?? (track.start_sec !== null ? fmtTime(track.start_sec) : "–")}</span>
-  <span class="tartist">{track.artist ?? ""}</span>
-  <span class="ttitle">{track.title ?? ""}</span>
-  <span class="talbum">{track.album ?? ""}</span>
+  <span class="tartist ellipsis">{track.artist ?? ""}</span>
+  <span class="ttitle ellipsis">{track.title ?? ""}</span>
+  <span class="talbum ellipsis">{track.album ?? ""}</span>
   <button
     class="mini"
     class:on={track.favourite}
@@ -86,20 +86,9 @@
   }
   .tartist {
     font-weight: 600;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-  .ttitle {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
   }
   .talbum {
     color: var(--c-dim);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
     text-align: right;
   }
   .mini {

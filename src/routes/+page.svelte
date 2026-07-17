@@ -6,7 +6,6 @@
 
   let shows = $state<Show[]>([]);
   let loading = $state(true);
-  let refreshing = $state(false);
   let error = $state<string | null>(null);
   let query = $state("");
   let trackHits = $state<TrackHit[]>([]);
@@ -19,17 +18,20 @@
 
   async function load(refresh = false) {
     error = null;
-    if (refresh) refreshing = true;
     try {
       shows = await api.getCatalog(refresh);
     } catch (e) {
       error = String(e);
     } finally {
       loading = false;
-      refreshing = false;
     }
   }
-  load();
+  // Paint cached catalog instantly, then re-scrape wfmu so the alphabet picks up
+  // any new audition/show without blocking the view.
+  (async () => {
+    await load();
+    await load(true);
+  })();
 
   const letters = $derived.by(() => {
     const set = new Set<string>();
@@ -167,9 +169,6 @@
   <button class="ghost" onclick={randomShow} disabled={!shows.length} title="Play a random show">
     🎲 Random
   </button>
-  <button class="ghost" onclick={() => load(true)} disabled={refreshing}>
-    {#if refreshing}Refreshing…{:else}<Icon name="refresh" /> Refresh catalog{/if}
-  </button>
 </div>
 
 {#if error}
@@ -192,8 +191,8 @@
             <Icon name={player.live?.id === s.id && player.playing ? "pause" : "play"} />
           </span>
           <span class="lc-text">
-            <span class="lc-name">{s.name}</span>
-            <span class="lc-tag">{s.tagline}</span>
+            <span class="lc-name ellipsis">{s.name}</span>
+            <span class="lc-tag ellipsis">{s.tagline}</span>
           </span>
         </a>
       {/each}
@@ -224,9 +223,9 @@
   <div class="tracklist">
     {#each trackHits.slice(0, 50) as hit}
       <button class="trackhit" onclick={() => playTrackHit(hit)} title="Play episode at this song">
-        <span class="t-artist">{hit.track.artist ?? "?"}</span>
-        <span class="t-title">{hit.track.title ?? "?"}</span>
-        <span class="t-meta">{hit.show_name} · {hit.air_date ?? ""}</span>
+        <span class="t-artist ellipsis">{hit.track.artist ?? "?"}</span>
+        <span class="t-title ellipsis">{hit.track.title ?? "?"}</span>
+        <span class="t-meta ellipsis">{hit.show_name} · {hit.air_date ?? ""}</span>
       </button>
     {/each}
   </div>
@@ -238,11 +237,11 @@
     <div class="row">
       <a class="row-main" href={"/show/" + show.id}>
         <span class="row-text">
-          <span class="row-name">
+          <span class="row-name ellipsis">
             {show.name}
             {#if show.favourite}<span class="row-fav"><Icon name="star" filled size="0.85em" /></span>{/if}
           </span>
-          <span class="row-sub">
+          <span class="row-sub ellipsis">
             {#if show.dj}{show.dj}{/if}
             {#if show.dj && !show.on_air}<span class="dot">·</span>{/if}
             {#if !show.on_air}<span class="row-off">archive</span>{/if}
@@ -397,16 +396,10 @@
   .lc-name {
     font-weight: 700;
     font-size: 14px;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
   }
   .lc-tag {
     font-size: 12px;
     color: var(--c-dim);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
   }
   .alpha {
     display: flex;
@@ -481,9 +474,6 @@
   .row-name {
     font-weight: 600;
     font-size: 14px;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
   }
   .row-fav {
     color: var(--c-gold);
@@ -493,9 +483,6 @@
   .row-sub {
     color: var(--c-dim);
     font-size: 12px;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
   }
   .row-desc {
     color: var(--c-dim);
@@ -581,20 +568,9 @@
   }
   .t-artist {
     font-weight: 600;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-  .t-title {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
   }
   .t-meta {
     color: var(--c-dim);
     text-align: right;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
   }
 </style>

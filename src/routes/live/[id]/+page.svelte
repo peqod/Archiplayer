@@ -16,7 +16,6 @@
   const stream = $derived(LIVE_STREAMS.find((candidate) => candidate.id === streamId));
   let detail = $state<LivePage | null>(null);
   let loading = $state(true);
-  let refreshing = $state(false);
   let error = $state<string | null>(null);
   let requestGeneration = 0;
 
@@ -27,7 +26,6 @@
       return;
     }
     const generation = ++requestGeneration;
-    if (refresh) refreshing = true;
     try {
       const next = await api.getLivePage(stream.id, refresh);
       if (generation !== requestGeneration) return;
@@ -39,7 +37,6 @@
     } finally {
       if (generation === requestGeneration) {
         loading = false;
-        refreshing = false;
       }
     }
   }
@@ -48,7 +45,8 @@
     void streamId;
     detail = null;
     loading = true;
-    void load();
+    // Opening the station pulls fresh live data; the interval below keeps it current.
+    void load(true);
   });
 
   onMount(() => {
@@ -126,9 +124,6 @@
       <button class="primary" onclick={() => player.playLive(stream)}>
         <Icon name={player.live?.id === stream.id && player.playing ? "pause" : "play"} />
         {player.live?.id === stream.id && player.playing ? "Pause live" : "Listen live"}
-      </button>
-      <button class="ghost" onclick={() => load(true)} disabled={refreshing}>
-        <Icon name="refresh" /> {refreshing ? "Refreshing…" : "Refresh"}
       </button>
     </div>
   </div>

@@ -22,7 +22,6 @@
   let show = $state<Show | null>(null);
   let episodes = $state<Episode[]>([]);
   let loading = $state(true);
-  let refreshing = $state(false);
   let error = $state<string | null>(null);
   let expanded = $state<Record<number, Track[] | "loading">>({});
   let downloading = $state<Record<number, { bytes: number; total: number }>>({});
@@ -31,7 +30,6 @@
 
   async function load(refresh = false) {
     error = null;
-    if (refresh) refreshing = true;
     try {
       const detail = await api.getShow(showId, refresh);
       show = detail.show;
@@ -40,7 +38,6 @@
       error = String(e);
     } finally {
       loading = false;
-      refreshing = false;
     }
   }
 
@@ -50,7 +47,11 @@
     episodes = [];
     expanded = {};
     loading = true;
-    load();
+    // Paint cached episodes, then re-scrape the show page so new episodes appear.
+    (async () => {
+      await load();
+      await load(true);
+    })();
   });
 
   onMount(() => {
@@ -255,9 +256,6 @@
       <button class="primary" onclick={playAll} disabled={!playableCount}><Icon name="play" /> Play all (newest first)</button>
       <button class="ghost fav" class:on={show.favourite} onclick={favShow}>
         <Icon name="star" filled={show.favourite} /> {show.favourite ? "Favourited" : "Favourite"}
-      </button>
-      <button class="ghost" onclick={() => load(true)} disabled={refreshing}>
-        {#if refreshing}Refreshing…{:else}<Icon name="refresh" /> Refresh{/if}
       </button>
     </div>
   </div>
@@ -492,13 +490,6 @@
   .playbtn:disabled {
     opacity: 0.35;
     cursor: default;
-  }
-  /* Optical-centre the play triangle in the round episode button. */
-  .playbtn :global(svg.icon) {
-    transform: translateX(2px);
-  }
-  .playbtn.playing :global(svg.icon) {
-    transform: none;
   }
   .ep-main {
     flex: 1 1 auto;
