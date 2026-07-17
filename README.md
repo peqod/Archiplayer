@@ -46,54 +46,29 @@ Download the matching file from the [latest release](../../releases/latest).
 
 ## Build from source
 
-All platforms need [Node.js 20 or newer](https://nodejs.org/), npm, [stable Rust](https://rustup.rs/), Git, and the platform-specific Tauri prerequisites below.
+You need [Node.js 20 or newer](https://nodejs.org/), npm, [Rust via rustup](https://rustup.rs/), and Git.
 
 Clone the repository, then run the common setup:
 
 ```sh
-git clone https://github.com/OWNER/archiplayer.git
-cd archiplayer
+git clone https://github.com/peqod/Archiplayer.git
+cd Archiplayer
 npm ci
 ```
 
-Replace `OWNER` with the repository owner.
+### Windows (x64)
 
-### Windows
+1. Install **Visual Studio Build Tools** with the **Desktop development with C++** workload. It must include MSVC v143, a Windows 10/11 SDK, and WebView2 (WebView2 ships with Windows 11).
+2. Install Rust from [rustup.rs](https://rustup.rs/). The MSVC toolchain is pinned in `src-tauri/rust-toolchain.toml`, so rustup installs `stable-x86_64-pc-windows-msvc` automatically on the first `cargo` run. No manual `rustup default` is needed.
+3. Install JS dependencies: `npm ci`.
+4. **Run in development:** `npm run dev:windows`. This dot-sources `build-env.ps1` to load `link.exe` plus the Windows SDK, then starts `tauri dev`. To reuse your current shell instead, run `. .\build-env.ps1` once, then `npm run tauri dev`.
+5. **Build the installer:** `npm run build:windows`. The NSIS installer is written to `src-tauri/target/release/bundle/nsis/Archiplayer_<version>_x64-setup.exe`.
 
-Install the **Desktop development with C++** workload from Visual Studio Build Tools. It must include MSVC, the Windows SDK, and WebView2. Archiplayer intentionally uses the MSVC Rust toolchain rather than GNU.
+> If `cargo` reports a file lock ("used by another process"), stop a running `archiplayer.exe` first (`taskkill /F /IM archiplayer.exe`), then rebuild.
 
-```powershell
-rustup default stable-x86_64-pc-windows-msvc
-npm run tauri build -- --bundles nsis
-```
+### macOS and Linux
 
-The installer is written below `src-tauri/target/release/bundle/nsis/`.
-
-### macOS
-
-Install Xcode Command Line Tools:
-
-```sh
-xcode-select --install
-rustup target add aarch64-apple-darwin x86_64-apple-darwin
-npm run tauri build -- --target universal-apple-darwin --bundles dmg
-```
-
-The universal disk image is written below `src-tauri/target/universal-apple-darwin/release/bundle/dmg/`.
-
-### Ubuntu / Debian
-
-Install the WebKitGTK and packaging libraries required by Tauri:
-
-```sh
-sudo apt update
-sudo apt install -y libwebkit2gtk-4.1-dev build-essential curl wget file libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev patchelf
-npm run tauri build -- --bundles appimage,deb
-```
-
-Artifacts are written below `src-tauri/target/release/bundle/`.
-
-> Other Linux distributions can run Archiplayer, but package names and WebKitGTK availability vary. The first supported release targets x64 AppImage and Debian packages.
+Build-from-source steps for macOS (universal `.dmg`) and Linux (AppImage / deb) are in progress, tracked in issue [#1](https://github.com/peqod/Archiplayer/issues/1) ([PRD](docs/prd/cross-platform-build-instructions.md)). The Download table above still applies to published releases.
 
 ## Develop and test
 

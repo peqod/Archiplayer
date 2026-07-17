@@ -1,2 +1,2 @@
-[target.x86_64-pc-windows-gnu]
-rustflags = ["-C", "link-arg=-Wl,--exclude-libs=ALL"]
+# No target-specific rustflags are needed for the MSVC toolchain.
+# (Previously carried a GNU-only -Wl,--exclude-libs=ALL linker flag, inert under MSVC.)

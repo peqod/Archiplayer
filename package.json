@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite dev",
     "dev:windows": "powershell -NoProfile -ExecutionPolicy Bypass -Command \". .\\build-env.ps1; npm run tauri dev\"",
+    "build:windows": "powershell -NoProfile -ExecutionPolicy Bypass -Command \". .\\build-env.ps1; npm run tauri build -- --bundles nsis\"",
     "build": "vite build",
     "preview": "vite preview",
     "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
