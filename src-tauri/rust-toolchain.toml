@@ -1,2 +1,4 @@
 [toolchain]
-channel = "stable-x86_64-pc-windows-msvc"
+# Bare "stable" resolves to stable-{default host}, which is MSVC on Windows.
+# Naming the triple here breaks cargo on Linux and macOS.
+channel = "stable"
