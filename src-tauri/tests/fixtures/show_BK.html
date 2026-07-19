@@ -1,0 +1,653 @@
+<!DOCTYPE html>
+<!--Default templates created 2/21/01 (v3: 11/6/18), written 2001-2022 by Ken Garson (ken@kenzodb.com). Some contributions copyright 2020-2022 Ken Garson Systems LLC: https://kenzodb.com. v4/18/22-->
+<!--playlist generator Created 10/20/00 (v3: 11/1/18), written 2000-2025 by Ken Garson (ken@kenzodb.com). Some contributions copyright 2020-2025 Ken Garson Systems LLC: https://kenzodb.com. v7/9/25-->
+<html>
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0, maximum-scale=2.0, user-scalable=yes">
+<script type="text/javascript">
+document.domain="wfmu.org";
+</script>
+<base target="_top">
+<link rel="alternate" type="application/rss+xml" title="WFMU Playlists for Bryce's show" href="http://www.wfmu.org/playlistfeed/BK.xml">
+<link rel="alternate" type="application/rss+xml" title="WFMU MP3 archives for Bryce's show" href="http://www.wfmu.org/archivefeed/mp3/BK.xml">
+<script type="text/javascript" src="/libraries/jquery/jquery-3.7.1.min.js"></script><link type="text/css" href="/libraries/jqueryui/1.12.1-dialogsmoothness/jquery-ui.min.css" rel="stylesheet" /><script type="text/javascript" src="/libraries/jqueryui/1.12.1-dialogsmoothness/jquery-ui-kenzo-210507.min.js"></script>
+<script type="text/javascript" src="/libraries/jquery/js.cookie.js"></script>
+<script type="text/javascript" src="/libraries/highslide/highslide-v4.1.13.min.js"></script><script type="text/javascript" src="/libraries/highslide/highslide.config-v4.1.13.js"></script><link rel="stylesheet" type="text/css" href="/libraries/highslide/highslide-v4.1.13.css" />
+<style type="text/css">
+a.highslide img {
+max-width:335px;
+max-height:263px;
+display:inline-block;
+margin-left:auto;
+margin-right:auto;
+height:auto;
+width:auto;
+border-style:none;
+}
+div.highslide-caption {
+text-align:center;
+color: black;
+}
+div.image_caption {
+text-align:center;
+font-size: small;
+padding-left:12px;
+max-width:333px;
+}
+div.image_caption_top {
+text-align:center;
+font-size: small;
+}
+a.playlist_top_image img {
+/*max-width:800px;*/
+max-height:500px;
+max-width:95%;
+}
+span.KDBFavIcon img {
+display:inline-block;
+margin-left:auto;
+margin-right:auto;
+}
+</style>
+<link id="noframes_style" type="text/css" href="/css/playlist_noframes_aftershow.1670968947.css" rel="stylesheet" />
+<script type="text/javascript">
+function kdbarchivelink(url, v) {
+window.open(url, "kdbflashplayerwindow",(v==1 ? "width=645,height=135":(v==2 ? "width=540,height=164":(v==3 ? "width=605,height=708":(v==4 ? "width=0,height=0":"width=0,height=0")))) + ",scrollbars=no,resizable=yes,toolbar=no,directories=no,location=no,menubar=no,status=no");
+return false;
+}
+</script>
+<meta property="og:site_name" content="WFMU" />
+<meta property="og:type" content="website" />
+<meta property="og:title" content="Bryce's show" />
+<meta property="og:description" content="Playlists &amp; archives" />
+<meta property="og:url" content="http://wfmu.org/playlists/BK" />
+<title>
+WFMU:
+Bryce:
+Playlists and Archives
+</title>
+<style type="text/css" id="playlist_css_additional">
+BODY, TD, TH, .everything, P {
+color: #999BA0;
+font-family: verdana, geneva, arial, sans-serif;
+}
+button.reply_thread_button {
+color: #999BA0;
+}
+.showlist {
+font-size: 80%;
+font-family: verdana, geneva, arial, sans-serif;
+}
+BODY {
+background-color: #212332
+}
+.song, table#comments-table td {
+background-color: #2D2F40;
+}
+A:link {color: #CCA525}
+A:visited {color: #706234}
+A:active, button.reply_thread_button:hover {color: #FDD446}
+.invis {text-decoration: none}
+.webonly {
+font-style: italic;
+font-size: 70%;
+}
+.KDBFavIcon.KDBsong {
+float:right;
+margin-right: 5px;
+}
+.playlistcommentsform {
+font-size: 90%;
+margin:0;
+width:98%;
+}
+.topborder {
+/*border: 2px solid;*/
+}
+p.content, td.content {
+margin: 0;
+padding: 0.5em;
+}
+p.content div, td.content div {
+font-size: 120%;
+font-weight: bold;
+}
+p.boxed, td.boxed {
+border-top:1px solid silver;
+margin: 0.25em;
+padding: 0.25em 0.5em 0.55em 0.5em; /*pre-avatars*/
+/*padding: 0.15em 0.25em 0.15em 0.25em;*/ /*avatars*/
+}
+table#comments-table {
+border-spacing:0;
+border-collapse:collapse;
+font-size: 95%;
+border: 2px solid;
+line-height: 120%;
+table-layout:fixed;
+word-wrap:break-word;
+overflow:hidden;
+}
+.nounder {
+text-decoration: none;
+}
+span.key { font-weight: bold; }
+span.value { }
+div#playlistcommentstable {
+/*margin: 0.2em 4em;*/
+font-size: 90%;
+}
+div#playlistcommentstable_listonly {
+margin: 0.2em 0.2em;
+font-size: 90%;
+}
+span.rightmost {
+width:13.5em;
+/*width:17.2em;*/ /*for reply/next/up*/
+float:right;
+text-align:right;
+font-size: 90%;
+}
+span.rightmost_live {
+/*width:11.9em;*/ /* 11/28/22 test */
+/*width:15.6em;*/ /*for reply/next/up*/
+float:right;
+text-align:right;
+font-size: 90%;
+white-space: nowrap;
+}
+span.badges {
+font-size:180%;
+font-weight:bold;
+vertical-align:text-top;
+}
+textarea {
+font-family: verdana, geneva, arial, sans-serif;
+font-size: 100%;
+overflow-x: hidden; /*avoids firefox extra row*/
+}
+</style>
+<style type="text/css">
+.noDialogTitle .ui-dialog-titlebar {display:none}
+.ui-widget {
+font-size: 13px;
+}
+.ui-dialog .ui-dialog-content, .ui-widget-content a {
+padding: 0px;
+line-height:150%;
+font-weight: normal;
+color: black;
+}
+</style>
+<script type="text/javascript" src="/js/kenzodb_fav_comp.1670147842.js"></script>
+</head>
+<body>
+<div id="wrapper">
+<div class="songs">
+<div class="KDBFavPop"><div class="KDBFavPopMessage"></div></div>
+<script type="text/javascript">
+KDBFav.initialize({"myurl":"http:\/\/wfmu.org\/playlists\/BK","login":"\/auth.php?a=login&r=http%3A%2F%2Fwfmu.org%2Fplaylists%2FBK","register":"\/auth.php?a=register&r=http%3A%2F%2Fwfmu.org%2Fplaylists%2FBK","profile_favs":"\/auth.php?a=update_profile&panel_id=favorites&r=http%3A%2F%2Fwfmu.org%2Fplaylists%2FBK","fav_icon_clicked":"\/auth.php?a=fav_icon_clicked&r=http%3A%2F%2Fwfmu.org%2Fplaylists%2FBK","user_favs_base":"\/user_favs.php","song_page_base":"\/song.php","controller":"\/favcon.php","fav_unset_icon":"\/Gfx\/star_empty_2.png","fav_set_icon":"\/Gfx\/star_favorited_2.png","fav_busy_icon":"\/Gfx\/star_empty_spin.gif"},"playlist index","BK");
+</script>
+<iframe src="https://www.wfmu.org/auth.php?a=iframe&amp;t=r&amp;cf=verdana%2C+geneva%2C+arial%2Csans-serif&amp;ct=%23999BA0&amp;cl=%23CCA525&amp;cv=%23706234&amp;ca=%23FDD446&amp;r=http%3A%2F%2Fwfmu.org%2Fplaylists%2FBK"
+marginheight="0" frameborder="0" scrolling="no" id="kdb_login_iframe" title="WFMU login"
+width="100%"
+height="27"
+>
+<div align="right">
+<a href="http://www.wfmu.org/auth.php?a=login&amp;r=http%3A%2F%2Fwfmu.org%2Fplaylists%2FBK" target="_top">Login/Logout</a> |
+<a href="http://www.wfmu.org/auth.php?a=register&amp;r=http%3A%2F%2Fwfmu.org%2Fplaylists%2FBK" target="_top">Register</a> |
+Please enable inline frames!
+</div>
+</iframe>
+<script type="text/javascript">
+function kdb_login_iframeResize(id){
+var size_element; var e;
+try {
+size_element=document.getElementById(id).contentWindow.document.getElementById("kdb_login_text_size");
+document.getElementById(id).height= (size_element.clientHeight + 2) + "px";
+document.getElementById(id).width= (size_element.clientWidth + 17) + "px";
+} catch (e) {}
+}
+</script>
+<!--Generated by KenzoDB ( https://kenzodb.com ), written 2000-2026 by Ken Garson-->
+<h2>
+<span class="KDBFavIcon KDBprogram" id="KDBprogram-BK">
+<a href="http://www.wfmu.org/auth.php?a=fav_icon_clicked&amp;type=program&amp;id=BK&amp;page_type=playlist+index&amp;page_id=BK&amp;r=http%3A%2F%2Fwfmu.org%2Fplaylists%2FBK"
+onclick="KDBFav.fav_icon_clicked(event, this.parentNode);"
+title="Favoriting"
+><img src="/Gfx/star_empty_2.png" border="0" alt="Favoriting" width="15" height="15" /></a>
+</span>
+Bryce:
+Playlists and Archives
+</h2>
+<div class="everything">
+<p><font size="-1">
+<b>I never miscue a record. I am punctual, well-prepared, and dislike clutter. Outgoing and helpful, I'm always appropriately dressed. I do not behave erratically and have excellent penmanship. My CD's never skip, and I am in good health. I like all the notes, in any order.
+</b>
+</font></p>
+<div>
+<b>
+On
+<a href="https://wfmu.org/" title="More info">WFMU</a>
+|
+91.1, 90.1, 91.9 FM &amp;
+<a href="http://wfmu.org/">wfmu.org</a>
+<div style="margin-left: 20px; margin-top: 3px;">
+<font size="-1">
+WFMU LIVE Audio Streams
+(<a href="/audiostream.shtml">Get help</a>): &nbsp;
+<a href="http://www.radiorethink.com/tuner/?stationCode=wfmu&amp;stream=hi" title="Listen"
+onclick="window.open(this.href,'kdbflashplayerwindow','width=425,height=800,scrollbars=no,resizable=yes,toolbar=no,directories=no,location=no,menubar=no,status=no'); return false;"
+>Pop-up</a>&nbsp; |&nbsp;
+<a href="/wfmu_aac.pls" title="Listen"
+>128k AAC</a>&nbsp; |&nbsp;
+<a href="/wfmu_mp3.pls" title="Listen"
+>128k MP3</a>&nbsp; |&nbsp;
+<a href="/wfmu32.pls" title="Listen"
+>32k MP3</a>
+</font>
+</div>
+</b>
+</div>
+<font size="-1"><br><br><br><p align="center"><img src="https://blogfiles.wfmu.org/BK/bryce.gif" alt=""></p><br><br></font>
+</div>
+<hr size="3"
+>
+<div class="showlist">
+<ul>
+<li>
+<a name="2024"> </a>
+<span class="KDBFavIcon KDBepisode" id="KDBepisode-140756">
+<a href="http://www.wfmu.org/auth.php?a=fav_icon_clicked&amp;type=episode&amp;id=140756&amp;page_type=playlist+index&amp;page_id=BK&amp;r=http%3A%2F%2Fwfmu.org%2Fplaylists%2FBK"
+onclick="KDBFav.fav_icon_clicked(event, this.parentNode);"
+title="Favoriting"
+><img src="/Gfx/star_empty_2.png" border="0" alt="Favoriting" width="15" height="15" /></a>
+</span>
+June 7, 2024:
+<b></b>
+<a href="/playlists/shows/140756">See the playlist</a>
+| Listen: <span style="white-space:nowrap"><a href="/flashplayer.php?version=3&amp;show=140756&amp;archive=253899" onclick="return kdbarchivelink(this.href, 3)"><img class="listen_link_image" src="/flashplayer/playbuttont.gif" alt="Pop-up listen">&nbsp;Pop-up&nbsp;player!</a></span>
+<br>
+</ul><ul>
+<li>
+<span class="KDBFavIcon KDBepisode" id="KDBepisode-140511">
+<a href="http://www.wfmu.org/auth.php?a=fav_icon_clicked&amp;type=episode&amp;id=140511&amp;page_type=playlist+index&amp;page_id=BK&amp;r=http%3A%2F%2Fwfmu.org%2Fplaylists%2FBK"
+onclick="KDBFav.fav_icon_clicked(event, this.parentNode);"
+title="Favoriting"
+><img src="/Gfx/star_empty_2.png" border="0" alt="Favoriting" width="15" height="15" /></a>
+</span>
+May 31, 2024:
+<b></b>
+<a href="/playlists/shows/140511">See the playlist</a>
+| Listen: <span style="white-space:nowrap"><a href="/flashplayer.php?version=3&amp;show=140511&amp;archive=253551" onclick="return kdbarchivelink(this.href, 3)"><img class="listen_link_image" src="/flashplayer/playbuttont.gif" alt="Pop-up listen">&nbsp;Pop-up&nbsp;player!</a></span>
+<br>
+<li>
+<span class="KDBFavIcon KDBepisode" id="KDBepisode-140273">
+<a href="http://www.wfmu.org/auth.php?a=fav_icon_clicked&amp;type=episode&amp;id=140273&amp;page_type=playlist+index&amp;page_id=BK&amp;r=http%3A%2F%2Fwfmu.org%2Fplaylists%2FBK"
+onclick="KDBFav.fav_icon_clicked(event, this.parentNode);"
+title="Favoriting"
+><img src="/Gfx/star_empty_2.png" border="0" alt="Favoriting" width="15" height="15" /></a>
+</span>
+May 24, 2024:
+<b></b>
+<a href="/playlists/shows/140273">See the playlist</a>
+| Listen: <span style="white-space:nowrap"><a href="/flashplayer.php?version=3&amp;show=140273&amp;archive=253207" onclick="return kdbarchivelink(this.href, 3)"><img class="listen_link_image" src="/flashplayer/playbuttont.gif" alt="Pop-up listen">&nbsp;Pop-up&nbsp;player!</a></span>
+<br>
+<li>
+<span class="KDBFavIcon KDBepisode" id="KDBepisode-140050">
+<a href="http://www.wfmu.org/auth.php?a=fav_icon_clicked&amp;type=episode&amp;id=140050&amp;page_type=playlist+index&amp;page_id=BK&amp;r=http%3A%2F%2Fwfmu.org%2Fplaylists%2FBK"
+onclick="KDBFav.fav_icon_clicked(event, this.parentNode);"
+title="Favoriting"
+><img src="/Gfx/star_empty_2.png" border="0" alt="Favoriting" width="15" height="15" /></a>
+</span>
+May 17, 2024:
+<b></b>
+<a href="/playlists/shows/140050">See the playlist</a>
+| Listen: <span style="white-space:nowrap"><a href="/flashplayer.php?version=3&amp;show=140050&amp;archive=252865" onclick="return kdbarchivelink(this.href, 3)"><img class="listen_link_image" src="/flashplayer/playbuttont.gif" alt="Pop-up listen">&nbsp;Pop-up&nbsp;player!</a></span>
+<br>
+<li>
+<span class="KDBFavIcon KDBepisode" id="KDBepisode-139807">
+<a href="http://www.wfmu.org/auth.php?a=fav_icon_clicked&amp;type=episode&amp;id=139807&amp;page_type=playlist+index&amp;page_id=BK&amp;r=http%3A%2F%2Fwfmu.org%2Fplaylists%2FBK"
+onclick="KDBFav.fav_icon_clicked(event, this.parentNode);"
+title="Favoriting"
+><img src="/Gfx/star_empty_2.png" border="0" alt="Favoriting" width="15" height="15" /></a>
+</span>
+May 10, 2024:
+<b></b>
+<a href="/playlists/shows/139807">See the playlist</a>
+| Listen: <span style="white-space:nowrap"><a href="/flashplayer.php?version=3&amp;show=139807&amp;archive=252532" onclick="return kdbarchivelink(this.href, 3)"><img class="listen_link_image" src="/flashplayer/playbuttont.gif" alt="Pop-up listen">&nbsp;Pop-up&nbsp;player!</a></span>
+<br>
+<li>
+<span class="KDBFavIcon KDBepisode" id="KDBepisode-139540">
+<a href="http://www.wfmu.org/auth.php?a=fav_icon_clicked&amp;type=episode&amp;id=139540&amp;page_type=playlist+index&amp;page_id=BK&amp;r=http%3A%2F%2Fwfmu.org%2Fplaylists%2FBK"
+onclick="KDBFav.fav_icon_clicked(event, this.parentNode);"
+title="Favoriting"
+><img src="/Gfx/star_empty_2.png" border="0" alt="Favoriting" width="15" height="15" /></a>
+</span>
+May 3, 2024:
+<b></b>
+<a href="/playlists/shows/139540">See the playlist</a>
+| Listen: <span style="white-space:nowrap"><a href="/flashplayer.php?version=3&amp;show=139540&amp;archive=252196" onclick="return kdbarchivelink(this.href, 3)"><img class="listen_link_image" src="/flashplayer/playbuttont.gif" alt="Pop-up listen">&nbsp;Pop-up&nbsp;player!</a></span>
+<br>
+</ul><ul>
+<li>
+<span class="KDBFavIcon KDBepisode" id="KDBepisode-139321">
+<a href="http://www.wfmu.org/auth.php?a=fav_icon_clicked&amp;type=episode&amp;id=139321&amp;page_type=playlist+index&amp;page_id=BK&amp;r=http%3A%2F%2Fwfmu.org%2Fplaylists%2FBK"
+onclick="KDBFav.fav_icon_clicked(event, this.parentNode);"
+title="Favoriting"
+><img src="/Gfx/star_empty_2.png" border="0" alt="Favoriting" width="15" height="15" /></a>
+</span>
+April 26, 2024:
+<b></b>
+<a href="/playlists/shows/139321">See the playlist</a>
+| Listen: <span style="white-space:nowrap"><a href="/flashplayer.php?version=3&amp;show=139321&amp;archive=251860" onclick="return kdbarchivelink(this.href, 3)"><img class="listen_link_image" src="/flashplayer/playbuttont.gif" alt="Pop-up listen">&nbsp;Pop-up&nbsp;player!</a></span>
+<br>
+<li>
+<span class="KDBFavIcon KDBepisode" id="KDBepisode-139092">
+<a href="http://www.wfmu.org/auth.php?a=fav_icon_clicked&amp;type=episode&amp;id=139092&amp;page_type=playlist+index&amp;page_id=BK&amp;r=http%3A%2F%2Fwfmu.org%2Fplaylists%2FBK"
+onclick="KDBFav.fav_icon_clicked(event, this.parentNode);"
+title="Favoriting"
+><img src="/Gfx/star_empty_2.png" border="0" alt="Favoriting" width="15" height="15" /></a>
+</span>
+April 19, 2024:
+<b></b>
+<a href="/playlists/shows/139092">See the playlist</a>
+| Listen: <span style="white-space:nowrap"><a href="/flashplayer.php?version=3&amp;show=139092&amp;archive=251523" onclick="return kdbarchivelink(this.href, 3)"><img class="listen_link_image" src="/flashplayer/playbuttont.gif" alt="Pop-up listen">&nbsp;Pop-up&nbsp;player!</a></span>
+<br>
+<li>
+<span class="KDBFavIcon KDBepisode" id="KDBepisode-138859">
+<a href="http://www.wfmu.org/auth.php?a=fav_icon_clicked&amp;type=episode&amp;id=138859&amp;page_type=playlist+index&amp;page_id=BK&amp;r=http%3A%2F%2Fwfmu.org%2Fplaylists%2FBK"
+onclick="KDBFav.fav_icon_clicked(event, this.parentNode);"
+title="Favoriting"
+><img src="/Gfx/star_empty_2.png" border="0" alt="Favoriting" width="15" height="15" /></a>
+</span>
+April 12, 2024:
+<b></b>
+<a href="/playlists/shows/138859">See the playlist</a>
+| Listen: <span style="white-space:nowrap"><a href="/flashplayer.php?version=3&amp;show=138859&amp;archive=251189" onclick="return kdbarchivelink(this.href, 3)"><img class="listen_link_image" src="/flashplayer/playbuttont.gif" alt="Pop-up listen">&nbsp;Pop-up&nbsp;player!</a></span>
+<br>
+<li>
+<span class="KDBFavIcon KDBepisode" id="KDBepisode-138629">
+<a href="http://www.wfmu.org/auth.php?a=fav_icon_clicked&amp;type=episode&amp;id=138629&amp;page_type=playlist+index&amp;page_id=BK&amp;r=http%3A%2F%2Fwfmu.org%2Fplaylists%2FBK"
+onclick="KDBFav.fav_icon_clicked(event, this.parentNode);"
+title="Favoriting"
+><img src="/Gfx/star_empty_2.png" border="0" alt="Favoriting" width="15" height="15" /></a>
+</span>
+April 5, 2024:
+<b></b>
+<a href="/playlists/shows/138629">See the playlist</a>
+| Listen: <span style="white-space:nowrap"><a href="/flashplayer.php?version=3&amp;show=138629&amp;archive=250849" onclick="return kdbarchivelink(this.href, 3)"><img class="listen_link_image" src="/flashplayer/playbuttont.gif" alt="Pop-up listen">&nbsp;Pop-up&nbsp;player!</a></span>
+<br>
+</ul><ul>
+<li>
+<span class="KDBFavIcon KDBepisode" id="KDBepisode-138396">
+<a href="http://www.wfmu.org/auth.php?a=fav_icon_clicked&amp;type=episode&amp;id=138396&amp;page_type=playlist+index&amp;page_id=BK&amp;r=http%3A%2F%2Fwfmu.org%2Fplaylists%2FBK"
+onclick="KDBFav.fav_icon_clicked(event, this.parentNode);"
+title="Favoriting"
+><img src="/Gfx/star_empty_2.png" border="0" alt="Favoriting" width="15" height="15" /></a>
+</span>
+March 29, 2024:
+<b></b>
+<a href="/playlists/shows/138396">See the playlist</a>
+| Listen: <span style="white-space:nowrap"><a href="/flashplayer.php?version=3&amp;show=138396&amp;archive=250511" onclick="return kdbarchivelink(this.href, 3)"><img class="listen_link_image" src="/flashplayer/playbuttont.gif" alt="Pop-up listen">&nbsp;Pop-up&nbsp;player!</a></span>
+<br>
+<li>
+<span class="KDBFavIcon KDBepisode" id="KDBepisode-138159">
+<a href="http://www.wfmu.org/auth.php?a=fav_icon_clicked&amp;type=episode&amp;id=138159&amp;page_type=playlist+index&amp;page_id=BK&amp;r=http%3A%2F%2Fwfmu.org%2Fplaylists%2FBK"
+onclick="KDBFav.fav_icon_clicked(event, this.parentNode);"
+title="Favoriting"
+><img src="/Gfx/star_empty_2.png" border="0" alt="Favoriting" width="15" height="15" /></a>
+</span>
+March 22, 2024:
+<b></b>
+<a href="/playlists/shows/138159">See the playlist</a>
+| Listen: <span style="white-space:nowrap"><a href="/flashplayer.php?version=3&amp;show=138159&amp;archive=250167" onclick="return kdbarchivelink(this.href, 3)"><img class="listen_link_image" src="/flashplayer/playbuttont.gif" alt="Pop-up listen">&nbsp;Pop-up&nbsp;player!</a></span>
+<br>
+<li>
+<span class="KDBFavIcon KDBepisode" id="KDBepisode-137816">
+<a href="http://www.wfmu.org/auth.php?a=fav_icon_clicked&amp;type=episode&amp;id=137816&amp;page_type=playlist+index&amp;page_id=BK&amp;r=http%3A%2F%2Fwfmu.org%2Fplaylists%2FBK"
+onclick="KDBFav.fav_icon_clicked(event, this.parentNode);"
+title="Favoriting"
+><img src="/Gfx/star_empty_2.png" border="0" alt="Favoriting" width="15" height="15" /></a>
+</span>
+March 15, 2024:
+<b>Accessory B: Jesse Jarnow</b>
+|
+<a href="/playlists/shows/137816">See the playlist</a>
+| Listen: <span style="white-space:nowrap"><a href="/flashplayer.php?version=3&amp;show=137816&amp;archive=249836" onclick="return kdbarchivelink(this.href, 3)"><img class="listen_link_image" src="/flashplayer/playbuttont.gif" alt="Pop-up listen">&nbsp;Pop-up&nbsp;player!</a></span>
+<br>
+<li>
+<span class="KDBFavIcon KDBepisode" id="KDBepisode-137721">
+<a href="http://www.wfmu.org/auth.php?a=fav_icon_clicked&amp;type=episode&amp;id=137721&amp;page_type=playlist+index&amp;page_id=BK&amp;r=http%3A%2F%2Fwfmu.org%2Fplaylists%2FBK"
+onclick="KDBFav.fav_icon_clicked(event, this.parentNode);"
+title="Favoriting"
+><img src="/Gfx/star_empty_2.png" border="0" alt="Favoriting" width="15" height="15" /></a>
+</span>
+March 8, 2024:
+<b>Accessory A: Scott Williams</b>
+|
+<a href="/playlists/shows/137721">See the playlist</a>
+| Listen: <span style="white-space:nowrap"><a href="/flashplayer.php?version=3&amp;show=137721&amp;archive=249500" onclick="return kdbarchivelink(this.href, 3)"><img class="listen_link_image" src="/flashplayer/playbuttont.gif" alt="Pop-up listen">&nbsp;Pop-up&nbsp;player!</a></span>
+<br>
+<li>
+<span class="KDBFavIcon KDBepisode" id="KDBepisode-137499">
+<a href="http://www.wfmu.org/auth.php?a=fav_icon_clicked&amp;type=episode&amp;id=137499&amp;page_type=playlist+index&amp;page_id=BK&amp;r=http%3A%2F%2Fwfmu.org%2Fplaylists%2FBK"
+onclick="KDBFav.fav_icon_clicked(event, this.parentNode);"
+title="Favoriting"
+><img src="/Gfx/star_empty_2.png" border="0" alt="Favoriting" width="15" height="15" /></a>
+</span>
+March 1, 2024:
+<b>Creamo Coyl filled in. <a href="https://wfmu.org/playlists/shows/137492">Listen here.</a></b>
+<br>
+</ul><ul>
+<li>
+<span class="KDBFavIcon KDBepisode" id="KDBepisode-137266">
+<a href="http://www.wfmu.org/auth.php?a=fav_icon_clicked&amp;type=episode&amp;id=137266&amp;page_type=playlist+index&amp;page_id=BK&amp;r=http%3A%2F%2Fwfmu.org%2Fplaylists%2FBK"
+onclick="KDBFav.fav_icon_clicked(event, this.parentNode);"
+title="Favoriting"
+><img src="/Gfx/star_empty_2.png" border="0" alt="Favoriting" width="15" height="15" /></a>
+</span>
+February 23, 2024:
+<b></b>
+<a href="/playlists/shows/137266">See the playlist</a>
+| Listen: <span style="white-space:nowrap"><a href="/flashplayer.php?version=3&amp;show=137266&amp;archive=248817" onclick="return kdbarchivelink(this.href, 3)"><img class="listen_link_image" src="/flashplayer/playbuttont.gif" alt="Pop-up listen">&nbsp;Pop-up&nbsp;player!</a></span>
+<br>
+<li>
+<span class="KDBFavIcon KDBepisode" id="KDBepisode-136997">
+<a href="http://www.wfmu.org/auth.php?a=fav_icon_clicked&amp;type=episode&amp;id=136997&amp;page_type=playlist+index&amp;page_id=BK&amp;r=http%3A%2F%2Fwfmu.org%2Fplaylists%2FBK"
+onclick="KDBFav.fav_icon_clicked(event, this.parentNode);"
+title="Favoriting"
+><img src="/Gfx/star_empty_2.png" border="0" alt="Favoriting" width="15" height="15" /></a>
+</span>
+February 16, 2024:
+<b></b>
+<a href="/playlists/shows/136997">See the playlist</a>
+| Listen: <span style="white-space:nowrap"><a href="/flashplayer.php?version=3&amp;show=136997&amp;archive=248476" onclick="return kdbarchivelink(this.href, 3)"><img class="listen_link_image" src="/flashplayer/playbuttont.gif" alt="Pop-up listen">&nbsp;Pop-up&nbsp;player!</a></span>
+<br>
+<li>
+<span class="KDBFavIcon KDBepisode" id="KDBepisode-136764">
+<a href="http://www.wfmu.org/auth.php?a=fav_icon_clicked&amp;type=episode&amp;id=136764&amp;page_type=playlist+index&amp;page_id=BK&amp;r=http%3A%2F%2Fwfmu.org%2Fplaylists%2FBK"
+onclick="KDBFav.fav_icon_clicked(event, this.parentNode);"
+title="Favoriting"
+><img src="/Gfx/star_empty_2.png" border="0" alt="Favoriting" width="15" height="15" /></a>
+</span>
+February 9, 2024:
+<b></b>
+<a href="/playlists/shows/136764">See the playlist</a>
+| Listen: <span style="white-space:nowrap"><a href="/flashplayer.php?version=3&amp;show=136764&amp;archive=248137" onclick="return kdbarchivelink(this.href, 3)"><img class="listen_link_image" src="/flashplayer/playbuttont.gif" alt="Pop-up listen">&nbsp;Pop-up&nbsp;player!</a></span>
+<br>
+<li>
+<span class="KDBFavIcon KDBepisode" id="KDBepisode-136542">
+<a href="http://www.wfmu.org/auth.php?a=fav_icon_clicked&amp;type=episode&amp;id=136542&amp;page_type=playlist+index&amp;page_id=BK&amp;r=http%3A%2F%2Fwfmu.org%2Fplaylists%2FBK"
+onclick="KDBFav.fav_icon_clicked(event, this.parentNode);"
+title="Favoriting"
+><img src="/Gfx/star_empty_2.png" border="0" alt="Favoriting" width="15" height="15" /></a>
+</span>
+February 2, 2024:
+<b></b>
+<a href="/playlists/shows/136542">See the playlist</a>
+| Listen: <span style="white-space:nowrap"><a href="/flashplayer.php?version=3&amp;show=136542&amp;archive=247792" onclick="return kdbarchivelink(this.href, 3)"><img class="listen_link_image" src="/flashplayer/playbuttont.gif" alt="Pop-up listen">&nbsp;Pop-up&nbsp;player!</a></span>
+<br>
+</ul><ul>
+<li>
+<span class="KDBFavIcon KDBepisode" id="KDBepisode-136318">
+<a href="http://www.wfmu.org/auth.php?a=fav_icon_clicked&amp;type=episode&amp;id=136318&amp;page_type=playlist+index&amp;page_id=BK&amp;r=http%3A%2F%2Fwfmu.org%2Fplaylists%2FBK"
+onclick="KDBFav.fav_icon_clicked(event, this.parentNode);"
+title="Favoriting"
+><img src="/Gfx/star_empty_2.png" border="0" alt="Favoriting" width="15" height="15" /></a>
+</span>
+January 26, 2024:
+<b></b>
+<a href="/playlists/shows/136318">See the playlist</a>
+| Listen: <span style="white-space:nowrap"><a href="/flashplayer.php?version=3&amp;show=136318&amp;archive=247460" onclick="return kdbarchivelink(this.href, 3)"><img class="listen_link_image" src="/flashplayer/playbuttont.gif" alt="Pop-up listen">&nbsp;Pop-up&nbsp;player!</a></span>
+<br>
+<li>
+<span class="KDBFavIcon KDBepisode" id="KDBepisode-136060">
+<a href="http://www.wfmu.org/auth.php?a=fav_icon_clicked&amp;type=episode&amp;id=136060&amp;page_type=playlist+index&amp;page_id=BK&amp;r=http%3A%2F%2Fwfmu.org%2Fplaylists%2FBK"
+onclick="KDBFav.fav_icon_clicked(event, this.parentNode);"
+title="Favoriting"
+><img src="/Gfx/star_empty_2.png" border="0" alt="Favoriting" width="15" height="15" /></a>
+</span>
+January 19, 2024:
+<b></b>
+<a href="/playlists/shows/136060">See the playlist</a>
+| Listen: <span style="white-space:nowrap"><a href="/flashplayer.php?version=3&amp;show=136060&amp;archive=247124" onclick="return kdbarchivelink(this.href, 3)"><img class="listen_link_image" src="/flashplayer/playbuttont.gif" alt="Pop-up listen">&nbsp;Pop-up&nbsp;player!</a></span>
+<br>
+<li>
+<span class="KDBFavIcon KDBepisode" id="KDBepisode-135835">
+<a href="http://www.wfmu.org/auth.php?a=fav_icon_clicked&amp;type=episode&amp;id=135835&amp;page_type=playlist+index&amp;page_id=BK&amp;r=http%3A%2F%2Fwfmu.org%2Fplaylists%2FBK"
+onclick="KDBFav.fav_icon_clicked(event, this.parentNode);"
+title="Favoriting"
+><img src="/Gfx/star_empty_2.png" border="0" alt="Favoriting" width="15" height="15" /></a>
+</span>
+January 12, 2024:
+<b></b>
+<a href="/playlists/shows/135835">See the playlist</a>
+| Listen: <span style="white-space:nowrap"><a href="/flashplayer.php?version=3&amp;show=135835&amp;archive=246799" onclick="return kdbarchivelink(this.href, 3)"><img class="listen_link_image" src="/flashplayer/playbuttont.gif" alt="Pop-up listen">&nbsp;Pop-up&nbsp;player!</a></span>
+<br>
+<li>
+<span class="KDBFavIcon KDBepisode" id="KDBepisode-135602">
+<a href="http://www.wfmu.org/auth.php?a=fav_icon_clicked&amp;type=episode&amp;id=135602&amp;page_type=playlist+index&amp;page_id=BK&amp;r=http%3A%2F%2Fwfmu.org%2Fplaylists%2FBK"
+onclick="KDBFav.fav_icon_clicked(event, this.parentNode);"
+title="Favoriting"
+><img src="/Gfx/star_empty_2.png" border="0" alt="Favoriting" width="15" height="15" /></a>
+</span>
+January 5, 2024:
+<b>Creamo Coyle filled in. <a href="https://wfmu.org/playlists/shows/135601">Listen here.</a></b>
+<br>
+</ul>
+<a href="/playlists/BK2023">2023 playlists</a> |
+<a href="/playlists/BK2022">2022 playlists</a> |
+<a href="/playlists/BK2021">2021 playlists</a> |
+<a href="/playlists/BK2020">2020 playlists</a> |
+<a href="/playlists/BK2019">2019 playlists</a> |
+<a href="/playlists/BK2018">2018 playlists</a> |
+<a href="/playlists/BK2017">2017 playlists</a> |
+<a href="/playlists/BK2016">2016 playlists</a> |
+<a href="/playlists/BK2015">2015 playlists</a> |
+<a href="/playlists/BK2014">2014 playlists</a> |
+<a href="/playlists/BK2013">2013 playlists</a> |
+<a href="/playlists/BK2012">2012 playlists</a> |
+<a href="/playlists/BK2011">2011 playlists</a> |
+<a href="/playlists/BK2010">2010 playlists</a> |
+<a href="/playlists/BK2009">2009 playlists</a> |
+<a href="/playlists/BK2008">2008 playlists</a> |
+<a href="/playlists/BK2007">2007 playlists</a> |
+<a href="/playlists/BK2006">2006 playlists</a> |
+<a href="/playlists/BK2005">2005 playlists</a> |
+<a href="/playlists/BK2004">2004 playlists</a> |
+<a href="/playlists/BK2003">2003 playlists</a> |
+<a href="/playlists/BK2002">2002 playlists</a> |
+<a href="/playlists/BK2001">2001 playlists</a> |
+<br>
+</div>
+<div class="everything">
+<br><center>
+<font size="-1">
+<p>
+<span class="rsslinkstitle">RSS feeds<span class="rsslinksprogramtitle"> for Bryce's show</span>:</span>
+<span class="rsslinkslinks">
+<a href="/playlistfeed/BK.xml"><img src="/Gfx/feed-icon-14x14.png" border=0 height=14 width=14 alt="RSS">Playlists&nbsp;feed</a> | <a href="/archivefeed/mp3/BK.xml"><img src="/Gfx/feed-icon-14x14.png" border=0 height=14 width=14 alt="RSS">MP3&nbsp;archives&nbsp;feed</a>
+</span>
+</p>
+|
+Email <a href="/email.php?id=30&amp;return=http%3A%2F%2Fwfmu.org%2Fplaylists%2FBK">the Program Director</a>
+| <a href="/playlists">Other WFMU Playlists</a> |
+<a href="/artistkeywords.php/BK">All artists played by Bryce</a> |
+</font>
+<hr>
+<font size="1">
+<a href="/audiostream.shtml" title="Broadcasting live on the net!">Listen&nbsp;on&nbsp;the&nbsp;Internet</a> |
+<a href="/reachout.html" title="Email lists for the entire staff, pledging and much more">Contact&nbsp;Us</a> |
+<a href="/onair.html" title="The meat of the matter">Music&nbsp;&amp;&nbsp;Programs</a> |
+<a href="/" title="WFMU Home Page">WFMU&nbsp;Home&nbsp;Page</a> |
+<a href="/marathon/" title="Support freeform radio">Support&nbsp;Us</a> |
+<a href="/faq.html" title="You got questions? We got answers!">FAQ</a><br><br>
+Live Audio Streams for WFMU:
+<a href="http://www.radiorethink.com/tuner/?stationCode=wfmu&amp;stream=hi" onclick="window.open(this.href,'kdbflashplayerwindow','width=425,height=800,scrollbars=no,resizable=yes,toolbar=no,directories=no,location=no,menubar=no,status=no'); return false;">Pop-up</a>
+|
+<a href="http://wfmu.org/wfmu_aac.pls"">128k AAC</a>
+|
+<a href="http://wfmu.org/wfmu_mp3.pls"">128k MP3</a>
+|
+<a href="http://wfmu.org/wfmu32.pls"">32k MP3</a>
+<span class="navigation_other_more">
+&nbsp;&nbsp;&nbsp;(More streams:
+<a href="#" onclick="var x1=document.getElementsByClassName('navigation_other_streams'); var x2=document.getElementsByClassName('navigation_other_more'); for (var i=0; i<x1.length; i++) { x1[i].style.display='block'; x2[i].style.display='none';}; return false">[+]</a>)
+</span>
+<noscript>
+(Enable Javascript to see more streams!)
+</noscript>
+<div class="navigation_other_streams" style="display:none">
+Give the Drummer Radio:
+<a href="http://www.radiorethink.com/tuner/?stationCode=wfmugtd&amp;stream=hi" onclick="window.open(this.href,'kdbflashplayerwindow','width=425,height=800,scrollbars=no,resizable=yes,toolbar=no,directories=no,location=no,menubar=no,status=no'); return false;">Pop-up</a>
+|
+<a href="http://wfmu.org/wfmu_drummer.pls"">128k MP3</a>
+<br>
+Rock'N'Soul Radio:
+<a href="http://www.radiorethink.com/tuner/?stationCode=wfmurnsi&amp;stream=hi" onclick="window.open(this.href,'kdbflashplayerwindow','width=425,height=800,scrollbars=no,resizable=yes,toolbar=no,directories=no,location=no,menubar=no,status=no'); return false;">Pop-up</a>
+|
+<a href="http://wfmu.org/wfmu_rock.pls"">128k MP3</a>
+<br>
+Sheena's Jungle Room:
+<a href="http://www.radiorethink.com/tuner/?stationCode=wfmusjr&amp;stream=hi" onclick="window.open(this.href,'kdbflashplayerwindow','width=425,height=800,scrollbars=no,resizable=yes,toolbar=no,directories=no,location=no,menubar=no,status=no'); return false;">Pop-up</a>
+|
+<a href="http://wfmu.org/sheena.pls"">128k MP3</a>
+<br>
+</div>
+<!--Generated by KenzoDB ( https://kenzodb.com ), written 2000-2023 by Ken Garson-->
+</font>
+<hr>
+</div>
+<div class="everything" align="right">
+<h6>(C) 2026 WFMU.
+<a href="/artistkeywords.php/BK" class="invis">&nbsp;</a>
+Generated by <strong><a href="https://kenzodb.com/" style="text-decoration:none" target="_blank">KenzoDB</a></strong>, written 2000-2026 by <a href="https://kenzodb.com/contact" target="_blank">Ken Garson</a>
+</h6>
+<br>
+</div>
+<script type="text/javascript">function highslide_attach(selector_prefix = ""){jQuery(selector_prefix + " a.highslide").attr("onclick", "return hs.expand(this)").not("[title]").attr("title", "Click to enlarge");}highslide_attach();</script><!-- async google analytics code MA 2011-02-25 -->
+<script type="text/javascript">
+var _gaq = _gaq || [];
+_gaq.push(['_setAccount', 'UA-446006-1']);
+_gaq.push(['_trackPageview']);
+_gaq.push(['_trackPageLoadTime']);
+(function() {
+var ga = document.createElement('script'); ga.type = 'text/javascript'; ga.async = true;
+ga.src = ('https:' == document.location.protocol ? 'https://ssl' : 'http://www') + '.google-analytics.com/ga.js';
+var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(ga, s);
+})();
+</script>
+<div class="layout-sm-md">
+<div id="footer-comments-link" class="is-live" onclick="KDBPComm.view_switch('comments');">
+<i class="fa fa-comments" aria-hidden="true"></i>
+<span>
+<span class="live-indicator">To Comments!</span>
+</span>
+</div>
+</div>
+</div> <!-- songs_except_comments 3 -->
+</div> <!-- .songs -->
+</div> <!--wrapper-->
+</body>
+</html>
