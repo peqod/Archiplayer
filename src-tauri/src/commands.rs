@@ -3,7 +3,7 @@ use crate::wfmu;
 use crate::AppState;
 use rusqlite::params;
 use serde::Serialize;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashSet};
 use std::time::Duration;
 use tauri::{AppHandle, Manager, State};
 
@@ -145,9 +145,23 @@ pub async fn get_show(
                 seq += 1;
             }
         }
+        // Year pages link back to the show and to each other, so track what we've
+        // already pulled.
+        let mut visited: HashSet<&str> = HashSet::new();
         for year_path in &archive_years {
+            if !visited.insert(year_path.as_str()) {
+                continue;
+            }
             let year_url = format!("{}{}", wfmu::BASE, year_path);
-            let year_html = state.fetcher.get_text(&year_url).await?;
+            // A dead year page must not abort the whole show: bailing here would skip
+            // mark_show_scraped and force a full re-scrape on every later visit.
+            let year_html = match state.fetcher.get_text(&year_url).await {
+                Ok(h) => h,
+                Err(e) => {
+                    eprintln!("archive year {year_url} failed: {e}");
+                    continue;
+                }
+            };
             let year_eps = wfmu::parse_show_page(&year_html);
             let db = state.db()?;
             for e in &year_eps {

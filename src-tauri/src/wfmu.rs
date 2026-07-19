@@ -724,7 +724,8 @@ pub fn parse_channel_id(html: &str) -> Option<i64> {
 /// A deliberately stale hash forces the endpoint to include the current section.
 pub fn channel_nowplaying_url(page_url: &str, channel_id: i64) -> Option<String> {
     let mut parts = page_url.split('/');
-    let scheme = parts.next()?;
+    // `split('/')` yields the scheme with its trailing colon ("https:"), so drop it.
+    let scheme = parts.next()?.strip_suffix(':')?;
     let empty = parts.next()?;
     let host = parts.next()?;
     if !empty.is_empty() || !matches!(scheme, "http" | "https") || host.is_empty() {
@@ -934,44 +935,74 @@ pub fn parse_show_description(html: &str) -> Option<String> {
     non_empty(text)
 }
 
-/// Discover archive-year sub-pages for a show that has an "OLDER PLAYLISTS"
-/// dropdown on its page (e.g. /playlists/KG links to /playlists/KG2009, etc.).
-/// Returns the URL path portions (e.g. "/playlists/KG2009") for each year.
-pub fn parse_show_archive_years(html: &str, show_id: &str) -> Vec<String> {
-    // Find the <SELECT NAME="Ubu_Nav_Popup"> block.
-    let sel_start = match html.find("Ubu_Nav_Popup") {
-        Some(i) => i,
-        None => return vec![],
-    };
+/// Slice out the <SELECT NAME="Ubu_Nav_Popup"> ("OLDER PLAYLISTS") block, if present.
+fn nav_popup_block(html: &str) -> Option<&str> {
+    let sel_start = html.find("Ubu_Nav_Popup")?;
     // Back up to the opening <select / <SELECT tag.
-    let block_start = match html[..sel_start]
+    let block_start = html[..sel_start]
         .rfind("<select")
-        .or_else(|| html[..sel_start].rfind("<SELECT"))
-    {
-        Some(i) => i,
-        None => return vec![],
-    };
+        .or_else(|| html[..sel_start].rfind("<SELECT"))?;
     let block = &html[block_start..];
-    let block_end = match block.find("</select>").or_else(|| block.find("</SELECT>")) {
-        Some(i) => i,
-        None => return vec![],
-    };
-    let block = &block[..block_end];
+    let block_end = block.find("</select>").or_else(|| block.find("</SELECT>"))?;
+    Some(&block[..block_end])
+}
 
+/// Discover archive-year sub-pages for a show. Two markup shapes exist in the wild:
+/// an "OLDER PLAYLISTS" dropdown (/playlists/KG links to /playlists/KG2009 that way)
+/// and a plain run of links (/playlists/BK lists "2001 playlists" … as anchors).
+/// Both are scanned, so a page carrying both is still covered.
+/// Returns the URL path portions (e.g. "/playlists/KG2009"), newest year first.
+pub fn parse_show_archive_years(html: &str, show_id: &str) -> Vec<String> {
+    // Both patterns tolerate any attribute order, single or double quotes, an
+    // optional absolute origin, and any casing (WFMU emits <OPTION VALUE=…> and
+    // /Playlists/ on some pages).
     static OPTION_RE: OnceLock<Regex> = OnceLock::new();
-    let re = OPTION_RE
-        .get_or_init(|| Regex::new(r#"<option\s+value="(/playlists/[A-Za-z0-9]+)""#).unwrap());
+    let option_re = OPTION_RE.get_or_init(|| {
+        Regex::new(
+            r#"(?i)<option[^>]*\svalue=["'](?:https?://(?:www\.)?wfmu\.org)?(/playlists/[a-z0-9_-]+)["']"#,
+        )
+        .unwrap()
+    });
+    static ANCHOR_RE: OnceLock<Regex> = OnceLock::new();
+    let anchor_re = ANCHOR_RE.get_or_init(|| {
+        Regex::new(
+            r#"(?i)<a[^>]*\shref=["'](?:https?://(?:www\.)?wfmu\.org)?(/playlists/[a-z0-9_-]+)["']"#,
+        )
+        .unwrap()
+    });
 
-    // Build the expected prefix: /playlists/{show_id} followed by digits.
+    // Expected shape: /playlists/{show_id} followed by at least one digit. The
+    // digits-only rule keeps legacy paths like /~kennyg/playlists/00.html out, and
+    // requiring a non-empty suffix keeps the show's own page out (year pages link
+    // back to it).
     let prefix = format!("/playlists/{show_id}");
-    let mut years: Vec<String> = re
-        .captures_iter(block)
-        .map(|c| c[1].to_string())
-        .filter(|path| {
-            path.starts_with(&prefix) && path[prefix.len()..].chars().all(|c| c.is_ascii_digit())
-        })
+    let lower_prefix = prefix.to_ascii_lowercase();
+    let keep = |path: &str| -> Option<String> {
+        let suffix = path.to_ascii_lowercase();
+        let suffix = suffix.strip_prefix(&lower_prefix)?.to_string();
+        if suffix.is_empty() || !suffix.chars().all(|c| c.is_ascii_digit()) {
+            return None;
+        }
+        // Re-emit with the caller's show-id casing so paths dedupe cleanly.
+        Some(format!("{prefix}{suffix}"))
+    };
+
+    let from_dropdown = nav_popup_block(html)
+        .into_iter()
+        .flat_map(|block| option_re.captures_iter(block).map(|c| c[1].to_string()))
+        .collect::<Vec<_>>();
+    let from_anchors = anchor_re.captures_iter(html).map(|c| c[1].to_string());
+
+    let mut years: Vec<String> = from_dropdown
+        .into_iter()
+        .chain(from_anchors)
+        .filter_map(|path| keep(&path))
         .collect();
     years.sort();
+    years.dedup();
+    // Newest first: episodes are stored in `seq` order and the UI reads that as
+    // newest → oldest.
+    years.reverse();
     years
 }
 
@@ -1028,6 +1059,32 @@ pub fn parse_hms(s: &str) -> Option<i64> {
 }
 
 /// Parse a playlist page (https://wfmu.org/playlists/shows/{epId}) into tracks.
+/// Collect a table cell's text while skipping WFMU's `KDBFavIcon` helper spans.
+/// Those spans hold the song-star, jump/comment buttons and a hidden
+/// `..._summary_html` block ("Title" by "Artist"); their text would otherwise
+/// leak into the song-title cell.
+fn cell_text_without_helpers(td: scraper::ElementRef) -> String {
+    let mut out = String::new();
+    for node in td.descendants() {
+        let scraper::Node::Text(text) = node.value() else {
+            continue;
+        };
+        let in_helper = node.ancestors().any(|a| {
+            a.value()
+                .as_element()
+                .is_some_and(|el| el.classes().any(|c| c == "KDBFavIcon"))
+        });
+        if in_helper {
+            continue;
+        }
+        if !out.is_empty() {
+            out.push(' ');
+        }
+        out.push_str(text);
+    }
+    out
+}
+
 pub fn parse_playlist(html: &str) -> Vec<ParsedTrack> {
     static TIME: OnceLock<Regex> = OnceLock::new();
     let time_re = TIME.get_or_init(|| Regex::new(r"(\d+:\d{1,2}:\d{2})").unwrap());
@@ -1044,7 +1101,7 @@ pub fn parse_playlist(html: &str) -> Vec<ParsedTrack> {
 
     let cell_text = |row: scraper::ElementRef, sel: &Selector| -> Option<String> {
         let td = row.select(sel).next()?;
-        non_empty(clean_text(&td.text().collect::<Vec<_>>().join(" ")))
+        non_empty(clean_text(&cell_text_without_helpers(td)))
     };
 
     let mut tracks = Vec::new();
@@ -1564,11 +1621,93 @@ Peter Sellers
         assert_eq!(
             years,
             vec![
-                "/playlists/KG2008".to_string(),
-                "/playlists/KG2009".to_string(),
                 "/playlists/KG2010".to_string(),
+                "/playlists/KG2009".to_string(),
+                "/playlists/KG2008".to_string(),
             ]
         );
+    }
+
+    #[test]
+    fn archive_years_extracted_from_anchor_links() {
+        // /playlists/BK has no dropdown at all; the years are a run of plain links.
+        let html = fixture("show_BK.html");
+        let years = parse_show_archive_years(&html, "BK");
+        let expected: Vec<String> = (2001..=2023)
+            .rev()
+            .map(|y| format!("/playlists/BK{y}"))
+            .collect();
+        assert_eq!(years, expected);
+    }
+
+    #[test]
+    fn archive_years_are_newest_first() {
+        let html = r##"<a href="/playlists/BK2003">2003 playlists</a> |
+<a href="/playlists/BK2001">2001 playlists</a> |
+<a href="/playlists/BK2002">2002 playlists</a> |"##;
+        let years = parse_show_archive_years(html, "BK");
+        assert_eq!(
+            years,
+            vec![
+                "/playlists/BK2003".to_string(),
+                "/playlists/BK2002".to_string(),
+                "/playlists/BK2001".to_string(),
+            ]
+        );
+    }
+
+    #[test]
+    fn archive_years_deduped_across_dropdown_and_anchors() {
+        let html = r##"<SELECT NAME="Ubu_Nav_Popup">
+<option value="/playlists/KG2009">2009</option>
+<option value="/playlists/KG2008">2008</option>
+</SELECT>
+<a href="/playlists/KG2009">2009 playlists</a> |
+<a href="https://wfmu.org/playlists/KG2007">2007 playlists</a>"##;
+        let years = parse_show_archive_years(html, "KG");
+        assert_eq!(
+            years,
+            vec![
+                "/playlists/KG2009".to_string(),
+                "/playlists/KG2008".to_string(),
+                "/playlists/KG2007".to_string(),
+            ]
+        );
+    }
+
+    #[test]
+    fn archive_years_tolerate_uppercase_option_markup() {
+        let html = r##"<SELECT NAME="Ubu_Nav_Popup">
+<OPTION VALUE="">OLDER PLAYLISTS</OPTION>
+<OPTION SELECTED VALUE="/Playlists/KG2009">2009</OPTION>
+<OPTION VALUE='/playlists/KG2008'>2008</OPTION>
+</SELECT>"##;
+        let years = parse_show_archive_years(html, "KG");
+        assert_eq!(
+            years,
+            vec![
+                "/playlists/KG2009".to_string(),
+                "/playlists/KG2008".to_string(),
+            ]
+        );
+    }
+
+    #[test]
+    fn archive_years_exclude_the_show_page_itself() {
+        // Year pages link back to /playlists/BK; chasing that would re-scrape the show.
+        let html = fixture("show_BK2001.html");
+        let years = parse_show_archive_years(&html, "BK");
+        assert!(!years.contains(&"/playlists/BK".to_string()));
+        assert!(years.contains(&"/playlists/BK2023".to_string()));
+    }
+
+    #[test]
+    fn year_page_parses_episodes() {
+        let html = fixture("show_BK2001.html");
+        let eps = parse_show_page(&html);
+        assert_eq!(eps.len(), 22);
+        assert!(eps.iter().all(|e| e.air_date.is_some()));
+        assert!(eps.iter().any(|e| e.archive_id.is_some()));
     }
 
     #[test]
