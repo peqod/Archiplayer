@@ -62,9 +62,38 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ github.ref_name }}
+          REPO: ${{ github.repository }}
         run: |
+          set -euo pipefail
+
+          # Draft releases have no git tag ref yet, so /releases/tags/{tag} (what
+          # `gh release download|upload <tag>` uses) 404s. Resolve by id instead.
+          release_id=$(gh api "repos/$REPO/releases" --paginate \
+            --jq "map(select(.tag_name == \"$TAG\")) | .[0].id // empty")
+          if [ -z "$release_id" ]; then
+            echo "No release found for tag $TAG" >&2
+            exit 1
+          fi
+
           mkdir release-assets
-          gh release download "$TAG" --dir release-assets
-          cd release-assets
-          sha256sum * > SHA256SUMS.txt
-          gh release upload "$TAG" SHA256SUMS.txt --clobber
+          gh api "repos/$REPO/releases/$release_id/assets" --paginate \
+            --jq '.[] | select(.name != "SHA256SUMS.txt") | "\(.id)\t\(.name)"' > assets.tsv
+
+          while IFS=$'\t' read -r id name; do
+            gh api "repos/$REPO/releases/assets/$id" \
+              -H "Accept: application/octet-stream" > "release-assets/$name"
+          done < assets.tsv
+
+          (cd release-assets && sha256sum -- *) > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+
+          # Replace any previous copy, then upload via the assets API.
+          old=$(gh api "repos/$REPO/releases/$release_id/assets" --paginate \
+            --jq '.[] | select(.name == "SHA256SUMS.txt") | .id')
+          for id in $old; do
+            gh api --method DELETE "repos/$REPO/releases/assets/$id"
+          done
+          gh api --method POST \
+            "https://uploads.github.com/repos/$REPO/releases/$release_id/assets?name=SHA256SUMS.txt" \
+            -H "Content-Type: text/plain" \
+            --input SHA256SUMS.txt
