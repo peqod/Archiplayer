@@ -1,8 +1,7 @@
 (() => {
-  const onPages = location.hostname.endsWith("github.io");
-  const owner = onPages ? location.hostname.split(".")[0] : "";
-  const repo = onPages ? (location.pathname.split("/").filter(Boolean)[0] || `${owner}.github.io`) : "";
-  const repository = owner && repo ? `https://github.com/${owner}/${repo}` : "https://github.com/";
+  const owner = "peqod";
+  const repo = "Archiplayer";
+  const repository = `https://github.com/${owner}/${repo}`;
   const releases = `${repository}/releases`;
 
   document.querySelectorAll("[data-repo-link]").forEach((link) => { link.href = repository; });
@@ -18,7 +17,6 @@
     primary.href = "#install";
   }
 
-  if (!owner || !repo) return;
   fetch(`https://api.github.com/repos/${owner}/${repo}/releases/latest`, { headers: { Accept: "application/vnd.github+json" } })
     .then((response) => response.ok ? response.json() : Promise.reject())
     .then((release) => {
