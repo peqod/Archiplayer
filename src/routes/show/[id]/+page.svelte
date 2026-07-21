@@ -12,7 +12,8 @@
   import { openUrl } from "@tauri-apps/plugin-opener";
   import Icon from "$lib/Icon.svelte";
   import TrackRow from "$lib/TrackRow.svelte";
-  import { onMount } from "svelte";
+  import { centerEpisodeRow } from "$lib/episode-scroll";
+  import { onMount, tick } from "svelte";
 
   function openWfmu(e: MouseEvent) {
     e.preventDefault();
@@ -25,8 +26,21 @@
   let error = $state<string | null>(null);
   let expanded = $state<Record<number, Track[] | "loading">>({});
   let downloading = $state<Record<number, { bytes: number; total: number }>>({});
+  let episodeListEl = $state<HTMLElement | null>(null);
+  let centeredEpisodeId: number | null = null;
 
   const showId = $derived($page.params.id ?? "");
+
+  async function centerRequestedEpisode() {
+    const episodeId = $page.state.centerEpisodeId;
+    if (!episodeId || centeredEpisodeId === episodeId) return;
+
+    await tick();
+    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (centerEpisodeRow(episodeListEl, episodeId, reducedMotion)) {
+      centeredEpisodeId = episodeId;
+    }
+  }
 
   async function load(refresh = false) {
     error = null;
@@ -39,6 +53,7 @@
     } finally {
       loading = false;
     }
+    await centerRequestedEpisode();
   }
 
   $effect(() => {
@@ -46,6 +61,7 @@
     show = null;
     episodes = [];
     expanded = {};
+    centeredEpisodeId = null;
     loading = true;
     // Paint cached episodes, then re-scrape the show page so new episodes appear.
     (async () => {
@@ -260,9 +276,9 @@
     </div>
   </div>
 
-  <div class="eplist">
+  <div class="eplist" bind:this={episodeListEl}>
     {#each episodes as ep (ep.id)}
-      <div class="ep" class:current={player.current?.episode.id === ep.id}>
+      <div class="ep" class:current={player.current?.episode.id === ep.id} data-episode-id={ep.id}>
         <div class="ep-row">
           {#if progressFrac(ep) > 0}
             <div

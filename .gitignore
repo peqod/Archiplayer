@@ -12,6 +12,7 @@ vite.config.ts.timestamp-*
 # Tauri / Rust
 src-tauri/target/
 src-tauri/gen/
+/Archiplayer_*_x64-setup.exe
 
 # Logs & OS cruft
 *.log
@@ -20,3 +21,7 @@ Thumbs.db
 # Editors
 .vscode/
 .idea/
+
+# Local agent tooling
+.claude/
+.codex/

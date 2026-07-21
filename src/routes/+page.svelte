@@ -3,6 +3,7 @@
   import { player, type QueueItem } from "$lib/player.svelte";
   import { goto } from "$app/navigation";
   import Icon from "$lib/Icon.svelte";
+  import { selectRandomPlayback } from "$lib/random-show";
 
   let shows = $state<Show[]>([]);
   let loading = $state(true);
@@ -11,6 +12,7 @@
   let trackHits = $state<TrackHit[]>([]);
   let letterFilter = $state<string | null>(null);
   let busyShow = $state<string | null>(null);
+  let randomBusy = $state(false);
   let searchTimer: ReturnType<typeof setTimeout> | undefined;
 
   const PAGE_SIZE = 60;
@@ -119,16 +121,35 @@
     await launchShow(show);
   }
 
-  // Pick a show from the current instant: scramble the timestamp's digits into a
-  // seed, then index into the catalog. Different every click, derived from "now".
   async function randomShow() {
-    if (!shows.length) return;
-    const stamp = String(Date.now()).split("").reverse().join("");
-    let seed = 0;
-    for (const ch of stamp) seed = (seed * 31 + ch.charCodeAt(0)) >>> 0;
-    const show = shows[seed % shows.length];
-    goto("/show/" + show.id);
-    launchShow(show);
+    if (!shows.length || randomBusy) return;
+    randomBusy = true;
+    error = null;
+    try {
+      const selection = await selectRandomPlayback(
+        shows,
+        (show) => api.getShow(show.id),
+        player.current?.episode.show_id ?? null,
+        player.current?.episode.id ?? null,
+      );
+      if (!selection) {
+        error = "No playable archives found in the catalog.";
+        return;
+      }
+
+      const items: QueueItem[] = selection.episodes.map((episode) => ({
+        episode,
+        showName: selection.show.name,
+      }));
+      await goto("/show/" + selection.show.id, {
+        state: { centerEpisodeId: selection.episodes[selection.index].id },
+      });
+      await player.playQueue(items, selection.index);
+    } catch (err) {
+      error = String(err);
+    } finally {
+      randomBusy = false;
+    }
   }
 
   async function toggleFav(show: Show, e: MouseEvent) {
@@ -166,8 +187,8 @@
     placeholder="Search shows, DJs — and songs from cached playlists…"
     bind:value={query}
   />
-  <button class="ghost" onclick={randomShow} disabled={!shows.length} title="Play a random show">
-    🎲 Random
+  <button class="ghost" onclick={randomShow} disabled={!shows.length || randomBusy} title="Play a random show and episode">
+    🎲 {randomBusy ? "Finding…" : "Random"}
   </button>
 </div>
 

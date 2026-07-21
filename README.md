@@ -62,7 +62,7 @@ npm ci
 2. Install Rust from [rustup.rs](https://rustup.rs/). The MSVC toolchain is pinned in `src-tauri/rust-toolchain.toml`, so rustup installs `stable-x86_64-pc-windows-msvc` automatically on the first `cargo` run. No manual `rustup default` is needed.
 3. Install JS dependencies: `npm ci`.
 4. **Run in development:** `npm run dev:windows`. This dot-sources `build-env.ps1` to load `link.exe` plus the Windows SDK, then starts `tauri dev`. To reuse your current shell instead, run `. .\build-env.ps1` once, then `npm run tauri dev`.
-5. **Build the installer:** `npm run build:windows`. The NSIS installer is written to `src-tauri/target/release/bundle/nsis/Archiplayer_<version>_x64-setup.exe`.
+5. **Build the installer:** `npm run build:windows`. The NSIS installer is copied to the repository root as `Archiplayer_<version>_x64-setup.exe` (and remains available under `src-tauri/target/release/bundle/nsis/`).
 
 > If `cargo` reports a file lock ("used by another process"), stop a running `archiplayer.exe` first (`taskkill /F /IM archiplayer.exe`), then rebuild.
 
