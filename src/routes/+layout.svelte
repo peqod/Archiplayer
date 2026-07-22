@@ -253,7 +253,7 @@
       <button class="pbtn" onclick={() => player.prevTrack()} disabled={!player.tracks.length} title="Previous song"><Icon name="prev" /></button>
       <button class="pbtn skip" onclick={() => player.skip(-15)} disabled={!player.current} title="Back 15 seconds">«15</button>
       <button class="pbtn main" onclick={() => player.toggle()} disabled={!player.current && !player.live} title="Play/pause">
-        {#if player.loading}…{:else if player.playing}<Icon name="playing" />{:else}<Icon name="play" />{/if}
+        {#if player.loading}…{:else if player.playing}<Icon name="playing" size="22px" />{:else}<Icon name="play" size="22px" />{/if}
       </button>
       <button class="pbtn skip" onclick={() => player.skip(15)} disabled={!player.current} title="Forward 15 seconds">15»</button>
       <button class="pbtn" onclick={() => player.nextTrack()} disabled={!player.tracks.length} title="Next song"><Icon name="next" /></button>
@@ -397,7 +397,7 @@
        (inline style, modifier class, or <Icon size=…>) for per-place custom values. */
     --icon-size: 1.2em;      /* glyph size inside buttons; cascades into <Icon> */
     --pbtn-size: 32px;        /* transport secondary buttons (prev / next) */
-    --pbtn-main-size: 46px;   /* transport main play/pause button */
+    --pbtn-main-size: 42px;   /* transport main play/pause button */
     --pctl-gap: 8px;          /* gap between transport buttons */
     --player-gap: 18px;       /* gap between player sections */
   }
@@ -518,10 +518,6 @@
     background: var(--c-accent);
     color: var(--c-on-accent);
     font-size: 18px;
-  }
-  .pbtn.main :global(svg.icon) {
-    width: 22px;
-    height: 22px;
   }
   /* Optically centre the right-pointing play/playing triangles wherever they render
      (header, track rows, show + profile pages). A percentage keeps the shift proportional
@@ -683,7 +679,6 @@
       /* Each clamp is linear between 324px and 760px. Keeping the endpoints here
          makes the intended minimum and intermediate compositions explicit. */
       --pbtn-size: clamp(32px, calc(29.028px + 0.917vw), 36px);
-      --pbtn-main-size: clamp(46px, calc(41.541px + 1.376vw), 52px);
       --pctl-gap: clamp(6px, calc(4.514px + 0.459vw), 8px);
       --player-gap: clamp(14px, calc(11.028px + 0.917vw), 18px);
       --icon-size: clamp(11.4px, calc(8.428px + 0.917vw), 15.4px);
@@ -692,8 +687,6 @@
       --mini-pad-inline: clamp(12px, calc(7.541px + 1.376vw), 18px);
       --mini-pad-bottom: clamp(8px, calc(5.028px + 0.917vw), 12px);
       --mini-control-font: clamp(12px, calc(10.514px + 0.459vw), 14px);
-      --mini-main-font: clamp(14px, calc(12.514px + 0.459vw), 16px);
-      --mini-main-icon: clamp(22px, calc(19.028px + 0.917vw), 26px);
       --mini-title-font: clamp(12px, calc(10.514px + 0.459vw), 14px);
       --mini-track-font: clamp(11px, calc(9.514px + 0.459vw), 13px);
       --mini-meta-margin: clamp(3px, calc(2.257px + 0.229vw), 4px);
@@ -724,16 +717,9 @@
       width: min(100%, var(--transport-width));
       margin-inline: auto;
     }
-    /* Font sizes track the compact tokens above. */
+    /* Secondary control labels track the compact token above. */
     .pbtn {
       font-size: var(--mini-control-font);
-    }
-    .pbtn.main {
-      font-size: var(--mini-main-font);
-    }
-    .pbtn.main :global(svg.icon) {
-      width: var(--mini-main-icon);
-      height: var(--mini-main-icon);
     }
     .p-title {
       margin-bottom: var(--mini-meta-margin);

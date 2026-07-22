@@ -22,18 +22,17 @@
 </script>
 
 <div class="track" class:now={current} aria-current={current ? "true" : undefined}>
-  <button
-    class="tplay"
-    onclick={onplay}
-    disabled={!playable || !onplay}
-    title={current
-      ? playing ? "Pause song" : "Resume song"
-      : playable && track.start_sec !== null
-        ? `Play at ${fmtTime(track.start_sec)}`
-        : playable
-          ? "Play episode (no timestamp)"
-          : "Live track"}
-  ><Icon name={current && playing ? "pause" : "play"} /></button>
+  {#if playable && onplay && track.start_sec !== null}
+    <button
+      class="tplay"
+      onclick={onplay}
+      title={current
+        ? playing ? "Pause song" : "Resume song"
+        : `Play at ${fmtTime(track.start_sec)}`}
+    ><Icon name={current && playing ? "pause" : "play"} /></button>
+  {:else}
+    <span class="tplay-spacer" aria-hidden="true"></span>
+  {/if}
   <span class="ttime">{timeLabel ?? (track.start_sec !== null ? fmtTime(track.start_sec) : "–")}</span>
   <span class="tartist ellipsis">{track.artist ?? ""}</span>
   <span class="ttitle ellipsis">{track.title ?? ""}</span>
@@ -74,9 +73,6 @@
   }
   .tplay:hover:not(:disabled) {
     color: var(--c-accent);
-  }
-  .tplay:disabled {
-    opacity: 0.3;
   }
   .ttime {
     color: var(--c-dim);
