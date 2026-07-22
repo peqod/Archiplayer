@@ -181,15 +181,21 @@
 
 <div class="head">
   <h1>Shows</h1>
-  <input
-    class="search"
-    type="search"
-    placeholder="Search shows, DJs — and songs from cached playlists…"
-    bind:value={query}
-  />
-  <button class="ghost" onclick={randomShow} disabled={!shows.length || randomBusy} title="Play a random show and episode">
-    🎲 {randomBusy ? "Finding…" : "Random"}
-  </button>
+  <div class="search-wrap">
+    <input
+      class="search"
+      type="search"
+      placeholder="Search shows, DJs — and songs from cached playlists…"
+      bind:value={query}
+    />
+    <button
+      class="dice"
+      onclick={randomShow}
+      disabled={!shows.length || randomBusy}
+      title="Play a random show and episode"
+      aria-label="Play a random show and episode"
+    >{randomBusy ? "…" : "🎲"}</button>
+  </div>
 </div>
 
 {#if error}
@@ -312,19 +318,51 @@
     font-size: 16px;
     margin: 18px 0 8px;
   }
-  .search {
+  .search-wrap {
+    position: relative;
     flex: 1 1 auto;
     max-width: 520px;
+  }
+  .search {
+    width: 100%;
+    display: block;
     background: var(--c-surface);
     border: 1px solid var(--c-border);
     color: var(--c-text);
-    padding: 8px 12px;
+    padding: 8px 42px 8px 12px; /* right pad reserves room for the inset dice */
     border-radius: 8px;
     font-size: 14px;
   }
   .search:focus {
     outline: none;
     border-color: var(--c-accent);
+  }
+  /* Drop the WebView native clear (✕) so it can't collide with the inset dice. */
+  .search::-webkit-search-cancel-button {
+    -webkit-appearance: none;
+    appearance: none;
+  }
+  /* Random-show trigger, seated in the search bar's right corner. */
+  .dice {
+    position: absolute;
+    top: 50%;
+    right: 4px;
+    transform: translateY(-50%);
+    background: none;
+    border: none;
+    border-radius: 6px;
+    padding: 4px 6px;
+    font-size: 16px;
+    line-height: 1;
+    cursor: pointer;
+    color: var(--c-dim);
+  }
+  .dice:hover:not(:disabled) {
+    background: var(--c-surface2);
+  }
+  .dice:disabled {
+    cursor: default;
+    opacity: 0.6;
   }
   .ghost {
     background: none;
