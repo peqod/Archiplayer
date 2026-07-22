@@ -3,17 +3,49 @@
   import "@fontsource/inter/600.css";
   import "@fontsource/inter/700.css";
   import "@fontsource/inter/800.css";
-  import { player } from "$lib/player.svelte";
+  import { player, type QueueItem } from "$lib/player.svelte";
   import { api, fmtTime } from "$lib/api";
+  import { selectRandomPlayback } from "$lib/random-show";
   import { theme } from "$lib/theme.svelte";
   import Icon from "$lib/Icon.svelte";
   import { page } from "$app/stores";
+  import { goto } from "$app/navigation";
   import { tick } from "svelte";
   import { getCurrentWindow, PhysicalSize } from "@tauri-apps/api/window";
 
   let { children } = $props();
   let audioEl: HTMLAudioElement;
   let favError = $state<string | null>(null);
+  let luckyBusy = $state(false);
+
+  // Same action the catalog dice fires: random show + random starting episode.
+  async function feelingLucky() {
+    if (luckyBusy) return;
+    luckyBusy = true;
+    try {
+      const shows = await api.getCatalog();
+      if (!shows.length) return;
+      const selection = await selectRandomPlayback(
+        shows,
+        (show) => api.getShow(show.id),
+        player.current?.episode.show_id ?? null,
+        player.current?.episode.id ?? null,
+      );
+      if (!selection) return;
+      const items: QueueItem[] = selection.episodes.map((episode) => ({
+        episode,
+        showName: selection.show.name,
+      }));
+      await goto("/show/" + selection.show.id, {
+        state: { centerEpisodeId: selection.episodes[selection.index].id },
+      });
+      await player.playQueue(items, selection.index);
+    } catch (err) {
+      favError = String(err);
+    } finally {
+      luckyBusy = false;
+    }
+  }
   // Player-only collapse shortens the window to the player + tabs. The routed
   // content remains mounted underneath, so manually enlarging the window reveals it.
   // Width remains user-controlled so the responsive player can still be resized.
@@ -345,7 +377,11 @@
           {@render volumeControl()}
         </div>
       {:else}
-        <div class="p-track idle">Nothing playing — pick a show.</div>
+        <div class="p-track idle">
+          <button class="lucky" onclick={feelingLucky} disabled={luckyBusy}>
+            {luckyBusy ? "Finding…" : "🎲 I'm feeling lucky today"}
+          </button>
+        </div>
       {/if}
     </div>
   </header>
@@ -561,6 +597,21 @@
   }
   .p-track.idle {
     color: var(--c-dim);
+    opacity: 0.7;
+  }
+  .lucky {
+    background: none;
+    border: none;
+    padding: 0;
+    font: inherit;
+    color: var(--c-accent);
+    cursor: pointer;
+  }
+  .lucky:hover:not(:disabled) {
+    text-decoration: underline;
+  }
+  .lucky:disabled {
+    cursor: default;
     opacity: 0.7;
   }
   .err {

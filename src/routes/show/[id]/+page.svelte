@@ -263,7 +263,6 @@
       {#if show.description}<p class="blurb">{show.description}</p>{/if}
       <div class="meta">
         {episodes.length} episodes · {playableCount} with audio
-        {#if !show.on_air}· no longer on air{/if}
         <span class="dot">·</span>
         <a class="wfmu-link" href={"https://wfmu.org/playlists/" + show.id} onclick={openWfmu}>View on WFMU ↗</a>
       </div>
