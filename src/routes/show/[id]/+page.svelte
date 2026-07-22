@@ -12,6 +12,7 @@
   import { openUrl } from "@tauri-apps/plugin-opener";
   import Icon from "$lib/Icon.svelte";
   import TrackRow from "$lib/TrackRow.svelte";
+  import CatalogNav from "$lib/CatalogNav.svelte";
   import { centerEpisodeRow } from "$lib/episode-scroll";
   import { onMount, tick } from "svelte";
 
@@ -246,6 +247,8 @@
     return Array.isArray(v) ? v : [];
   }
 </script>
+
+<CatalogNav />
 
 <a href="/" class="back">← All shows</a>
 

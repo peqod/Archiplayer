@@ -2,6 +2,8 @@
   import { api, LIVE_STREAMS, type Show, type TrackHit } from "$lib/api";
   import { player, type QueueItem } from "$lib/player.svelte";
   import { goto } from "$app/navigation";
+  import { page } from "$app/stores";
+  import { onMount } from "svelte";
   import Icon from "$lib/Icon.svelte";
   import { selectRandomPlayback } from "$lib/random-show";
 
@@ -34,6 +36,17 @@
     await load();
     await load(true);
   })();
+
+  // Seed the filter from URL params once, so the show-view CatalogNav bar can deep-link
+  // back into a filtered catalog (?q= / ?letter= / ?fav=1). No params = home as usual.
+  onMount(() => {
+    const sp = $page.url.searchParams;
+    const q = sp.get("q");
+    const letter = sp.get("letter");
+    if (q) query = q;
+    else if (sp.get("fav") === "1") letterFilter = "★";
+    else if (letter) letterFilter = letter;
+  });
 
   const letters = $derived.by(() => {
     const set = new Set<string>();
@@ -203,6 +216,22 @@
 {/if}
 
 {#if !query}
+  <div class="alpha">
+    <button
+      class="fav-filter"
+      class:on={letterFilter === "★"}
+      onclick={() => (letterFilter = letterFilter === "★" ? null : "★")}
+      title="Show only favourited shows"
+    >★ Favourites{favCount ? ` (${favCount})` : ""}</button>
+    <span class="alpha-sep"></span>
+    <button class:on={letterFilter === null} onclick={() => (letterFilter = null)}>All</button>
+    {#each letters as l}
+      <button class:on={letterFilter === l} onclick={() => (letterFilter = letterFilter === l ? null : l)}>{l}</button>
+    {/each}
+  </div>
+{/if}
+
+{#if !query}
   <div class="live">
     <span class="live-label"><span class="live-dot"></span> Listen Live Now</span>
     <div class="live-streams">
@@ -224,22 +253,6 @@
         </a>
       {/each}
     </div>
-  </div>
-{/if}
-
-{#if !query}
-  <div class="alpha">
-    <button
-      class="fav-filter"
-      class:on={letterFilter === "★"}
-      onclick={() => (letterFilter = letterFilter === "★" ? null : "★")}
-      title="Show only favourited shows"
-    >★ Favourites{favCount ? ` (${favCount})` : ""}</button>
-    <span class="alpha-sep"></span>
-    <button class:on={letterFilter === null} onclick={() => (letterFilter = null)}>All</button>
-    {#each letters as l}
-      <button class:on={letterFilter === l} onclick={() => (letterFilter = letterFilter === l ? null : l)}>{l}</button>
-    {/each}
   </div>
 {/if}
 
