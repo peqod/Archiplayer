@@ -1,5 +1,7 @@
 <script lang="ts">
   import { api, type Show } from "$lib/api";
+  import { player, type QueueItem } from "$lib/player.svelte";
+  import { selectRandomPlayback } from "$lib/random-show";
   import { goto } from "$app/navigation";
   import { onMount } from "svelte";
 
@@ -8,6 +10,7 @@
   // home catalog with the matching filter applied (?q= / ?letter= / ?fav=1).
   let shows = $state<Show[]>([]);
   let query = $state("");
+  let randomBusy = $state(false);
 
   onMount(async () => {
     try {
@@ -33,6 +36,33 @@
     const q = query.trim();
     goto(q ? "/?q=" + encodeURIComponent(q) : "/");
   }
+
+  // Same random-show + random-episode jump as the home dice; opens the show and plays.
+  async function randomShow() {
+    if (!shows.length || randomBusy) return;
+    randomBusy = true;
+    try {
+      const selection = await selectRandomPlayback(
+        shows,
+        (show) => api.getShow(show.id),
+        player.current?.episode.show_id ?? null,
+        player.current?.episode.id ?? null,
+      );
+      if (!selection) return;
+      const items: QueueItem[] = selection.episodes.map((episode) => ({
+        episode,
+        showName: selection.show.name,
+      }));
+      await goto("/show/" + selection.show.id, {
+        state: { centerEpisodeId: selection.episodes[selection.index].id },
+      });
+      await player.playQueue(items, selection.index);
+    } catch {
+      /* leave the bar quiet on failure */
+    } finally {
+      randomBusy = false;
+    }
+  }
 </script>
 
 <div class="catnav">
@@ -43,6 +73,14 @@
       placeholder="Search shows, DJs, songs…"
       bind:value={query}
     />
+    <button
+      class="dice"
+      type="button"
+      onclick={randomShow}
+      disabled={!shows.length || randomBusy}
+      title="Play a random show and episode"
+      aria-label="Play a random show and episode"
+    >{randomBusy ? "…" : "🎲"}</button>
   </form>
   <div class="alpha">
     <button
@@ -70,6 +108,7 @@
     margin-bottom: 4px;
   }
   .search-wrap {
+    position: relative;
     max-width: 520px;
     margin-bottom: 10px;
   }
@@ -79,13 +118,39 @@
     background: var(--c-surface);
     border: 1px solid var(--c-border);
     color: var(--c-text);
-    padding: 8px 12px;
+    padding: 8px 42px 8px 12px; /* right pad reserves room for the inset dice */
     border-radius: 8px;
     font-size: 14px;
   }
   .search:focus {
     outline: none;
     border-color: var(--c-accent);
+  }
+  /* Drop the WebView native clear (✕) so it can't collide with the inset dice. */
+  .search::-webkit-search-cancel-button {
+    -webkit-appearance: none;
+    appearance: none;
+  }
+  .dice {
+    position: absolute;
+    top: 50%;
+    right: 4px;
+    transform: translateY(-50%);
+    background: none;
+    border: none;
+    border-radius: 6px;
+    padding: 4px 6px;
+    font-size: 16px;
+    line-height: 1;
+    cursor: pointer;
+    color: var(--c-dim);
+  }
+  .dice:hover:not(:disabled) {
+    background: var(--c-surface2);
+  }
+  .dice:disabled {
+    cursor: default;
+    opacity: 0.6;
   }
   .alpha {
     display: flex;

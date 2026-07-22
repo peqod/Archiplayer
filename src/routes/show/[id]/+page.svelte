@@ -2,7 +2,6 @@
   import { page } from "$app/stores";
   import {
     api,
-    fmtTime,
     type Episode,
     type Show,
     type Track,
@@ -320,9 +319,6 @@
             <span class="ep-date">{ep.air_date ?? "unknown date"}</span>
             {#if ep.title}<span class="ep-title">{ep.title}</span>{/if}
             {#if ep.completed}<span class="badge done">completed</span>{/if}
-            {#if !ep.completed && ep.resume_sec && ep.resume_sec > 5}
-              <span class="badge resume">↺ {fmtTime(ep.resume_sec)}</span>
-            {/if}
             {#if !ep.has_audio}<span class="badge">playlist only</span>{/if}
             {#if ep.downloaded}<span class="badge dl">offline</span>{/if}
             {#if downloading[ep.id]}
@@ -557,10 +553,6 @@
   .badge.done {
     color: var(--c-on-accent);
     background: var(--c-accent);
-  }
-  .badge.resume {
-    color: var(--c-accent);
-    font-variant-numeric: tabular-nums;
   }
   .ep-actions {
     display: flex;
