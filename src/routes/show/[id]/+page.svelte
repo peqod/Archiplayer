@@ -50,6 +50,20 @@
     }
   }
 
+  // Crossing a responsive breakpoint restacks the player header and reflows the
+  // episode rows (grid at <=760px), changing every row height. The scroll offset
+  // that had the playhead centred now points elsewhere, so recompute it. Same
+  // episode, so this skips the centerRequestedEpisode guard on purpose.
+  function recenterPlayhead() {
+    const episodeId = playheadEpisodeId();
+    if (!episodeId) return;
+    // Recompute after the reflow flushes so scrollIntoView reads the new heights.
+    requestAnimationFrame(() => {
+      const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      centerEpisodeRow(episodeListEl, episodeId, reducedMotion);
+    });
+  }
+
   async function load(refresh = false) {
     error = null;
     try {
@@ -97,8 +111,16 @@
         }
       }
     });
+    // Recentre the playhead whenever a layout breakpoint flips under a resize.
+    const breakpoints = ["(max-width: 760px)", "(max-width: 420px)"].map((q) =>
+      window.matchMedia(q),
+    );
+    const onBreakpoint = () => recenterPlayhead();
+    for (const mq of breakpoints) mq.addEventListener("change", onBreakpoint);
+
     return () => {
       un.then((f) => f());
+      for (const mq of breakpoints) mq.removeEventListener("change", onBreakpoint);
     };
   });
 
