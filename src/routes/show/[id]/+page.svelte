@@ -32,8 +32,16 @@
 
   const showId = $derived($page.params.id ?? "");
 
+  // The playing/paused episode, but only if it belongs to the show being viewed —
+  // returning here (e.g. from search) should recentre the list on the playhead.
+  function playheadEpisodeId(): number | null {
+    const ep = player.current?.episode;
+    return ep && ep.show_id === showId ? ep.id : null;
+  }
+
   async function centerRequestedEpisode() {
-    const episodeId = $page.state.centerEpisodeId;
+    // Explicit request (random-show nav) wins; otherwise fall back to the playhead.
+    const episodeId = $page.state.centerEpisodeId ?? playheadEpisodeId();
     if (!episodeId || centeredEpisodeId === episodeId) return;
 
     await tick();
