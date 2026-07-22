@@ -57,6 +57,12 @@
     width: 100%;
     min-width: 0;
   }
+  /* Zebra striping: every other row 15% darker than the surface behind it.
+     A black overlay darkens regardless of page/theme; hover + .now rules follow
+     so they still override. */
+  .track:nth-child(even) {
+    background: rgba(0, 0, 0, 0.15);
+  }
   .track:hover {
     background: var(--c-surface);
   }
