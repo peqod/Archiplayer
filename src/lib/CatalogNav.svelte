@@ -8,6 +8,10 @@
   // Persistent catalog bar for views that have no show list of their own (e.g. the
   // show/playlist page). Search + alphabet don't filter in place — they jump to the
   // home catalog with the matching filter applied (?q= / ?letter= / ?fav=1).
+  // `reverse` is owned by the host view (bound) so the toggle sits in the alpha bar
+  // without moving the affordance elsewhere.
+  let { reverse = $bindable(false) }: { reverse?: boolean } = $props();
+
   let shows = $state<Show[]>([]);
   let query = $state("");
   let randomBusy = $state(false);
@@ -93,6 +97,15 @@
     {#each letters as l}
       <button onclick={() => goto("/?letter=" + encodeURIComponent(l))}>{l}</button>
     {/each}
+    <span class="alpha-gap"></span>
+    <button
+      class="rev"
+      class:on={reverse}
+      onclick={() => (reverse = !reverse)}
+      aria-pressed={reverse}
+      aria-label="Reverse episode order"
+      title={reverse ? "Show newest first" : "Reverse order (oldest first)"}
+    >⇅</button>
   </div>
 </div>
 
@@ -180,5 +193,19 @@
     align-self: stretch;
     background: var(--c-border);
     margin: 0 4px;
+  }
+  /* 16px breather then the reverse-order toggle, mirroring the home catalog bar. */
+  .alpha-gap {
+    width: 16px;
+    flex: 0 0 auto;
+  }
+  .rev {
+    font-size: 15px;
+    line-height: 1;
+  }
+  .rev.on {
+    background: var(--c-accent);
+    color: var(--c-surface);
+    font-weight: 700;
   }
 </style>

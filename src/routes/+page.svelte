@@ -13,6 +13,7 @@
   let query = $state("");
   let trackHits = $state<TrackHit[]>([]);
   let letterFilter = $state<string | null>(null);
+  let reverse = $state(false);
   let busyShow = $state<string | null>(null);
   let randomBusy = $state(false);
   let searchTimer: ReturnType<typeof setTimeout> | undefined;
@@ -78,6 +79,7 @@
         return letterFilter === "#" ? !/[A-Z]/.test(c) : c === letterFilter;
       });
     }
+    if (reverse) list.reverse();
     return list;
   });
 
@@ -85,9 +87,10 @@
   const favCount = $derived(shows.filter((s) => s.favourite).length);
 
   $effect(() => {
-    // reset paging when the filter changes
+    // reset paging when the filter or order changes
     void query;
     void letterFilter;
+    void reverse;
     visibleCount = PAGE_SIZE;
   });
 
@@ -228,6 +231,15 @@
     {#each letters as l}
       <button class:on={letterFilter === l} onclick={() => (letterFilter = letterFilter === l ? null : l)}>{l}</button>
     {/each}
+    <span class="alpha-gap"></span>
+    <button
+      class="rev"
+      class:on={reverse}
+      onclick={() => (reverse = !reverse)}
+      aria-pressed={reverse}
+      aria-label="Reverse sort order"
+      title={reverse ? "Sort A→Z" : "Reverse order (Z→A)"}
+    >⇅</button>
   </div>
 {/if}
 
@@ -508,6 +520,15 @@
     align-self: stretch;
     background: var(--c-border);
     margin: 0 4px;
+  }
+  /* 16px breather between the letters and the reverse-order toggle. */
+  .alpha-gap {
+    width: 16px;
+    flex: 0 0 auto;
+  }
+  .rev {
+    font-size: 15px;
+    line-height: 1;
   }
   .list {
     display: flex;

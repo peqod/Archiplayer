@@ -28,8 +28,13 @@
   let downloading = $state<Record<number, { bytes: number; total: number }>>({});
   let episodeListEl = $state<HTMLElement | null>(null);
   let centeredEpisodeId: number | null = null;
+  let reverse = $state(false);
 
   const showId = $derived($page.params.id ?? "");
+
+  // Displayed episode order. WFMU lists newest first; the reverse toggle flips to
+  // oldest first. Queue building and Play-all follow this so playback matches the view.
+  const orderedEpisodes = $derived(reverse ? [...episodes].reverse() : episodes);
 
   // The playing/paused episode, but only if it belongs to the show being viewed —
   // returning here (e.g. from search) should recentre the list on the playhead.
@@ -84,6 +89,7 @@
     episodes = [];
     expanded = {};
     centeredEpisodeId = null;
+    reverse = false; // each show opens newest-first
     loading = true;
     // Paint cached episodes, then re-scrape the show page so new episodes appear.
     (async () => {
@@ -152,7 +158,7 @@
     startTrackSec: number | null = null,
   ) {
     if (!show) return;
-    const list = episodes.filter((e) => e.has_audio); // newest → oldest (visual order)
+    const list = orderedEpisodes.filter((e) => e.has_audio); // follows displayed order
     const idx = list.findIndex((e) => e.id === ep.id);
     if (idx < 0) {
       await player.playEpisode(ep, show.name, startSec, startTrackSec);
@@ -189,9 +195,9 @@
   }
 
   async function playFromHere(ep: Episode) {
-    // queue: this episode then everything below it (older, down the list)
+    // queue: this episode then everything below it in the displayed order
     if (!show) return;
-    const list = episodes.filter((e) => e.has_audio); // newest → oldest (visual order)
+    const list = orderedEpisodes.filter((e) => e.has_audio); // follows displayed order
     const idx = list.findIndex((e) => e.id === ep.id);
     if (idx < 0) return;
     const items: QueueItem[] = list
@@ -263,8 +269,8 @@
 
   async function playAll() {
     if (!show) return;
-    const items: QueueItem[] = episodes
-      .filter((e) => e.has_audio) // newest → oldest (visual order)
+    const items: QueueItem[] = orderedEpisodes
+      .filter((e) => e.has_audio) // follows displayed order (reverse = oldest first)
       .map((e) => ({ episode: e, showName: show!.name }));
     if (items.length) await player.playQueue(items);
   }
@@ -277,7 +283,7 @@
   }
 </script>
 
-<CatalogNav />
+<CatalogNav bind:reverse />
 
 <a href="/" class="back">← All shows</a>
 
@@ -300,7 +306,7 @@
       </div>
     </div>
     <div class="actions">
-      <button class="primary" onclick={playAll} disabled={!playableCount}><Icon name="play" /> Play all (newest first)</button>
+      <button class="primary" onclick={playAll} disabled={!playableCount}><Icon name="play" /> Play all ({reverse ? "oldest" : "newest"} first)</button>
       <button class="ghost fav" class:on={show.favourite} onclick={favShow}>
         <Icon name="star" filled={show.favourite} /> {show.favourite ? "Favourited" : "Favourite"}
       </button>
@@ -308,7 +314,7 @@
   </div>
 
   <div class="eplist" bind:this={episodeListEl}>
-    {#each episodes as ep (ep.id)}
+    {#each orderedEpisodes as ep (ep.id)}
       <div class="ep" class:current={player.current?.episode.id === ep.id} data-episode-id={ep.id}>
         <div class="ep-row">
           {#if progressFrac(ep) > 0}
