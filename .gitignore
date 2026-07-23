@@ -14,6 +14,9 @@ src-tauri/target/
 src-tauri/gen/
 /Archiplayer_*_x64-setup.exe
 
+# Release artifacts (CI owns these on the GitHub release)
+/SHA256SUMS.txt
+
 # Logs & OS cruft
 *.log
 Thumbs.db
