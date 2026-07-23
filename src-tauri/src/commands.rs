@@ -8,6 +8,7 @@ use std::time::Duration;
 use tauri::{AppHandle, Manager, State};
 
 type CmdResult<T> = Result<T, String>;
+const LIVE_PLAYLIST_REFRESH_SECONDS: i64 = 30;
 
 fn db_err(e: rusqlite::Error) -> String {
     format!("db error: {e}")
@@ -281,7 +282,17 @@ pub async fn get_live_status(
         0,
     )
     .map_err(db_err)?;
-    let playlist_needs_load = hosted && !db.episode_tracks_scraped(episode_id).map_err(db_err)?;
+    // The main FM homepage exposes the active playlist but no current-song fields.
+    // Re-scrape that append-only playlist periodically while listening; otherwise the
+    // first snapshot remains cached for the rest of the broadcast. Channel feeds with
+    // current-song metadata keep using the lightweight observation path below.
+    let playlist_needs_load = hosted
+        && if current_song.is_none() {
+            db.episode_tracks_stale(episode_id, LIVE_PLAYLIST_REFRESH_SECONDS)
+                .map_err(db_err)?
+        } else {
+            !db.episode_tracks_scraped(episode_id).map_err(db_err)?
+        };
     if (!hosted || !playlist_needs_load) && current_song.is_some() {
         let observation = polled_live_track(&status).into_iter().collect::<Vec<_>>();
         db.sync_tracks(episode_id, &observation, TrackSyncMode::AppendObservations)

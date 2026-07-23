@@ -673,6 +673,21 @@ impl Db {
         Ok(scraped.is_some())
     }
 
+    pub fn episode_tracks_stale(
+        &self,
+        episode_id: i64,
+        max_age_seconds: i64,
+    ) -> Result<bool, rusqlite::Error> {
+        let last_scraped: Option<i64> = self.conn.query_row(
+            "SELECT last_scraped FROM episodes WHERE id=?1",
+            [episode_id],
+            |r| r.get(0),
+        )?;
+        Ok(last_scraped
+            .map(|timestamp| Self::now().saturating_sub(timestamp) >= max_age_seconds)
+            .unwrap_or(true))
+    }
+
     pub fn toggle_favourite(&self, kind: &str, ref_id: &str) -> Result<bool, rusqlite::Error> {
         let removed = self.conn.execute(
             "DELETE FROM favourites WHERE kind=?1 AND ref_id=?2",
@@ -791,7 +806,7 @@ impl Db {
 mod tests {
     use super::{Db, TrackSyncMode};
     use crate::wfmu::{ParsedRecentTrack, ParsedTrack};
-    use rusqlite::Connection;
+    use rusqlite::{params, Connection};
 
     #[test]
     fn legacy_database_is_migrated_without_losing_rows() {
@@ -897,6 +912,43 @@ mod tests {
             )
             .unwrap();
         assert_eq!(attribution, (observed_episode, 42));
+
+        drop(db);
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn live_playlist_refresh_detects_missing_and_stale_snapshots() {
+        let path = std::env::temp_dir().join(format!(
+            "archiplayer-live-refresh-{}-{}.db",
+            std::process::id(),
+            Db::now()
+        ));
+        let mut db = Db::open(&path).expect("open live refresh test db");
+        db.upsert_show("LIVE", "Live", None, true).unwrap();
+        db.upsert_episode(-3, "LIVE", None, Some("Live"), None, 0)
+            .unwrap();
+        assert!(db.episode_tracks_stale(-3, 30).unwrap());
+
+        let track = ParsedTrack {
+            artist: Some("Artist".into()),
+            title: Some("Track".into()),
+            album: None,
+            label: None,
+            comments: None,
+            start_sec: Some(0),
+        };
+        db.sync_tracks(-3, &[track], TrackSyncMode::Snapshot)
+            .unwrap();
+        assert!(!db.episode_tracks_stale(-3, 30).unwrap());
+
+        db.conn
+            .execute(
+                "UPDATE episodes SET last_scraped=?2 WHERE id=?1",
+                params![-3, Db::now() - 31],
+            )
+            .unwrap();
+        assert!(db.episode_tracks_stale(-3, 30).unwrap());
 
         drop(db);
         let _ = std::fs::remove_file(path);

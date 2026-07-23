@@ -405,7 +405,9 @@ class Player {
   ) {
     let request = this.livePlaylistLoads.get(episodeId);
     if (!request) {
-      request = api.getPlaylist(episodeId);
+      // get_live_status only requests this load for a missing or stale hosted
+      // playlist, so bypass the archive cache and fetch the latest appended rows.
+      request = api.getPlaylist(episodeId, true);
       this.livePlaylistLoads.set(episodeId, request);
     }
     try {

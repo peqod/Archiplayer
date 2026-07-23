@@ -48,13 +48,15 @@
       luckyBusy = false;
     }
   }
-  // Player-only collapse shortens the window to the player + tabs. The routed
-  // content remains mounted underneath, so manually enlarging the window reveals it.
-  // Width remains user-controlled so the responsive player can still be resized.
+  // Player-only collapse shrinks the window to the minimum-width player + tabs.
+  // The routed content remains mounted underneath, and the exact pre-collapse
+  // client size is restored when the shell is expanded again.
+  const COMPACT_WIDTH = 324;
   let collapsed = $state(false);
   let navEl: HTMLElement;
   let headerEl: HTMLElement;
-  let expandedHeight = 0; // remembered logical height to restore on expand
+  let expandedWidth = 0;
+  let expandedHeight = 0;
   // Mirrors the CSS mini-mode breakpoint so volume can fold to a popover.
   let mini = $state(false);
   let volOpen = $state(false);
@@ -86,20 +88,29 @@
       const scale = await win.scaleFactor();
       const physical = await win.innerSize();
       if (collapsed) {
-        // Collapse only the library area. Preserve the current width so users can
-        // keep resizing the compact player through its responsive breakpoints.
+        // Tauri setSize targets the client area. Resize to the native minimum
+        // width and the measured player + tab height.
         const compact = Math.ceil((headerEl?.offsetHeight ?? 0) + (navEl?.offsetHeight ?? 0));
+        const width = Math.round(COMPACT_WIDTH * scale);
         const height = Math.round(compact * scale);
-        if (compact > 0 && Math.abs(physical.height - height) > 1) {
-          await win.setSize(new PhysicalSize(physical.width, height));
+        if (
+          compact > 0 &&
+          (Math.abs(physical.width - width) > 1 || Math.abs(physical.height - height) > 1)
+        ) {
+          await win.setSize(new PhysicalSize(width, height));
         }
       } else {
-        // Restore only the pre-collapse height. A restored collapsed session has
-        // no in-memory height, so use a comfortable library default.
+        // Restore the exact pre-collapse client size. A restored collapsed session
+        // has no in-memory size, so use the configured default window dimensions.
+        const targetWidth = expandedWidth > 0 ? expandedWidth : 1280;
         const targetHeight = expandedHeight > 0 ? expandedHeight : 860;
+        const width = Math.round(targetWidth * scale);
         const height = Math.round(targetHeight * scale);
-        if (Math.abs(physical.height - height) > 1) {
-          await win.setSize(new PhysicalSize(physical.width, height));
+        if (
+          Math.abs(physical.width - width) > 1 ||
+          Math.abs(physical.height - height) > 1
+        ) {
+          await win.setSize(new PhysicalSize(width, height));
         }
       }
     } catch {
@@ -118,11 +129,12 @@
     collapseTransitioning = true;
     try {
       if (!collapsed) {
-        // About to collapse: remember only the height. Width stays user-controlled.
+        // About to collapse: remember the complete client size for restoration.
         try {
           const win = getCurrentWindow();
           const scale = await win.scaleFactor();
           const size = (await win.innerSize()).toLogical(scale);
+          expandedWidth = size.width;
           expandedHeight = size.height;
         } catch {
           /* ignore */
