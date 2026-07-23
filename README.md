@@ -8,7 +8,7 @@
   A local-first desktop browser and player for the [WFMU](https://wfmu.org/) archives.<br>
   Rust + Tauri 2 + Svelte 5 · No login · No cloud · Open source
 
-  [Website](../../deployments/github-pages) · [Latest release](../../releases/latest) · [Build from source](#build-from-source) · [Report a problem](../../issues/new/choose)
+  [Website](https://peqod.github.io/Archiplayer) · [Latest release](../../releases/latest) · [Build from source](#build-from-source) · [Report a problem](../../issues/new/choose)
 </div>
 
 ---
@@ -31,7 +31,7 @@ Download the matching file from the [latest release](../../releases/latest).
 ### Opening an unsigned build
 
 - **Windows:** open the installer, choose **More info**, verify the source, then choose **Run anyway**.
-- **macOS:** move Archiplayer to Applications, Control-click it, choose **Open**, then confirm once.
+- **macOS:** move Archiplayer to Applications, try to open it once, then go to **System Settings → Privacy & Security → Open Anyway** and confirm.
 - **Linux AppImage:** make it executable with `chmod +x Archiplayer*.AppImage`, then run it.
 
 ## What it does
@@ -45,6 +45,9 @@ Download the matching file from the [latest release](../../releases/latest).
 - Track listening time and export favourites, listens, and stats as CSV.
 
 ## Build from source
+
+> [!NOTE]
+> Source-build steps are documented for Windows today; macOS and Linux are in progress (tracked in issue [#1](https://github.com/peqod/Archiplayer/issues/1)).
 
 You need [Node.js 20 or newer](https://nodejs.org/), npm, [Rust via rustup](https://rustup.rs/), and Git.
 
@@ -115,6 +118,8 @@ Rust application ── SQLite library, favourites, history and settings
 ```
 
 WFMU does not expose an official archive API. Archiplayer parses the public KenzoDB pages on demand, limits those page requests to one per second, and caches results rather than crawling the site.
+
+Opening the app makes one request (the A–Z show index). Every other page is fetched only on click — one request each, capped at 1/sec, and cached after. No bulk download, no “download all”.
 
 | Data | Public source |
 |---|---|

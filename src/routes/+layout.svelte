@@ -13,6 +13,7 @@
   import { goto } from "$app/navigation";
   import { tick } from "svelte";
   import { getCurrentWindow, PhysicalSize } from "@tauri-apps/api/window";
+  import { openUrl } from "@tauri-apps/plugin-opener";
 
   let { children } = $props();
   let audioEl: HTMLAudioElement;
@@ -149,6 +150,11 @@
       return;
     }
     if (collapsed) void toggleCollapse();
+  }
+
+  function supportWfmu(e: MouseEvent) {
+    e.preventDefault();
+    openUrl("https://pledge.wfmu.org/donate").catch(() => {});
   }
 
   $effect(() => {
@@ -407,6 +413,12 @@
         onclick={(event) => onNavClick(event, "/profile")}
       >Profile</a>
     </div>
+    <a
+      class="nav-donate"
+      href="https://pledge.wfmu.org/donate"
+      title="Support WFMU"
+      onclick={supportWfmu}
+    ><span class="d-full">♥ Support WFMU</span><span class="d-mini">♥ WFMU</span></a>
   </nav>
 
   <main>
@@ -518,6 +530,21 @@
   .nav-links a.active {
     background: var(--c-surface2);
     color: var(--c-accent);
+  }
+  .nav-donate {
+    margin-left: auto;
+    color: var(--c-gold);
+    padding: 4px 10px;
+    border-radius: 6px;
+    font-weight: 700;
+    white-space: nowrap;
+  }
+  .nav-donate:hover {
+    color: var(--c-line);
+    text-decoration: none;
+  }
+  .nav-donate .d-mini {
+    display: none;
   }
   main {
     flex: 1 1 auto;
@@ -920,7 +947,7 @@
       height: 26px;
     }
     .brand-name {
-      font-size: 13px;
+      display: none;
     }
     .brand-sub {
       display: none;
@@ -933,6 +960,13 @@
     }
     .nav-links a {
       padding: 3px 8px;
+    }
+    /* Shorten the donate label so the button holds through the mini range. */
+    .nav-donate .d-full {
+      display: none;
+    }
+    .nav-donate .d-mini {
+      display: inline;
     }
   }
   @media (max-width: 420px) {
@@ -948,11 +982,11 @@
       height: 24px;
     }
     .brand-name {
-      display: inline;
+      display: none;
       font-size: 12px;
     }
     .brand-sub {
-      display: inline;
+      display: none;
       font-size: 10px;
     }
     .nav-links {

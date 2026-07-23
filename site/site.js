@@ -32,9 +32,14 @@
         if (asset && link) link.href = asset.browser_download_url;
       });
       const note = document.querySelector("[data-release-note]");
-      if (note) note.textContent = `${release.tag_name} · Free community builds for Windows, macOS and Linux.`;
+      if (note) note.textContent = `${release.tag_name} · Early builds. Windows now; macOS and Linux in progress.`;
+      const sha = assets.find((item) => /SHA256SUMS/i.test(item.name));
+      const shaLink = document.querySelector("[data-sha256-link]");
+      if (sha && shaLink) shaLink.href = sha.browser_download_url;
     })
     .catch(() => {
       document.querySelectorAll("[data-asset]").forEach((link) => { link.href = releases; });
+      const shaLink = document.querySelector("[data-sha256-link]");
+      if (shaLink) shaLink.href = releases;
     });
 })();

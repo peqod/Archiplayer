@@ -1,6 +1,6 @@
 [package]
 name = "archiplayer"
-version = "0.2.0"
+version = "0.3.0"
 description = "Archiplayer — local-first WFMU archive browser and player"
 authors = ["archiplayer"]
 edition = "2021"
