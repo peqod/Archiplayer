@@ -10,6 +10,7 @@
   import { listen } from "@tauri-apps/api/event";
   import { openUrl } from "@tauri-apps/plugin-opener";
   import Icon from "$lib/Icon.svelte";
+  import { shareShow, shareEpisode, shareTrack, wfmuEpisodeUrl, wfmuShowUrl } from "$lib/share";
   import TrackRow from "$lib/TrackRow.svelte";
   import CatalogNav from "$lib/CatalogNav.svelte";
   import { centerEpisodeRow } from "$lib/episode-scroll";
@@ -310,6 +311,9 @@
       <button class="ghost fav" class:on={show.favourite} onclick={favShow}>
         <Icon name="star" filled={show.favourite} /> {show.favourite ? "Favourited" : "Favourite"}
       </button>
+      <button class="ghost share" onclick={() => show && shareShow(show)}>
+        <Icon name="share" /> Share
+      </button>
     </div>
   </div>
 
@@ -358,6 +362,7 @@
           <div class="ep-actions">
             <button class="mini" onclick={() => playFromHere(ep)} disabled={!ep.has_audio} title="Play from this episode onward"><Icon name="next" /></button>
             <button class="mini" class:on={ep.favourite} onclick={() => favEpisode(ep)} title="Save episode"><Icon name="save" filled={ep.favourite} /></button>
+            <button class="mini" onclick={() => shareEpisode(show?.name ?? "", ep)} title="Share episode"><Icon name="share" /></button>
             <button
               class="mini"
               class:on={ep.downloaded}
@@ -386,6 +391,13 @@
                   playable={ep.has_audio}
                   onplay={() => playTrack(ep, t)}
                   onfavourite={() => favTrack(ep, t)}
+                  onshare={() =>
+                    shareTrack(
+                      t,
+                      show?.name ?? "",
+                      ep.air_date,
+                      ep.archive_id != null ? wfmuEpisodeUrl(ep.archive_id) : wfmuShowUrl(ep.show_id),
+                    )}
                 />
               {/each}
             </div>
@@ -609,7 +621,8 @@
     opacity: 0.3;
     cursor: default;
   }
-  .ghost.fav {
+  .ghost.fav,
+  .ghost.share {
     display: inline-flex;
     align-items: center;
     gap: 6px;

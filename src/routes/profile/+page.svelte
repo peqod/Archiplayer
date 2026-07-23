@@ -14,6 +14,7 @@
   import { onMount } from "svelte";
   import ThemePicker from "$lib/ThemePicker.svelte";
   import Icon from "$lib/Icon.svelte";
+  import { shareShow, shareEpisode, shareTrack, wfmuShowUrl } from "$lib/share";
 
   let favs = $state<Favourites | null>(null);
   let stats = $state<Stats | null>(null);
@@ -255,7 +256,10 @@
           <div class="fav">
             <a href={"/show/" + f.show.id}>{f.show.name}</a>
             {#if f.show.dj}<span class="muted">with {f.show.dj}</span>{/if}
-            <button class="mini" onclick={() => unfav("show", f.show.id)} title="Remove"><Icon name="star" filled /></button>
+            <div class="fav-actions">
+              <button class="mini share" onclick={() => shareShow(f.show)} title="Share"><Icon name="share" /></button>
+              <button class="mini" onclick={() => unfav("show", f.show.id)} title="Remove"><Icon name="star" filled /></button>
+            </div>
           </div>
         {:else}
           <p class="muted">None yet — hover a show and hit the star.</p>
@@ -274,7 +278,10 @@
             ><Icon name="play" /></button>
             <span>{f.show_name} — {f.episode.air_date ?? ""}</span>
             {#if f.episode.title}<span class="muted ellip">{f.episode.title}</span>{/if}
-            <button class="mini" onclick={() => unfav("episode", String(f.episode.id))} title="Remove"><Icon name="star" filled /></button>
+            <div class="fav-actions">
+              <button class="mini share" onclick={() => shareEpisode(f.show_name, f.episode)} title="Share"><Icon name="share" /></button>
+              <button class="mini" onclick={() => unfav("episode", String(f.episode.id))} title="Remove"><Icon name="star" filled /></button>
+            </div>
           </div>
         {:else}
           <p class="muted">None yet.</p>
@@ -294,7 +301,10 @@
               <b>{f.track.artist ?? "?"}</b> — {f.track.title ?? "?"}
             </span>
             <span class="muted">{f.show_name} · {f.air_date ?? ""}</span>
-            <button class="mini" onclick={() => unfav("track", String(f.track.id))} title="Remove"><Icon name="star" filled /></button>
+            <div class="fav-actions">
+              <button class="mini share" onclick={() => shareTrack(f.track, f.show_name, f.air_date, wfmuShowUrl(f.show_id))} title="Share"><Icon name="share" /></button>
+              <button class="mini" onclick={() => unfav("track", String(f.track.id))} title="Remove"><Icon name="star" filled /></button>
+            </div>
           </div>
         {:else}
           <p class="muted">None yet — favourite songs from a playlist.</p>
@@ -552,8 +562,12 @@
     margin-bottom: 4px;
     font-size: 14px;
   }
-  .fav .mini {
+  .fav-actions {
     margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex: 0 0 auto;
   }
   .mini {
     background: none;
@@ -561,9 +575,17 @@
     color: var(--c-gold);
     cursor: pointer;
     font-size: 15px;
+    display: inline-flex;
+    align-items: center;
   }
   .mini:hover {
     color: var(--c-danger);
+  }
+  .mini.share {
+    color: var(--c-dim);
+  }
+  .mini.share:hover {
+    color: var(--c-accent);
   }
   .linkish {
     background: var(--c-surface2);

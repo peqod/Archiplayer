@@ -10,6 +10,7 @@
     timeLabel = null,
     onplay,
     onfavourite,
+    onshare,
   }: {
     track: Track;
     current?: boolean;
@@ -18,6 +19,7 @@
     timeLabel?: string | null;
     onplay?: () => void;
     onfavourite: () => void;
+    onshare?: () => void;
   } = $props();
 </script>
 
@@ -37,18 +39,23 @@
   <span class="tartist ellipsis">{track.artist ?? ""}</span>
   <span class="ttitle ellipsis">{track.title ?? ""}</span>
   <span class="talbum ellipsis">{track.album ?? ""}</span>
-  <button
-    class="mini"
-    class:on={track.favourite}
-    onclick={onfavourite}
-    title="Star song"
-  ><Icon name="star" filled={track.favourite} /></button>
+  <div class="tactions">
+    <button
+      class="mini"
+      class:on={track.favourite}
+      onclick={onfavourite}
+      title="Star song"
+    ><Icon name="star" filled={track.favourite} /></button>
+    {#if onshare}
+      <button class="mini" onclick={onshare} title="Share song"><Icon name="share" /></button>
+    {/if}
+  </div>
 </div>
 
 <style>
   .track {
     display: grid;
-    grid-template-columns: 30px 56px minmax(100px, 220px) minmax(120px, 1fr) minmax(80px, 220px) 30px;
+    grid-template-columns: 30px 56px minmax(100px, 220px) minmax(120px, 1fr) minmax(80px, 220px) auto;
     align-items: center;
     gap: 8px;
     padding: 3px 6px;
@@ -93,6 +100,12 @@
     color: var(--c-dim);
     text-align: right;
   }
+  .tactions {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    justify-self: end;
+  }
   .mini {
     background: none;
     border: none;
@@ -114,11 +127,11 @@
 
   @media (max-width: 760px) {
     .track {
-      grid-template-columns: 28px 50px minmax(0, 1fr) 28px;
+      grid-template-columns: 28px 50px minmax(0, 1fr) auto;
       grid-template-areas:
-        "play time artist favourite"
-        "play time title favourite"
-        "play time album favourite";
+        "play time artist actions"
+        "play time title actions"
+        "play time album actions";
       column-gap: 6px;
       row-gap: 1px;
       padding: 5px 2px;
@@ -143,10 +156,13 @@
       text-align: left;
       font-size: 12px;
     }
-    .mini {
-      grid-area: favourite;
+    .tactions {
+      grid-area: actions;
       align-self: center;
-      justify-self: end;
+      flex-direction: column;
+      gap: 0;
+    }
+    .mini {
       padding: 4px;
     }
   }

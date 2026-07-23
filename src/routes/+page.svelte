@@ -6,6 +6,7 @@
   import { onMount } from "svelte";
   import Icon from "$lib/Icon.svelte";
   import { selectRandomPlayback } from "$lib/random-show";
+  import { shareShow } from "$lib/share";
 
   let shows = $state<Show[]>([]);
   let loading = $state(true);
@@ -179,6 +180,12 @@
     }
   }
 
+  function share(show: Show, e: MouseEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    shareShow(show);
+  }
+
   async function playTrackHit(hit: TrackHit) {
     try {
       const detail = await api.getShow(hit.show_id);
@@ -307,6 +314,9 @@
         </button>
         <button class="rbtn star" class:on={show.favourite} onclick={(e) => toggleFav(show, e)} title="Favourite">
           <Icon name="star" filled={show.favourite} />
+        </button>
+        <button class="rbtn share" onclick={(e) => share(show, e)} title="Share">
+          <Icon name="share" />
         </button>
       </div>
     </div>
@@ -627,6 +637,10 @@
   }
   .rbtn.star.on {
     color: var(--c-gold);
+  }
+  .rbtn.share {
+    display: inline-flex;
+    align-items: center;
   }
   .rbtn:hover {
     filter: brightness(1.1);

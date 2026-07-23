@@ -8,6 +8,7 @@
   import { selectRandomPlayback } from "$lib/random-show";
   import { theme } from "$lib/theme.svelte";
   import Icon from "$lib/Icon.svelte";
+  import Toast from "$lib/Toast.svelte";
   import { page } from "$app/stores";
   import { goto } from "$app/navigation";
   import { tick } from "svelte";
@@ -412,6 +413,7 @@
     {@render children()}
   </main>
   {#if favError}<button class="fav-error" onclick={() => (favError = null)}>{favError} ✕</button>{/if}
+  <Toast />
 </div>
 
 <style>
