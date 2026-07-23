@@ -47,7 +47,7 @@ Download the matching file from the [latest release](../../releases/latest).
 ## Build from source
 
 > [!NOTE]
-> Source-build steps are documented for Windows today; macOS and Linux are in progress (tracked in issue [#1](https://github.com/peqod/Archiplayer/issues/1)).
+> Published releases (Windows, macOS, Linux) are built from this source in CI. The detailed local walkthrough below is Windows-first; macOS and Linux build with the standard Tauri toolchain, with a step-by-step guide tracked in issue [#1](https://github.com/peqod/Archiplayer/issues/1).
 
 You need [Node.js 20 or newer](https://nodejs.org/), npm, [Rust via rustup](https://rustup.rs/), and Git.
 
@@ -71,7 +71,7 @@ npm ci
 
 ### macOS and Linux
 
-Build-from-source steps for macOS (universal `.dmg`) and Linux (AppImage / deb) are in progress, tracked in issue [#1](https://github.com/peqod/Archiplayer/issues/1) ([PRD](docs/prd/cross-platform-build-instructions.md)). The Download table above still applies to published releases.
+Published releases include macOS (universal `.dmg`) and Linux (AppImage / deb), built in CI with the standard Tauri toolchain. A detailed local build walkthrough for macOS and Linux is tracked in issue [#1](https://github.com/peqod/Archiplayer/issues/1) ([PRD](docs/prd/cross-platform-build-instructions.md)).
 
 ## Develop and test
 
