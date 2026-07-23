@@ -6,7 +6,11 @@ use std::sync::OnceLock;
 use std::time::{Duration, Instant};
 
 pub const BASE: &str = "https://wfmu.org";
-const USER_AGENT: &str = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36 ArchiveBunker2/0.1";
+const USER_AGENT: &str = concat!(
+    "Archiplayer/",
+    env!("CARGO_PKG_VERSION"),
+    " (+https://github.com/peqod/Archiplayer)"
+);
 const MIN_REQUEST_GAP: Duration = Duration::from_millis(1000);
 const MIN_STATUS_REQUEST_GAP: Duration = Duration::from_millis(250);
 const MIN_LIVE_PAGE_REQUEST_GAP: Duration = Duration::from_millis(250);
