@@ -1,4 +1,5 @@
-# Loads the MSVC linker and Windows SDK environment for Rust/Tauri.
+# Selects the Rust MSVC toolchain and loads the MSVC linker and Windows SDK
+# environment for Rust/Tauri.
 # Dot-source this file so the variables remain in the current shell:
 #   . .\build-env.ps1
 
@@ -7,6 +8,19 @@ $ErrorActionPreference = "Stop"
 if ($env:OS -ne "Windows_NT") {
   throw "build-env.ps1 is only needed on Windows."
 }
+
+$rustToolchain = "stable-x86_64-pc-windows-msvc"
+if (-not (Get-Command rustup -ErrorAction SilentlyContinue)) {
+  throw "rustup was not found. Install Rust from https://rustup.rs/."
+}
+$installedToolchains = & rustup toolchain list
+if ($LASTEXITCODE -ne 0) {
+  throw "Could not read the installed Rust toolchains."
+}
+if (-not ($installedToolchains | Where-Object { $_ -match "^$([regex]::Escape($rustToolchain))(\s|$)" })) {
+  throw "The Rust MSVC toolchain is not installed. Run 'rustup toolchain install $rustToolchain'."
+}
+$env:RUSTUP_TOOLCHAIN = $rustToolchain
 
 $vswhere = Join-Path ${env:ProgramFiles(x86)} "Microsoft Visual Studio\Installer\vswhere.exe"
 if (-not (Test-Path -LiteralPath $vswhere)) {
@@ -86,4 +100,4 @@ $env:LIB = @(
 $msvcBin = Join-Path $msvc.FullName "bin\HostX64\x64"
 $env:PATH = "$msvcBin;$sdkBin;$env:PATH"
 
-Write-Host "MSVC $($msvc.Name) + Windows SDK $sdkVersion environment loaded (x64)."
+Write-Host "Rust $rustToolchain + MSVC $($msvc.Name) + Windows SDK $sdkVersion environment loaded (x64)."

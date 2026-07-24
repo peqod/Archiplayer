@@ -11,6 +11,15 @@ use std::time::Duration;
 use tauri::{AppHandle, Manager, State};
 
 type CmdResult<T> = Result<T, String>;
+type ListenExportRow = (
+    String,
+    String,
+    Option<String>,
+    Option<String>,
+    i64,
+    i64,
+    i64,
+);
 const LIVE_PLAYLIST_REFRESH_SECONDS: i64 = 30;
 
 fn db_err(e: rusqlite::Error) -> String {
@@ -1288,15 +1297,7 @@ pub fn export_csv(kind: String, dest: String, state: State<'_, AppState>) -> Cmd
                          ORDER BY l.started_at",
                     )
                     .map_err(db_err)?;
-                let items: Vec<(
-                    String,
-                    String,
-                    Option<String>,
-                    Option<String>,
-                    i64,
-                    i64,
-                    i64,
-                )> = stmt
+                let items: Vec<ListenExportRow> = stmt
                     .query_map([], |r| {
                         Ok((
                             r.get(0)?,

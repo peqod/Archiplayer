@@ -198,9 +198,8 @@ impl Db {
         for (table, column, sql) in migrations {
             let exists = {
                 let mut stmt = tx.prepare(&format!("PRAGMA table_info({table})"))?;
-                let columns = stmt.query_map([], |row| row.get::<_, String>(1))?;
-                let found = columns.filter_map(Result::ok).any(|name| name == column);
-                found
+                let mut columns = stmt.query_map([], |row| row.get::<_, String>(1))?;
+                columns.any(|name| name.is_ok_and(|name| name == column))
             };
             if !exists {
                 tx.execute(sql, [])?;
@@ -1053,7 +1052,7 @@ mod tests {
             played_at: 1_752_500_000,
             air_date: "2026-07-14".into(),
         };
-        db.sync_provider_tracks(-10, "wfmugtd", &[provider.clone()])
+        db.sync_provider_tracks(-10, "wfmugtd", std::slice::from_ref(&provider))
             .unwrap();
         db.sync_provider_tracks(-10, "wfmugtd", &[provider])
             .unwrap();

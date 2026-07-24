@@ -188,6 +188,12 @@ pub struct Fetcher {
     last_live_page_request: tokio::sync::Mutex<Option<Instant>>,
 }
 
+impl Default for Fetcher {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Fetcher {
     pub fn new() -> Self {
         let client_builder = || {

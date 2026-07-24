@@ -20,11 +20,13 @@ jobs:
           - platform: macos-latest
             args: --target universal-apple-darwin --bundles dmg
     runs-on: ${{ matrix.platform }}
+    env:
+      RUSTUP_TOOLCHAIN: ${{ matrix.platform == 'windows-latest' && 'stable-x86_64-pc-windows-msvc' || 'stable' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
       - uses: dtolnay/rust-toolchain@stable
         with:

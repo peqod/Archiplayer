@@ -12,7 +12,7 @@ Standard operating procedure for cutting a release. Releases are driven by **pus
 ## Prerequisites
 
 - Windows with **PowerShell 7** (`pwsh`).
-- **Node 20** and **Rust stable** (matches CI).
+- **Node 22** and **Rust stable** (matches CI).
 - **GitHub CLI** authenticated with push rights: `gh auth login`, verify `gh auth status`.
 - A clean `main` that is level with `origin/main`.
 - Visual Studio Build Tools (Desktop C++) + a Windows SDK are only needed for the optional local smoke build, not for the release itself.
@@ -115,7 +115,7 @@ This loads the MSVC/SDK environment and copies an unsigned `Archiplayer_<version
 
 ## Reproducibility — honest
 
-The bundles are **not** byte-for-byte reproducible: NSIS, `.dmg`, and `.AppImage` embed build timestamps and packaging metadata, so two builds of the same commit differ in bytes. Reproducibility here means a **repeatable process** with pinned inputs — `package-lock.json`, `Cargo.lock` (`--locked` in CI), Node 20, Rust stable, and pinned action/toolchain versions. Builds are functionally equivalent, not bit-identical. Byte-identical reproducibility would require code signing removal, deterministic packagers, and pinned SDKs, which are out of scope.
+The bundles are **not** byte-for-byte reproducible: NSIS, `.dmg`, and `.AppImage` embed build timestamps and packaging metadata, so two builds of the same commit differ in bytes. Reproducibility here means a **repeatable process** with pinned inputs — `package-lock.json`, `Cargo.lock` (`--locked` in CI), Node 22, Rust stable, and pinned action/toolchain versions. Builds are functionally equivalent, not bit-identical. Byte-identical reproducibility would require code signing removal, deterministic packagers, and pinned SDKs, which are out of scope.
 
 ## Optional: pruning old releases
 
