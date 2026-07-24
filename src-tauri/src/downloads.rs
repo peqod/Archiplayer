@@ -17,19 +17,72 @@ fn emit(app: &AppHandle, p: &DownloadProgress) {
     let _ = app.emit("download-progress", p);
 }
 
-/// "Show - Air date - Title", using the episode id when there's no air date so distinct
-/// episodes can't collide on one filename.
+/// Cleans up a half-finished download on any early return: removes the `.part` file and
+/// flips the row out of `downloading` to `error`, then emits an error event. `disarm()` is
+/// called only after the file is renamed into place and the row is marked `done`, so a
+/// successful download skips all of this. Because it runs from `Drop`, every failure path
+/// (create, write, flush, rename, and the final DB write) is covered by one mechanism.
+struct DownloadGuard<'a> {
+    state: &'a AppState,
+    app: AppHandle,
+    episode_id: i64,
+    tmp: std::path::PathBuf,
+    dest_str: String,
+    total: i64,
+    bytes: i64,
+    armed: bool,
+}
+
+impl DownloadGuard<'_> {
+    fn set_bytes(&mut self, bytes: i64) {
+        self.bytes = bytes;
+    }
+
+    fn disarm(&mut self) {
+        self.armed = false;
+    }
+}
+
+impl Drop for DownloadGuard<'_> {
+    fn drop(&mut self) {
+        if !self.armed {
+            return;
+        }
+        let _ = std::fs::remove_file(&self.tmp);
+        if let Ok(db) = self.state.db() {
+            let _ = db.upsert_download(
+                self.episode_id,
+                &self.dest_str,
+                self.bytes,
+                self.total,
+                "error",
+            );
+        }
+        emit(
+            &self.app,
+            &DownloadProgress {
+                episode_id: self.episode_id,
+                bytes: self.bytes,
+                total: self.total,
+                status: "error".into(),
+                error: Some("download did not complete".into()),
+            },
+        );
+    }
+}
+
+/// "Show - Air date - Title - Episode id". The id is always present so two episodes with
+/// matching metadata cannot collide on one filename.
 fn build_name(show: &str, air: Option<&str>, title: Option<&str>, episode_id: i64) -> String {
     let mut s = show.trim().to_string();
     if s.is_empty() {
-        s = format!("Episode {episode_id}");
+        s = "Episode".to_string();
     }
-    match air {
-        Some(a) if !a.trim().is_empty() => {
+    if let Some(a) = air {
+        if !a.trim().is_empty() {
             s.push_str(" - ");
             s.push_str(a.trim());
         }
-        _ => s.push_str(&format!(" - {episode_id}")),
     }
     if let Some(t) = title {
         if !t.trim().is_empty() {
@@ -37,6 +90,7 @@ fn build_name(show: &str, air: Option<&str>, title: Option<&str>, episode_id: i6
             s.push_str(t.trim());
         }
     }
+    s.push_str(&format!(" - {episode_id}"));
     s
 }
 
@@ -111,7 +165,7 @@ async fn download_episode_inner(
     tokio::fs::create_dir_all(&dir)
         .await
         .map_err(|e| format!("mkdir failed: {e}"))?;
-    // Meaningful filename: "Show - Air date - Title.mp3" (sanitised), falling back to the id.
+    // Meaningful filename: "Show - Air date - Title - Episode id.mp3" (sanitised).
     let filename = {
         let parts = state.db()?.episode_filename_parts(episode_id).ok();
         match parts {
@@ -124,23 +178,27 @@ async fn download_episode_inner(
             None => episode_id.to_string(),
         }
     };
-    let extension = reqwest::Url::parse(&source.url)
-        .ok()
-        .and_then(|url| {
-            std::path::Path::new(url.path())
-                .extension()
-                .and_then(|ext| ext.to_str())
-                .map(str::to_ascii_lowercase)
-        })
+    // Cached and freshly scraped URLs both pass through the same strict validation immediately
+    // before the backend fetch. The audio-only client applies it again to every redirect.
+    let audio_url = crate::wfmu::validate_audio_url(&source.url)?;
+    let extension = std::path::Path::new(audio_url.path())
+        .extension()
+        .and_then(|ext| ext.to_str())
+        .map(str::to_ascii_lowercase)
         .filter(|ext| matches!(ext.as_str(), "mp3" | "mp4" | "m4a" | "aac"))
         .unwrap_or_else(|| "mp3".to_string());
     let dest = dir.join(format!("{filename}.{extension}"));
     let dest_str = dest.to_string_lossy().to_string();
+    match tokio::fs::try_exists(&dest).await {
+        Ok(true) => return Err(format!("download destination already exists: {dest_str}")),
+        Ok(false) => {}
+        Err(error) => return Err(format!("could not inspect download destination: {error}")),
+    }
 
     let resp = state
         .fetcher
-        .client()
-        .get(&source.url)
+        .audio_client()
+        .get(audio_url)
         .send()
         .await
         .map_err(|e| format!("download request failed: {e}"))?;
@@ -148,48 +206,42 @@ async fn download_episode_inner(
         return Err(format!("HTTP {} downloading audio", resp.status()));
     }
     let total = resp.content_length().unwrap_or(0) as i64;
+    let tmp = dir.join(format!("{episode_id}.part"));
+    // `create_new` refuses to clobber a stale/concurrent partial file. Construct the guard only
+    // after this succeeds so a failed reservation never deletes a file owned by another process.
+    let mut file = tokio::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&tmp)
+        .await
+        .map_err(|e| format!("reserve partial download failed: {e}"))?;
+    // From here on, any early return cleans up the partial via the guard's Drop.
+    let mut guard = DownloadGuard {
+        state: &state,
+        app: app.clone(),
+        episode_id,
+        tmp: tmp.clone(),
+        dest_str: dest_str.clone(),
+        total,
+        bytes: 0,
+        armed: true,
+    };
     {
         let db = state.db()?;
         db.upsert_download(episode_id, &dest_str, 0, total, "downloading")
             .map_err(|e| e.to_string())?;
     }
-
-    let tmp = dir.join(format!("{episode_id}.part"));
-    let mut file = tokio::fs::File::create(&tmp)
-        .await
-        .map_err(|e| format!("create file failed: {e}"))?;
     let mut stream = resp.bytes_stream();
     let mut bytes: i64 = 0;
     let mut last_emit = std::time::Instant::now();
 
     while let Some(chunk) = stream.next().await {
-        let chunk = match chunk {
-            Ok(c) => c,
-            Err(e) => {
-                let msg = format!("download interrupted: {e}");
-                {
-                    if let Ok(db) = state.db() {
-                        let _ = db.upsert_download(episode_id, &dest_str, bytes, total, "error");
-                    }
-                }
-                emit(
-                    &app,
-                    &DownloadProgress {
-                        episode_id,
-                        bytes,
-                        total,
-                        status: "error".into(),
-                        error: Some(msg.clone()),
-                    },
-                );
-                let _ = tokio::fs::remove_file(&tmp).await;
-                return Err(msg);
-            }
-        };
+        let chunk = chunk.map_err(|e| format!("download interrupted: {e}"))?;
         file.write_all(&chunk)
             .await
             .map_err(|e| format!("write failed: {e}"))?;
         bytes += chunk.len() as i64;
+        guard.set_bytes(bytes);
         if last_emit.elapsed().as_millis() > 300 {
             last_emit = std::time::Instant::now();
             {
@@ -211,6 +263,15 @@ async fn download_episode_inner(
     }
     file.flush().await.map_err(|e| e.to_string())?;
     drop(file);
+    match tokio::fs::try_exists(&dest).await {
+        Ok(true) => {
+            return Err(format!(
+                "download destination appeared during transfer: {dest_str}"
+            ))
+        }
+        Ok(false) => {}
+        Err(error) => return Err(format!("could not inspect download destination: {error}")),
+    }
     tokio::fs::rename(&tmp, &dest)
         .await
         .map_err(|e| format!("finalize failed: {e}"))?;
@@ -220,6 +281,8 @@ async fn download_episode_inner(
         db.upsert_download(episode_id, &dest_str, bytes, bytes.max(total), "done")
             .map_err(|e| e.to_string())?;
     }
+    // File is renamed into place and the row is marked done: no cleanup needed.
+    guard.disarm();
     emit(
         &app,
         &DownloadProgress {
@@ -240,7 +303,11 @@ mod tests {
     #[test]
     fn download_names_are_portable_and_distinct() {
         assert_eq!(sanitize_filename("Show: A/B?"), "Show- A-B-");
-        assert!(build_name("Show", None, None, 42).contains("42"));
+        assert_eq!(
+            build_name("Show", Some("July 24, 2026"), Some("Title"), 42),
+            "Show - July 24, 2026 - Title - 42"
+        );
+        assert_eq!(build_name("Show", None, None, 42), "Show - 42");
         assert!(sanitize_filename("...   ").starts_with("download"));
     }
 }

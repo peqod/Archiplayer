@@ -3,7 +3,10 @@ use crate::wfmu;
 use crate::AppState;
 use rusqlite::params;
 use serde::Serialize;
+use std::borrow::Cow;
 use std::collections::{BTreeMap, HashSet};
+use std::io::Write;
+use std::path::{Path, PathBuf};
 use std::time::Duration;
 use tauri::{AppHandle, Manager, State};
 
@@ -250,6 +253,9 @@ pub async fn get_live_status(
     let episode_id = status
         .episode_id
         .unwrap_or_else(|| synthetic_live_episode_id(&stream_id, now));
+    // A None show_id means the program didn't map to a real archived show, so we mint a
+    // synthetic live-* row. Only those get flagged is_live; a real show must stay in the catalog.
+    let synthetic_show = status.show_id.is_none();
     let show_id = status
         .show_id
         .clone()
@@ -273,6 +279,9 @@ pub async fn get_live_status(
     let mut db = state.db()?;
     db.upsert_show(&show_id, &show_name, None, true)
         .map_err(db_err)?;
+    if synthetic_show {
+        db.set_show_live(&show_id).map_err(db_err)?;
+    }
     db.upsert_episode(
         episode_id,
         &show_id,
@@ -360,6 +369,7 @@ pub async fn get_live_page(
         let mut db = state.db()?;
         db.upsert_show(&live_show_id, station.name, None, true)
             .map_err(db_err)?;
+        db.set_show_live(&live_show_id).map_err(db_err)?;
         for (episode_id, (date, tracks)) in grouped {
             db.upsert_episode(
                 episode_id,
@@ -576,11 +586,15 @@ pub async fn resolve_audio(episode_id: i64, state: State<'_, AppState>) -> CmdRe
             }
         }
     }
-    if let Some(url) = ep.audio_url.clone() {
+    if let Some(url) = ep
+        .audio_url
+        .as_deref()
+        .and_then(|url| wfmu::validate_audio_url(url).ok())
+    {
         // Backfill the offset for episodes resolved before it was tracked.
         let offset_sec = ensure_offset(&state, &ep).await;
         return Ok(AudioSource {
-            url,
+            url: url.into(),
             local: false,
             offset_sec,
         });
@@ -627,6 +641,7 @@ pub async fn resolve_audio(episode_id: i64, state: State<'_, AppState>) -> CmdRe
             wfmu::parse_m3u(&body).ok_or("could not resolve an audio URL for this episode")?
         }
     };
+    let url = wfmu::validate_audio_url(&url)?.to_string();
     {
         let db = state.db()?;
         db.set_audio_url(episode_id, &url).map_err(db_err)?;
@@ -840,7 +855,7 @@ pub fn search(query: String, state: State<'_, AppState>) -> CmdResult<SearchResu
          JOIN tracks t ON t.id = CAST(ft.track_id AS INTEGER)
          JOIN episodes e ON e.id = t.episode_id
          JOIN shows s ON s.id = e.show_id
-         WHERE tracks_fts MATCH ?1 LIMIT 200"
+         WHERE tracks_fts MATCH ?1 AND s.is_live = 0 LIMIT 200"
     } else {
         "SELECT t.id, t.episode_id, t.seq, t.artist, t.title, t.album, t.label, t.comments, t.start_sec,
                 t.source_id, t.played_at,
@@ -849,7 +864,7 @@ pub fn search(query: String, state: State<'_, AppState>) -> CmdResult<SearchResu
          FROM tracks t
          JOIN episodes e ON e.id = t.episode_id
          JOIN shows s ON s.id = e.show_id
-         WHERE t.artist LIKE ?1 OR t.title LIKE ?1 OR t.album LIKE ?1 LIMIT 200"
+         WHERE (t.artist LIKE ?1 OR t.title LIKE ?1 OR t.album LIKE ?1) AND s.is_live = 0 LIMIT 200"
     };
     let param: String = if db.fts {
         // FTS5 query syntax: quote each term to avoid operator injection.
@@ -933,7 +948,16 @@ pub fn get_download_dir(app: AppHandle, state: State<'_, AppState>) -> CmdResult
 }
 
 #[tauri::command]
-pub fn set_download_dir(dir: String, state: State<'_, AppState>) -> CmdResult<()> {
+pub fn set_download_dir(dir: String, app: AppHandle, state: State<'_, AppState>) -> CmdResult<()> {
+    // Persist the choice, and grant the asset protocol access to it now. The dialog's
+    // temporary scope grant is not persisted across restarts, so downloads under a custom
+    // folder would otherwise stop playing after a relaunch (the startup grant in run() covers
+    // subsequent launches). Granting the default $APPDATA/downloads dir again is harmless.
+    if !dir.trim().is_empty() {
+        app.asset_protocol_scope()
+            .allow_directory(&dir, true)
+            .map_err(|e| format!("could not grant folder access: {e}"))?;
+    }
     state
         .db()?
         .set_setting("download_dir", &dir)
@@ -1083,10 +1107,17 @@ pub fn list_downloads(state: State<'_, AppState>) -> CmdResult<Vec<DownloadRow>>
 
 #[tauri::command]
 pub fn delete_download(episode_id: i64, state: State<'_, AppState>) -> CmdResult<()> {
-    let path = state.db()?.remove_download(episode_id).map_err(db_err)?;
+    // Delete the file first; only drop the bookkeeping row once the file is actually gone.
+    // Otherwise a locked/inaccessible file becomes an unmanaged orphan.
+    let path = state.db()?.download_path(episode_id).map_err(db_err)?;
     if let Some(p) = path {
-        let _ = std::fs::remove_file(p);
+        match std::fs::remove_file(&p) {
+            Ok(()) => {}
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {} // already gone
+            Err(e) => return Err(format!("could not delete file: {e}")),
+        }
     }
+    state.db()?.remove_download(episode_id).map_err(db_err)?;
     Ok(())
 }
 
@@ -1108,153 +1139,258 @@ fn ts_to_iso(ts: i64) -> String {
     format!("{y:04}-{mo:02}-{d:02} {h:02}:{m:02}:{s:02}")
 }
 
+fn neutralize_csv_cell(value: &str) -> Cow<'_, str> {
+    let formula = value
+        .as_bytes()
+        .first()
+        .is_some_and(|first| matches!(*first, b'=' | b'+' | b'-' | b'@'));
+    if formula {
+        Cow::Owned(format!("'{value}"))
+    } else {
+        Cow::Borrowed(value)
+    }
+}
+
+fn write_csv_record<W: Write>(
+    writer: &mut csv::Writer<W>,
+    record: &[&str],
+) -> Result<(), csv::Error> {
+    let cells: Vec<_> = record
+        .iter()
+        .map(|value| neutralize_csv_cell(value))
+        .collect();
+    writer.write_record(cells.iter().map(|cell| cell.as_bytes()))
+}
+
+fn create_csv_temp(dest: &Path) -> CmdResult<(PathBuf, std::fs::File)> {
+    let parent = dest
+        .parent()
+        .filter(|path| !path.as_os_str().is_empty())
+        .unwrap_or_else(|| Path::new("."));
+    let filename = dest
+        .file_name()
+        .ok_or("CSV destination must name a file")?
+        .to_string_lossy();
+    for attempt in 0..100 {
+        let path = parent.join(format!(
+            ".{filename}.{}.{}.tmp",
+            std::process::id(),
+            attempt
+        ));
+        match std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&path)
+        {
+            Ok(file) => return Ok((path, file)),
+            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => continue,
+            Err(error) => return Err(format!("CSV temp file failed: {error}")),
+        }
+    }
+    Err("could not reserve a CSV temp file".into())
+}
+
 #[tauri::command]
 pub fn export_csv(kind: String, dest: String, state: State<'_, AppState>) -> CmdResult<String> {
-    let db = state.db()?;
-    let mut wtr = csv::Writer::from_path(&dest).map_err(|e| format!("csv open failed: {e}"))?;
-    let mut rows = 0usize;
-    match kind.as_str() {
-        "favourites" => {
-            wtr.write_record(["kind", "name", "detail", "show", "date_added"])
-                .map_err(|e| e.to_string())?;
-            let mut stmt = db
-                .conn
-                .prepare(
-                    "SELECT f.kind, f.ref_id, f.added_at FROM favourites f ORDER BY f.added_at",
-                )
-                .map_err(db_err)?;
-            let favs: Vec<(String, String, i64)> = stmt
-                .query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))
-                .map_err(db_err)?
-                .filter_map(|r| r.ok())
-                .collect();
-            for (kind, ref_id, added_at) in favs {
-                let (name, detail, show) = match kind.as_str() {
-                    "show" => {
-                        let r: Result<(String, Option<String>), _> = db.conn.query_row(
-                            "SELECT name, dj FROM shows WHERE id=?1",
-                            [&ref_id],
-                            |r| Ok((r.get(0)?, r.get(1)?)),
-                        );
-                        match r {
-                            Ok((n, dj)) => (n, dj.unwrap_or_default(), String::new()),
-                            Err(_) => (ref_id.clone(), String::new(), String::new()),
-                        }
-                    }
-                    "episode" => {
-                        let r: Result<(Option<String>, Option<String>, String), _> = db.conn.query_row(
-                            "SELECT e.title, e.air_date, s.name FROM episodes e JOIN shows s ON s.id=e.show_id WHERE e.id=?1",
-                            [&ref_id],
-                            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
-                        );
-                        match r {
-                            Ok((t, d, s)) => (t.unwrap_or_default(), d.unwrap_or_default(), s),
-                            Err(_) => (ref_id.clone(), String::new(), String::new()),
-                        }
-                    }
-                    _ => {
-                        let r: Result<(Option<String>, Option<String>, String), _> = db.conn.query_row(
-                            "SELECT t.artist, t.title, s.name FROM tracks t JOIN episodes e ON e.id=t.episode_id JOIN shows s ON s.id=e.show_id WHERE t.id=?1",
-                            [&ref_id],
-                            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
-                        );
-                        match r {
-                            Ok((a, t, s)) => (t.unwrap_or_default(), a.unwrap_or_default(), s),
-                            Err(_) => (ref_id.clone(), String::new(), String::new()),
-                        }
-                    }
-                };
-                wtr.write_record([&kind, &name, &detail, &show, &ts_to_iso(added_at)])
-                    .map_err(|e| e.to_string())?;
-                rows += 1;
-            }
-        }
-        "listens" => {
-            wtr.write_record([
-                "session",
-                "show",
-                "episode_date",
-                "episode_title",
-                "started_at",
-                "seconds",
-                "completed",
-            ])
-            .map_err(|e| e.to_string())?;
-            let mut stmt = db
-                .conn
-                .prepare(
-                    "SELECT l.id, s.name, e.air_date, e.title, l.started_at, l.seconds, l.completed
-                 FROM listens l JOIN episodes e ON e.id=l.episode_id JOIN shows s ON s.id=e.show_id
-                 ORDER BY l.started_at",
-                )
-                .map_err(db_err)?;
-            let items: Vec<(
-                String,
-                String,
-                Option<String>,
-                Option<String>,
-                i64,
-                i64,
-                i64,
-            )> = stmt
-                .query_map([], |r| {
-                    Ok((
-                        r.get(0)?,
-                        r.get(1)?,
-                        r.get(2)?,
-                        r.get(3)?,
-                        r.get(4)?,
-                        r.get(5)?,
-                        r.get(6)?,
-                    ))
-                })
-                .map_err(db_err)?
-                .filter_map(|r| r.ok())
-                .collect();
-            for (id, show, date, title, started, secs, done) in items {
-                wtr.write_record([
-                    &id,
-                    &show,
-                    &date.unwrap_or_default(),
-                    &title.unwrap_or_default(),
-                    &ts_to_iso(started),
-                    &secs.to_string(),
-                    &(done != 0).to_string(),
-                ])
-                .map_err(|e| e.to_string())?;
-                rows += 1;
-            }
-        }
-        "stats" => {
-            wtr.write_record(["rank", "show", "seconds_listened", "hours", "plays"])
-                .map_err(|e| e.to_string())?;
-            let mut stmt = db
-                .conn
-                .prepare(
-                    "SELECT s.name, SUM(l.seconds), COUNT(l.id)
-                 FROM listens l JOIN episodes e ON e.id=l.episode_id JOIN shows s ON s.id=e.show_id
-                 GROUP BY s.id ORDER BY SUM(l.seconds) DESC",
-                )
-                .map_err(db_err)?;
-            let items: Vec<(String, i64, i64)> = stmt
-                .query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))
-                .map_err(db_err)?
-                .filter_map(|r| r.ok())
-                .collect();
-            for (i, (show, secs, plays)) in items.iter().enumerate() {
-                wtr.write_record([
-                    &(i + 1).to_string(),
-                    show,
-                    &secs.to_string(),
-                    &format!("{:.2}", *secs as f64 / 3600.0),
-                    &plays.to_string(),
-                ])
-                .map_err(|e| e.to_string())?;
-                rows += 1;
-            }
-        }
-        other => return Err(format!("unknown export kind: {other}")),
+    // Reject an invalid kind before opening anything: the previous implementation truncated
+    // the user's chosen destination and only then discovered an unsupported export kind.
+    if !matches!(kind.as_str(), "favourites" | "listens" | "stats") {
+        return Err(format!("unknown export kind: {kind}"));
     }
-    wtr.flush().map_err(|e| e.to_string())?;
+
+    let dest_path = PathBuf::from(&dest);
+    let (temp_path, temp_file) = create_csv_temp(&dest_path)?;
+    let result = (|| -> CmdResult<usize> {
+        let db = state.db()?;
+        let mut writer = csv::Writer::from_writer(temp_file);
+        let mut rows = 0usize;
+        match kind.as_str() {
+            "favourites" => {
+                write_csv_record(
+                    &mut writer,
+                    &["kind", "name", "detail", "show", "date_added"],
+                )
+                .map_err(|e| e.to_string())?;
+                let mut stmt = db
+                    .conn
+                    .prepare(
+                        "SELECT f.kind, f.ref_id, f.added_at FROM favourites f ORDER BY f.added_at",
+                    )
+                    .map_err(db_err)?;
+                let favs: Vec<(String, String, i64)> = stmt
+                    .query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))
+                    .map_err(db_err)?
+                    .filter_map(|r| r.ok())
+                    .collect();
+                for (kind, ref_id, added_at) in favs {
+                    let (name, detail, show) = match kind.as_str() {
+                        "show" => {
+                            let r: Result<(String, Option<String>), _> = db.conn.query_row(
+                                "SELECT name, dj FROM shows WHERE id=?1",
+                                [&ref_id],
+                                |r| Ok((r.get(0)?, r.get(1)?)),
+                            );
+                            match r {
+                                Ok((n, dj)) => (n, dj.unwrap_or_default(), String::new()),
+                                Err(_) => (ref_id.clone(), String::new(), String::new()),
+                            }
+                        }
+                        "episode" => {
+                            let r: Result<(Option<String>, Option<String>, String), _> =
+                                db.conn.query_row(
+                                    "SELECT e.title, e.air_date, s.name FROM episodes e JOIN shows s ON s.id=e.show_id WHERE e.id=?1",
+                                    [&ref_id],
+                                    |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+                                );
+                            match r {
+                                Ok((t, d, s)) => (t.unwrap_or_default(), d.unwrap_or_default(), s),
+                                Err(_) => (ref_id.clone(), String::new(), String::new()),
+                            }
+                        }
+                        _ => {
+                            let r: Result<(Option<String>, Option<String>, String), _> =
+                                db.conn.query_row(
+                                    "SELECT t.artist, t.title, s.name FROM tracks t JOIN episodes e ON e.id=t.episode_id JOIN shows s ON s.id=e.show_id WHERE t.id=?1",
+                                    [&ref_id],
+                                    |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+                                );
+                            match r {
+                                Ok((a, t, s)) => (t.unwrap_or_default(), a.unwrap_or_default(), s),
+                                Err(_) => (ref_id.clone(), String::new(), String::new()),
+                            }
+                        }
+                    };
+                    let added_at = ts_to_iso(added_at);
+                    write_csv_record(&mut writer, &[&kind, &name, &detail, &show, &added_at])
+                        .map_err(|e| e.to_string())?;
+                    rows += 1;
+                }
+            }
+            "listens" => {
+                write_csv_record(
+                    &mut writer,
+                    &[
+                        "session",
+                        "show",
+                        "episode_date",
+                        "episode_title",
+                        "started_at",
+                        "seconds",
+                        "completed",
+                    ],
+                )
+                .map_err(|e| e.to_string())?;
+                let mut stmt = db
+                    .conn
+                    .prepare(
+                        "SELECT l.id, s.name, e.air_date, e.title, l.started_at, l.seconds, l.completed
+                         FROM listens l JOIN episodes e ON e.id=l.episode_id JOIN shows s ON s.id=e.show_id
+                         ORDER BY l.started_at",
+                    )
+                    .map_err(db_err)?;
+                let items: Vec<(
+                    String,
+                    String,
+                    Option<String>,
+                    Option<String>,
+                    i64,
+                    i64,
+                    i64,
+                )> = stmt
+                    .query_map([], |r| {
+                        Ok((
+                            r.get(0)?,
+                            r.get(1)?,
+                            r.get(2)?,
+                            r.get(3)?,
+                            r.get(4)?,
+                            r.get(5)?,
+                            r.get(6)?,
+                        ))
+                    })
+                    .map_err(db_err)?
+                    .filter_map(|r| r.ok())
+                    .collect();
+                for (id, show, date, title, started, secs, done) in items {
+                    let date = date.unwrap_or_default();
+                    let title = title.unwrap_or_default();
+                    let started = ts_to_iso(started);
+                    let secs = secs.to_string();
+                    let done = (done != 0).to_string();
+                    write_csv_record(
+                        &mut writer,
+                        &[&id, &show, &date, &title, &started, &secs, &done],
+                    )
+                    .map_err(|e| e.to_string())?;
+                    rows += 1;
+                }
+            }
+            "stats" => {
+                write_csv_record(
+                    &mut writer,
+                    &["rank", "show", "seconds_listened", "hours", "plays"],
+                )
+                .map_err(|e| e.to_string())?;
+                let mut stmt = db
+                    .conn
+                    .prepare(
+                        "SELECT s.name, SUM(l.seconds), COUNT(l.id)
+                         FROM listens l JOIN episodes e ON e.id=l.episode_id JOIN shows s ON s.id=e.show_id
+                         GROUP BY s.id ORDER BY SUM(l.seconds) DESC",
+                    )
+                    .map_err(db_err)?;
+                let items: Vec<(String, i64, i64)> = stmt
+                    .query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))
+                    .map_err(db_err)?
+                    .filter_map(|r| r.ok())
+                    .collect();
+                for (i, (show, secs, plays)) in items.iter().enumerate() {
+                    let rank = (i + 1).to_string();
+                    let hours = format!("{:.2}", *secs as f64 / 3600.0);
+                    let secs = secs.to_string();
+                    let plays = plays.to_string();
+                    write_csv_record(&mut writer, &[&rank, show, &secs, &hours, &plays])
+                        .map_err(|e| e.to_string())?;
+                    rows += 1;
+                }
+            }
+            _ => unreachable!("export kind was validated"),
+        }
+        writer.flush().map_err(|e| e.to_string())?;
+        writer
+            .get_ref()
+            .sync_all()
+            .map_err(|e| format!("CSV sync failed: {e}"))?;
+        drop(writer);
+        drop(db);
+        std::fs::rename(&temp_path, &dest_path).map_err(|e| format!("CSV finalize failed: {e}"))?;
+        Ok(rows)
+    })();
+    if result.is_err() {
+        let _ = std::fs::remove_file(&temp_path);
+    }
+    let rows = result?;
     Ok(format!("{rows} rows exported to {dest}"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{neutralize_csv_cell, write_csv_record};
+
+    #[test]
+    fn csv_cells_that_can_start_formulas_are_neutralized() {
+        for value in ["=1+1", "+cmd", "-2", "@SUM(A1:A2)"] {
+            assert_eq!(neutralize_csv_cell(value), format!("'{value}"));
+        }
+        assert_eq!(neutralize_csv_cell("plain text"), "plain text");
+
+        let mut writer = csv::Writer::from_writer(Vec::new());
+        write_csv_record(
+            &mut writer,
+            &["=1+1", "+cmd", "-2", "@SUM(A1:A2)", "plain text"],
+        )
+        .expect("write safe row");
+        let data = String::from_utf8(writer.into_inner().expect("flush row")).expect("UTF-8 CSV");
+        assert_eq!(data, "'=1+1,'+cmd,'-2,'@SUM(A1:A2),plain text\n");
+    }
 }

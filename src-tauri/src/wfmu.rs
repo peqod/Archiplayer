@@ -11,6 +11,9 @@ const USER_AGENT: &str = concat!(
     env!("CARGO_PKG_VERSION"),
     " (+https://github.com/peqod/Archiplayer)"
 );
+const WFMU_ARCHIVE_HOST: &str = "mp3archives.wfmu.org";
+const AMAZON_S3_HOST: &str = "s3.amazonaws.com";
+const WFMU_S3_BUCKET_PATH: &str = "/arch.wfmu.org/";
 const MIN_REQUEST_GAP: Duration = Duration::from_millis(1000);
 const MIN_STATUS_REQUEST_GAP: Duration = Duration::from_millis(250);
 const MIN_LIVE_PAGE_REQUEST_GAP: Duration = Duration::from_millis(250);
@@ -179,6 +182,7 @@ struct ChannelLandingSection {
 
 pub struct Fetcher {
     client: reqwest::Client,
+    audio_client: reqwest::Client,
     last_request: tokio::sync::Mutex<Option<Instant>>,
     last_status_request: tokio::sync::Mutex<Option<Instant>>,
     last_live_page_request: tokio::sync::Mutex<Option<Instant>>,
@@ -186,11 +190,32 @@ pub struct Fetcher {
 
 impl Fetcher {
     pub fn new() -> Self {
-        Fetcher {
-            client: reqwest::Client::builder()
+        let client_builder = || {
+            reqwest::Client::builder()
                 .user_agent(USER_AGENT)
+                // Bound connect and idle-read so a stalled server can't wedge a page load,
+                // live refresh, or a download forever. read_timeout fires on a stalled stream,
+                // not on total transfer time, so long but healthy downloads are unaffected.
+                .connect_timeout(Duration::from_secs(15))
+                .read_timeout(Duration::from_secs(30))
+        };
+        Fetcher {
+            client: client_builder().build().expect("http client"),
+            // Audio URLs originate in upstream markup. Validate every redirect as well as the
+            // initial URL so an allowed archive host cannot bounce the backend to localhost or
+            // another private service.
+            audio_client: client_builder()
+                .redirect(reqwest::redirect::Policy::custom(|attempt| {
+                    if attempt.previous().len() >= 10 {
+                        return attempt.error("too many audio redirects");
+                    }
+                    match validate_audio_url(attempt.url().as_str()) {
+                        Ok(_) => attempt.follow(),
+                        Err(error) => attempt.error(error),
+                    }
+                }))
                 .build()
-                .expect("http client"),
+                .expect("audio http client"),
             last_request: tokio::sync::Mutex::new(None),
             last_status_request: tokio::sync::Mutex::new(None),
             last_live_page_request: tokio::sync::Mutex::new(None),
@@ -199,6 +224,10 @@ impl Fetcher {
 
     pub fn client(&self) -> &reqwest::Client {
         &self.client
+    }
+
+    pub fn audio_client(&self) -> &reqwest::Client {
+        &self.audio_client
     }
 
     /// Polite GET: global 1 req/s toward wfmu.org.
@@ -240,6 +269,9 @@ impl Fetcher {
         let resp = self
             .client
             .get(url)
+            // Page scrapes should finish in seconds; cap total time (downloads use the client
+            // directly and are intentionally not capped here).
+            .timeout(Duration::from_secs(30))
             .send()
             .await
             .map_err(|e| format!("request failed: {e}"))?;
@@ -250,6 +282,31 @@ impl Fetcher {
             .await
             .map_err(|e| format!("read body failed: {e}"))
     }
+}
+
+/// Parse and constrain an upstream-provided audio URL before it reaches the backend client.
+/// WFMU currently serves archives either from its own archive host or from the `arch.wfmu.org`
+/// bucket on Amazon S3. Exact hosts, HTTPS/default port, and the S3 bucket path are required.
+pub fn validate_audio_url(raw: &str) -> Result<reqwest::Url, String> {
+    let url = reqwest::Url::parse(raw).map_err(|_| "invalid audio URL".to_string())?;
+    if url.scheme() != "https" {
+        return Err("audio URL must use HTTPS".into());
+    }
+    if !url.username().is_empty() || url.password().is_some() {
+        return Err("audio URL must not contain credentials".into());
+    }
+    if url.port_or_known_default() != Some(443) {
+        return Err("audio URL must use the default HTTPS port".into());
+    }
+    let allowed = match url.host_str() {
+        Some(WFMU_ARCHIVE_HOST) => true,
+        Some(AMAZON_S3_HOST) => url.path().starts_with(WFMU_S3_BUCKET_PATH),
+        _ => false,
+    };
+    if !allowed {
+        return Err("audio URL host is not an approved WFMU archive backend".into());
+    }
+    Ok(url)
 }
 
 fn decode_entities(s: &str) -> String {
@@ -947,7 +1004,9 @@ fn nav_popup_block(html: &str) -> Option<&str> {
         .rfind("<select")
         .or_else(|| html[..sel_start].rfind("<SELECT"))?;
     let block = &html[block_start..];
-    let block_end = block.find("</select>").or_else(|| block.find("</SELECT>"))?;
+    let block_end = block
+        .find("</select>")
+        .or_else(|| block.find("</SELECT>"))?;
     Some(&block[..block_end])
 }
 
@@ -1036,8 +1095,9 @@ pub fn parse_archiveplayer(html: &str) -> Option<String> {
     audio
         .captures(html)
         .map(|c| decode_entities(&c[1]))
-        .filter(|u| u.starts_with("http"))
         .or_else(|| any.captures(html).map(|c| decode_entities(&c[1])))
+        .and_then(|raw| validate_audio_url(&raw).ok())
+        .map(Into::into)
 }
 
 /// Extract the archive pre-roll offset (seconds) from an AccuPlayer page's
@@ -1195,7 +1255,8 @@ pub fn parse_m3u(body: &str) -> Option<String> {
     body.lines()
         .map(str::trim)
         .find(|l| !l.is_empty() && !l.starts_with('#'))
-        .map(str::to_string)
+        .and_then(|raw| validate_audio_url(raw).ok())
+        .map(Into::into)
 }
 
 pub fn catalog_url() -> String {
@@ -1390,6 +1451,34 @@ mod tests {
             Some("https://mp3archives.wfmu.org/archive/WA/wa260709.mp3")
         );
         assert_eq!(parse_archiveplayer("<p>no audio</p>"), None);
+        assert_eq!(
+            parse_archiveplayer(r#"<audio src="http://127.0.0.1/private.mp3"></audio>"#),
+            None
+        );
+    }
+
+    #[test]
+    fn audio_urls_are_limited_to_https_wfmu_archive_backends() {
+        for url in [
+            "https://mp3archives.wfmu.org/archive/WA/wa260709.mp3",
+            "https://s3.amazonaws.com/arch.wfmu.org/BT/bt010116r.mp4",
+        ] {
+            assert_eq!(
+                validate_audio_url(url).expect("approved backend").as_str(),
+                url
+            );
+        }
+
+        for url in [
+            "http://mp3archives.wfmu.org/archive/show.mp3",
+            "https://mp3archives.wfmu.org.evil.example/show.mp3",
+            "https://s3.amazonaws.com/other-bucket/show.mp3",
+            "https://127.0.0.1/private.mp3",
+            "https://mp3archives.wfmu.org:444/show.mp3",
+            "https://user@mp3archives.wfmu.org/show.mp3",
+        ] {
+            assert!(validate_audio_url(url).is_err(), "{url} must be rejected");
+        }
     }
 
     #[test]
@@ -1746,10 +1835,8 @@ Peter Sellers
             parse_m3u("https://mp3archives.wfmu.org/x/y.mp3\n"),
             Some("https://mp3archives.wfmu.org/x/y.mp3".to_string())
         );
-        assert_eq!(
-            parse_m3u("#EXTM3U\nhttps://a/b.mp3"),
-            Some("https://a/b.mp3".into())
-        );
+        assert_eq!(parse_m3u("#EXTM3U\nhttps://a/b.mp3"), None);
+        assert_eq!(parse_m3u("#EXTM3U\nhttp://127.0.0.1/private.mp3"), None);
         assert_eq!(parse_m3u(""), None);
     }
 }

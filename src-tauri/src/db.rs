@@ -160,6 +160,11 @@ impl Db {
                 "ALTER TABLE shows ADD COLUMN description TEXT",
             ),
             (
+                "shows",
+                "is_live",
+                "ALTER TABLE shows ADD COLUMN is_live INTEGER NOT NULL DEFAULT 0",
+            ),
+            (
                 "episodes",
                 "resume_sec",
                 "ALTER TABLE episodes ADD COLUMN resume_sec INTEGER",
@@ -205,7 +210,10 @@ impl Db {
             "CREATE UNIQUE INDEX IF NOT EXISTS idx_tracks_episode_source
              ON tracks(episode_id, source_id) WHERE source_id IS NOT NULL;",
         )?;
-        tx.pragma_update(None, "user_version", 2)?;
+        // Retroactively flag synthetic live rows created before the is_live column existed,
+        // so they stop appearing in the catalog. Real show ids never start with "live-".
+        tx.execute_batch("UPDATE shows SET is_live = 1 WHERE id LIKE 'live-%';")?;
+        tx.pragma_update(None, "user_version", 3)?;
         tx.commit()
     }
 
@@ -236,7 +244,7 @@ impl Db {
             "SELECT s.id, s.name, s.dj, s.description, s.on_air, s.last_scraped,
                     (SELECT COUNT(*) FROM episodes e WHERE e.show_id = s.id),
                     EXISTS(SELECT 1 FROM favourites f WHERE f.kind='show' AND f.ref_id = s.id)
-             FROM shows s ORDER BY s.name COLLATE NOCASE",
+             FROM shows s WHERE s.is_live = 0 ORDER BY s.name COLLATE NOCASE",
         )?;
         let rows = stmt.query_map([], |r| {
             Ok(Show {
@@ -263,7 +271,16 @@ impl Db {
 
     pub fn show_count(&self) -> Result<i64, rusqlite::Error> {
         self.conn
-            .query_row("SELECT COUNT(*) FROM shows", [], |r| r.get(0))
+            .query_row("SELECT COUNT(*) FROM shows WHERE is_live = 0", [], |r| {
+                r.get(0)
+            })
+    }
+
+    /// Flag a synthetic live-station row so the ordinary catalog and search never surface it.
+    pub fn set_show_live(&self, id: &str) -> Result<(), rusqlite::Error> {
+        self.conn
+            .execute("UPDATE shows SET is_live=1 WHERE id=?1", params![id])?;
+        Ok(())
     }
 
     pub fn mark_show_scraped(&self, id: &str) -> Result<(), rusqlite::Error> {
@@ -785,6 +802,17 @@ impl Db {
         Ok(())
     }
 
+    /// The stored destination path of a download, without touching the row.
+    pub fn download_path(&self, episode_id: i64) -> Result<Option<String>, rusqlite::Error> {
+        self.conn
+            .query_row(
+                "SELECT path FROM downloads WHERE episode_id=?1",
+                [episode_id],
+                |r| r.get(0),
+            )
+            .optional()
+    }
+
     pub fn remove_download(&self, episode_id: i64) -> Result<Option<String>, rusqlite::Error> {
         let path: Option<String> = self
             .conn
@@ -832,7 +860,7 @@ mod tests {
             .conn
             .pragma_query_value(None, "user_version", |row| row.get(0))
             .expect("schema version");
-        assert_eq!(version, 2);
+        assert_eq!(version, 3);
         let offset_column: i64 = db
             .conn
             .query_row(
@@ -842,6 +870,38 @@ mod tests {
             )
             .expect("offset column");
         assert_eq!(offset_column, 1);
+        let is_live_column: i64 = db
+            .conn
+            .query_row(
+                "SELECT COUNT(*) FROM pragma_table_info('shows') WHERE name='is_live'",
+                [],
+                |row| row.get(0),
+            )
+            .expect("is_live column");
+        assert_eq!(is_live_column, 1);
+        drop(db);
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn live_shows_are_hidden_from_catalog() {
+        let path = std::env::temp_dir().join(format!(
+            "archiplayer-islive-{}-{}.db",
+            std::process::id(),
+            Db::now()
+        ));
+        let db = Db::open(&path).expect("open is_live test db");
+        db.upsert_show("BK", "Beware of the Blog", None, false)
+            .unwrap();
+        db.upsert_show("live-drummer", "Drummer (live)", None, true)
+            .unwrap();
+        db.set_show_live("live-drummer").unwrap();
+
+        // The synthetic live row is excluded from the count and the A–Z listing.
+        assert_eq!(db.show_count().unwrap(), 1);
+        let shows = db.list_shows().unwrap();
+        assert_eq!(shows.len(), 1);
+        assert_eq!(shows[0].id, "BK");
         drop(db);
         let _ = std::fs::remove_file(path);
     }

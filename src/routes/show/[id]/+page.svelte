@@ -10,7 +10,7 @@
   import { listen } from "@tauri-apps/api/event";
   import { openUrl } from "@tauri-apps/plugin-opener";
   import Icon from "$lib/Icon.svelte";
-  import { shareShow, shareEpisode, shareTrack, wfmuEpisodeUrl, wfmuShowUrl } from "$lib/share";
+  import { shareShow, shareEpisode, shareTrack, wfmuEpisodeUrl } from "$lib/share";
   import TrackRow from "$lib/TrackRow.svelte";
   import CatalogNav from "$lib/CatalogNav.svelte";
   import { centerEpisodeRow } from "$lib/episode-scroll";
@@ -396,7 +396,7 @@
                       t,
                       show?.name ?? "",
                       ep.air_date,
-                      ep.archive_id != null ? wfmuEpisodeUrl(ep.archive_id) : wfmuShowUrl(ep.show_id),
+                      wfmuEpisodeUrl(ep.id),
                     )}
                 />
               {/each}
