@@ -21,4 +21,7 @@ Linux (Ubuntu/Debian x64), matching the clarity of the Windows section.
 - The toolchain pin does not force a Windows-only toolchain on non-Windows hosts.
 
 ## Status
-Tracked as [issue #1](https://github.com/peqod/Archiplayer/issues/1).
+Implemented in the README on `audit-wave1`. The Linux package list follows Tauri's official
+prerequisites, and the bundle arguments match the repository's Ubuntu and macOS CI jobs. Closing
+[issue #1](https://github.com/peqod/Archiplayer/issues/1) still requires fresh-clone smoke tests
+of the resulting packages on Linux, Apple Silicon, and Intel hardware.
