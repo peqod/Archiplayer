@@ -5,7 +5,7 @@ Standard operating procedure for cutting a release. Releases are driven by **pus
 ## Principles
 
 - **The tag is the trigger.** Pushing `vX.Y.Z` starts `.github/workflows/release.yml`. Nothing else needs doing to start a build.
-- **CI owns the release and `SHA256SUMS.txt`.** The workflow builds all three platforms and attaches the checksums. You do not build or hash locally for a release.
+- **CI owns the release and `SHA256SUMS.txt`.** The workflow builds Windows and macOS and attaches the checksums. You do not build or hash locally for a release.
 - **Never run `gh release create`.** It creates the tag *and* pre-publishes a release, colliding with what CI produces. (This is exactly how the v0.3.0 release got cut Windows-only by hand and had to be backfilled by CI.) The only correct trigger is a tag push.
 - **The release starts as a draft.** It is not visible on the website until you publish it (the site reads `releases/latest`, which excludes drafts).
 
@@ -74,20 +74,18 @@ gh release edit v0.4.0 --draft=false
 `.github/workflows/release.yml`:
 
 - **Trigger:** `push` on tags matching `v[0-9]+.[0-9]+.[0-9]+`.
-- **`publish` job:** a 3-platform matrix (`fail-fast: false`) — `windows-latest` (`nsis`), `ubuntu-22.04` (`appimage,deb`), `macos-latest` (universal `dmg`). Each runs the version gate, then `tauri-apps/tauri-action` with `releaseDraft: true`, creating/filling a **draft** release named `Archiplayer <tag>`.
+- **`publish` job:** a 2-platform matrix (`fail-fast: false`) — `windows-latest` (`nsis`) and `macos-latest` (universal `dmg`). Each runs the version gate, then `tauri-apps/tauri-action` with `releaseDraft: true`, creating/filling a **draft** release named `Archiplayer <tag>`.
 - **`checksums` job (`needs: publish`):** downloads every asset, runs `sha256sum` into `SHA256SUMS.txt`, and uploads it. Because it *needs* `publish`, **if any single platform leg fails, checksums is skipped** and the draft is left partial — do not publish it.
 
-Expected assets on a complete release (5):
+Expected assets on a complete release (3):
 
 ```
 Archiplayer_<ver>_x64-setup.exe     (Windows)
 Archiplayer_<ver>_universal.dmg     (macOS)
-Archiplayer_<ver>_amd64.AppImage    (Linux)
-Archiplayer_<ver>_amd64.deb         (Linux)
 SHA256SUMS.txt
 ```
 
-**Asset-name contract:** the website (`site/site.js`) matches assets by regex — Windows `/setup.*\.exe$|\.msi$/i`, macOS `/\.dmg$/i`, Linux `/\.AppImage$|\.deb$/i`, checksums `/SHA256SUMS/i`. Do not rename these outputs.
+**Asset-name contract:** the website (`site/site.js`) matches assets by regex — Windows `/setup.*\.exe$|\.msi$/i`, macOS `/\.dmg$/i`, checksums `/SHA256SUMS/i`. Do not rename these outputs. Linux is displayed as coming soon and has no asset matcher.
 
 ## Verify and publish
 
@@ -115,7 +113,7 @@ This loads the MSVC/SDK environment and copies an unsigned `Archiplayer_<version
 
 ## Reproducibility — honest
 
-The bundles are **not** byte-for-byte reproducible: NSIS, `.dmg`, and `.AppImage` embed build timestamps and packaging metadata, so two builds of the same commit differ in bytes. Reproducibility here means a **repeatable process** with pinned inputs — `package-lock.json`, `Cargo.lock` (`--locked` in CI), Node 22, Rust stable, and pinned action/toolchain versions. Builds are functionally equivalent, not bit-identical. Byte-identical reproducibility would require code signing removal, deterministic packagers, and pinned SDKs, which are out of scope.
+The bundles are **not** byte-for-byte reproducible: NSIS and `.dmg` embed build timestamps and packaging metadata, so two builds of the same commit differ in bytes. Reproducibility here means a **repeatable process** with pinned inputs — `package-lock.json`, `Cargo.lock` (`--locked` in CI), Node 22, Rust stable, and pinned action/toolchain versions. Builds are functionally equivalent, not bit-identical. Byte-identical reproducibility would require code signing removal, deterministic packagers, and pinned SDKs, which are out of scope.
 
 ## Optional: pruning old releases
 

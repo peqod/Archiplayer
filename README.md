@@ -24,7 +24,7 @@ Archiplayer turns WFMU’s enormous public archive into a personal desktop libra
 |---|---|---|
 | Windows | NSIS `.exe` | Windows 10+, x64 |
 | macOS | Universal `.dmg` | Intel and Apple Silicon |
-| Linux | `.AppImage` or `.deb` | x64 Linux / Debian-based distributions |
+| Linux | Coming soon | Packaging and compatibility validation in progress |
 
 Download the matching file from the [latest release](../../releases/latest).
 
@@ -32,7 +32,6 @@ Download the matching file from the [latest release](../../releases/latest).
 
 - **Windows:** open the installer, choose **More info**, verify the source, then choose **Run anyway**.
 - **macOS:** move Archiplayer to Applications, try to open it once, then go to **System Settings → Privacy & Security → Open Anyway** and confirm.
-- **Linux AppImage:** make it executable with `chmod +x Archiplayer*.AppImage`, then run it.
 
 ## What it does
 
@@ -48,7 +47,8 @@ Download the matching file from the [latest release](../../releases/latest).
 
 > [!NOTE]
 > Local desktop bundles must be built on their target operating system. The commands below match
-> the Windows, macOS, and Ubuntu jobs used for published releases.
+> the Windows and macOS jobs used for published releases. Linux builds are coming soon while
+> packaging and compatibility are revalidated.
 
 You need [Node.js 22.6 or newer](https://nodejs.org/), npm, [Rust via rustup](https://rustup.rs/), and Git.
 
@@ -97,47 +97,10 @@ The universal DMG runs natively on both Apple Silicon and Intel Macs.
 The unsigned installer is written to
 `src-tauri/target/universal-apple-darwin/release/bundle/dmg/`.
 
-### Linux (Ubuntu 22.04+/Debian 12, x64)
+### Linux
 
-1. Install WebKitGTK 4.1 and the build and packaging dependencies:
-
-   ```sh
-   sudo apt update
-   sudo apt install libwebkit2gtk-4.1-dev \
-     build-essential \
-     curl \
-     wget \
-     file \
-     libxdo-dev \
-     libssl-dev \
-     libayatana-appindicator3-dev \
-     librsvg2-dev \
-     patchelf
-   ```
-
-2. **Run in development:**
-
-   ```sh
-   npm run tauri dev
-   ```
-
-3. **Build both Linux packages:**
-
-   ```sh
-   npm run tauri build -- --bundles appimage,deb
-   ```
-
-The unsigned artifacts are written to:
-
-- `src-tauri/target/release/bundle/appimage/` (`.AppImage`)
-- `src-tauri/target/release/bundle/deb/` (`.deb`)
-
-To smoke-test the AppImage, make it executable and run it:
-
-```sh
-chmod +x src-tauri/target/release/bundle/appimage/*.AppImage
-./src-tauri/target/release/bundle/appimage/*.AppImage
-```
+Linux builds are coming soon. Packaging, media playback, and distribution compatibility are
+being revalidated before binaries and build-from-source instructions are offered as supported.
 
 ## Develop and test
 
@@ -209,11 +172,12 @@ Tauri chooses the operating system’s application-data directory for `org.archi
 
 ## Releases
 
-Pull requests and main-branch pushes run frontend checks, all standalone JavaScript suites, denied-warnings Rust formatting and Clippy gates, Rust tests, and native no-bundle builds on Windows, macOS, and Ubuntu. A semantic version tag such as `v0.2.0` creates a **draft** GitHub Release with:
+Pull requests and main-branch pushes run frontend checks, all standalone JavaScript suites,
+denied-warnings Rust formatting and Clippy gates, Rust tests, and native no-bundle builds on
+Windows and macOS. A semantic version tag such as `v0.3.1` creates a **draft** GitHub Release with:
 
 - Windows x64 NSIS installer
 - macOS universal DMG
-- Linux x64 AppImage and DEB
 - `SHA256SUMS.txt`
 
 Review and smoke-test all artifacts before publishing the draft. Keep the version in `package.json`, `src-tauri/Cargo.toml`, and `src-tauri/tauri.conf.json` aligned with the tag.

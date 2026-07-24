@@ -5,7 +5,7 @@
 
 .DESCRIPTION
   Drives the existing .github/workflows/release.yml pipeline. The workflow triggers
-  on pushing a vX.Y.Z tag, builds Windows/macOS/Linux via tauri-action into a DRAFT
+  on pushing a vX.Y.Z tag, builds Windows/macOS via tauri-action into a DRAFT
   release, then generates SHA256SUMS.txt. This script performs the manual half
   (version bump, commit, tag push), watches the run, verifies all assets landed, and
   publishes the draft.
@@ -235,7 +235,7 @@ function Assert-DraftAssets {
   if (-not $rel) { throw "No release found for $tag after CI. Aborting." }
 
   $names = @($rel.assets | ForEach-Object { $_.name })
-  $required = @('_x64-setup.exe', '_universal.dmg', '_amd64.AppImage', '_amd64.deb', 'SHA256SUMS.txt')
+  $required = @('_x64-setup.exe', '_universal.dmg', 'SHA256SUMS.txt')
   $missing = @()
   foreach ($needle in $required) {
     if (-not ($names | Where-Object { $_ -like "*$needle" })) { $missing += $needle }
@@ -243,7 +243,7 @@ function Assert-DraftAssets {
   if ($missing.Count -gt 0) {
     throw "Release $tag is missing assets: $($missing -join ', '). A platform build likely failed (checksums is skipped when any leg fails). Do NOT publish; fix and re-tag."
   }
-  Write-Host "  all 5 assets present: $($names -join ', ')"
+  Write-Host "  all 3 assets present: $($names -join ', ')"
   return $rel
 }
 

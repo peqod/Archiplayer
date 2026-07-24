@@ -17,7 +17,7 @@ body:
     id: os
     attributes:
       label: Operating system
-      options: [Windows, macOS Intel, macOS Apple Silicon, Linux AppImage, Linux DEB, Source build]
+      options: [Windows, macOS Intel, macOS Apple Silicon, Source build]
     validations:
       required: true
   - type: textarea
@@ -33,4 +33,3 @@ body:
       label: Expected result
     validations:
       required: true
-

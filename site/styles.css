@@ -87,6 +87,9 @@ figcaption { margin-top:7px; font-size:12px; color:var(--muted); }
 .platform .os { width:30px; height:30px; display:block; margin-bottom:4px; }
 .platform > p { color:var(--muted); font-size:12px; }
 .platform > a { display:inline-block; margin-top:10px; font-weight:bold; }
+.platform .availability { display:inline-block; margin-top:10px; color:var(--gold);
+  font-family:Consolas,"Courier New",monospace; font-size:11px; font-weight:bold;
+  letter-spacing:.06em; text-transform:uppercase; }
 details { margin-top:12px; font-size:12px; color:var(--muted); }
 summary { cursor:pointer; font-family:Consolas,"Courier New",monospace;
   text-transform:uppercase; font-size:11px; color:var(--ink); }
