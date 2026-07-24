@@ -209,9 +209,8 @@
   .actions { display: flex; gap: 8px; flex-wrap: wrap; }
   button { display: inline-flex; align-items: center; gap: 7px; }
   .primary { background: var(--c-accent); color: var(--c-on-accent); border: none; border-radius: 8px; padding: 8px 16px; font-weight: 700; cursor: pointer; }
-  .ghost, .archive-button { background: none; border: 1px solid var(--c-border); color: var(--c-dim); border-radius: 8px; padding: 7px 12px; cursor: pointer; text-decoration: none; }
-  .ghost:hover, .archive-button:hover { border-color: var(--c-accent); color: var(--c-accent); }
-  .ghost:disabled { opacity: .45; }
+  .archive-button { background: none; border: 1px solid var(--c-border); color: var(--c-dim); border-radius: 8px; padding: 7px 12px; cursor: pointer; text-decoration: none; }
+  .archive-button:hover { border-color: var(--c-accent); color: var(--c-accent); }
   .error, .warning { padding: 8px 12px; border-radius: 8px; margin-bottom: 12px; background: var(--c-surface2); }
   .error { border: 1px solid var(--c-danger); }
   .warning { border: 1px solid var(--c-border); color: var(--c-dim); font-size: 13px; }

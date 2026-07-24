@@ -1152,7 +1152,7 @@ fn neutralize_csv_cell(value: &str) -> Cow<'_, str> {
     let formula = value
         .as_bytes()
         .first()
-        .is_some_and(|first| matches!(*first, b'=' | b'+' | b'-' | b'@'));
+        .is_some_and(|first| matches!(*first, b'=' | b'+' | b'-' | b'@' | b'\t' | b'\r' | b'\n'));
     if formula {
         Cow::Owned(format!("'{value}"))
     } else {
@@ -1380,7 +1380,15 @@ mod tests {
 
     #[test]
     fn csv_cells_that_can_start_formulas_are_neutralized() {
-        for value in ["=1+1", "+cmd", "-2", "@SUM(A1:A2)"] {
+        for value in [
+            "=1+1",
+            "+cmd",
+            "-2",
+            "@SUM(A1:A2)",
+            "\t=1+1",
+            "\r=1+1",
+            "\n=1+1",
+        ] {
             assert_eq!(neutralize_csv_cell(value), format!("'{value}"));
         }
         assert_eq!(neutralize_csv_cell("plain text"), "plain text");
