@@ -131,7 +131,10 @@ function Update-AllVersions {
 
   # package.json + package-lock.json (root and packages[""]) in one npm call.
   if ($PSCmdlet.ShouldProcess("package.json + package-lock.json", "npm version $Version")) {
-    Invoke-Native npm version $Version --no-git-tag-version --allow-same-version | Out-Null
+    # This SOP is Windows-only. Use the cmd shim explicitly because npm.ps1
+    # reconstructs its caller's source text and mis-parses invocation through
+    # Invoke-Native's command variable as an extra `File` argument.
+    Invoke-Native npm.cmd version $Version --no-git-tag-version --allow-same-version | Out-Null
   }
 
   Update-VersionFile "src-tauri/tauri.conf.json" '("productName":\s*"Archiplayer",\s*"version":\s*")[^"]*(")' $Version
