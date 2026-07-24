@@ -41,6 +41,8 @@
       await goto("/show/" + selection.show.id, {
         state: { centerEpisodeId: selection.episodes[selection.index].id },
       });
+      // In minimal (collapsed) view, size the window for playback before the header expands.
+      if (collapsed) await growForPlayback();
       await player.playQueue(items, selection.index);
     } catch (err) {
       favError = String(err);
@@ -57,6 +59,9 @@
   let headerEl: HTMLElement;
   let expandedWidth = 0;
   let expandedHeight = 0;
+  // Last measured collapsed height while a track was loaded. Lets feelingLucky pre-grow
+  // the window to the playing size before the header expands, so it never clips.
+  let playingCompactHeight = 0;
   // Mirrors the CSS mini-mode breakpoint so volume can fold to a popover.
   let mini = $state(false);
   let volOpen = $state(false);
@@ -98,6 +103,8 @@
         // Tauri setSize targets the client area. Resize to the native minimum
         // width and the measured player + tab height.
         const compact = Math.ceil((headerEl?.offsetHeight ?? 0) + (navEl?.offsetHeight ?? 0));
+        // Remember the collapsed height while playing so feelingLucky can pre-size to it.
+        if (compact > 0 && (player.current || player.live)) playingCompactHeight = compact;
         const width = Math.round(COMPACT_WIDTH * scale);
         const height = Math.round(compact * scale);
         if (
@@ -128,6 +135,27 @@
         windowSizeQueued = false;
         void applyWindowSize();
       }
+    }
+  }
+
+  // Collapsed idle -> playing grows the header from one row to three synchronously, but the
+  // window resize is async. Pre-grow the window to the playing height first so the header
+  // expands into it (no nav clip / transport shift); the ResizeObserver then settles the exact
+  // height. Grows only — the observer handles any final shrink.
+  async function growForPlayback() {
+    if (!collapsed) return;
+    try {
+      const win = getCurrentWindow();
+      const scale = await win.scaleFactor();
+      const physical = await win.innerSize();
+      const targetLogical = playingCompactHeight > 0 ? playingCompactHeight : 200;
+      const width = Math.round(COMPACT_WIDTH * scale);
+      const height = Math.round(targetLogical * scale);
+      if (height > physical.height + 1) {
+        await win.setSize(new PhysicalSize(width, height));
+      }
+    } catch {
+      /* not in Tauri / no window perms — the header still expands, just without the pre-grow */
     }
   }
 
@@ -301,7 +329,7 @@
   </div>
 {/snippet}
 
-<div class="app">
+<div class="app" class:collapsed={collapsed}>
   <a class="skip-link" href="#main-content">Skip to content</a>
   <header
     class="player"
@@ -524,7 +552,10 @@
     display: flex;
     flex-direction: column;
     height: 100vh;
-    overflow: hidden; /* shell never scrolls — only <main> does */
+    /* clip (not hidden): hidden is still script-scrollable, so an episode
+       scrollIntoView() inside <main> would scroll the whole shell and shove the
+       player header off the top. clip makes the shell a non-scroll container. */
+    overflow: clip; /* shell never scrolls — only <main> does */
   }
   .skip-link {
     position: fixed;
@@ -608,6 +639,13 @@
     flex: 1 1 auto;
     overflow-y: auto;
     padding: 20px;
+  }
+  /* Player-only (collapsed) view: the window shrinks to player + nav, but that
+     resize is async and floored by minHeight, so the frame is briefly taller than
+     the content. Hide the routed page so its sticky search bar can never leak in
+     below the nav. Kept mounted + in flow, so scroll and size-restore survive. */
+  .app.collapsed main {
+    visibility: hidden;
   }
   .player {
     flex: 0 0 auto;
@@ -853,10 +891,6 @@
       --mini-volume-track: clamp(5px, calc(4.257px + 0.229vw), 6px);
       --mini-volume-thumb: clamp(13px, calc(11.514px + 0.459vw), 15px);
       --mini-volume-input: clamp(84px, calc(69.138px + 4.587vw), 104px);
-    }
-    .player.inactive {
-      gap: clamp(8px, calc(5.028px + 0.917vw), 12px);
-      padding-top: clamp(10px, calc(7.028px + 0.917vw), 14px);
     }
     .p-controls {
       justify-content: center;
