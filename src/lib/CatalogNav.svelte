@@ -16,12 +16,19 @@
   let query = $state("");
   let randomBusy = $state(false);
 
-  onMount(async () => {
-    try {
-      shows = await api.getCatalog();
-    } catch {
-      shows = [];
-    }
+  onMount(() => {
+    let active = true;
+    void api
+      .getCatalog()
+      .then((catalog) => {
+        if (active) shows = catalog;
+      })
+      .catch(() => {
+        if (active) shows = [];
+      });
+    return () => {
+      active = false;
+    };
   });
 
   // Same first-letter bucketing the home catalog uses, so the two alphabets match.
@@ -74,6 +81,7 @@
     <input
       class="search"
       type="search"
+      aria-label="Search shows, DJs, and songs"
       placeholder="Search shows, DJs, songs…"
       bind:value={query}
     />
@@ -86,18 +94,18 @@
       aria-label="Play a random show and episode"
     >{randomBusy ? "…" : "🎲"}</button>
   </form>
-  <div class="alpha">
+  <div class="alpha" role="group" aria-label="Catalog navigation and episode order">
     <button
       class="fav-filter"
       onclick={() => goto("/?fav=1")}
       title="Show only favourited shows"
     >★ Favourites{favCount ? ` (${favCount})` : ""}</button>
-    <span class="alpha-sep"></span>
+    <span class="alpha-sep" aria-hidden="true"></span>
     <button onclick={() => goto("/")}>All</button>
     {#each letters as l}
       <button onclick={() => goto("/?letter=" + encodeURIComponent(l))}>{l}</button>
     {/each}
-    <span class="alpha-gap"></span>
+    <span class="alpha-gap" aria-hidden="true"></span>
     <button
       class="rev"
       class:on={reverse}

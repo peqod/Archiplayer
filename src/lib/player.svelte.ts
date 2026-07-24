@@ -8,6 +8,7 @@ import {
   type Track,
 } from "./api";
 import { isAbortError, PlaybackTransitions } from "./playback-transition";
+import { normalizeVolume } from "./volume";
 
 export interface QueueItem {
   episode: Episode;
@@ -84,8 +85,14 @@ class Player {
   attach(el: HTMLAudioElement) {
     if (this.audio === el) return;
     this.audio = el;
-    const saved = localStorage.getItem("ab2.volume");
-    this.volume = saved ? Number(saved) : 1;
+    let saved: string | null = null;
+    try {
+      saved = localStorage.getItem("ab2.volume");
+    } catch {
+      /* storage can be unavailable in restricted webviews */
+    }
+    this.volume = normalizeVolume(saved);
+    this.preMuteVolume = this.volume > 0 ? this.volume : 1;
     el.volume = this.volume;
 
     el.addEventListener("timeupdate", () => {
@@ -217,6 +224,8 @@ class Player {
     this.error = null;
     this.loading = true;
     this.finishSession(false);
+    this.audio.pause();
+    this.playing = false;
     this.clearLiveStatusPolling();
     this.tracks = [];
     this.currentTime = 0;
@@ -439,11 +448,16 @@ class Player {
 
   toggle() {
     if (!this.audio || !this.audio.src) return;
-    if (this.audio.paused)
-      void this.audio.play().catch((error) => {
-        this.error = String(error);
-      });
+    if (this.audio.paused) this.resumeAudio();
     else this.audio.pause();
+  }
+
+  private resumeAudio() {
+    if (!this.audio) return;
+    void this.audio.play().catch((error) => {
+      this.error = String(error);
+      this.playing = false;
+    });
   }
 
   seek(sec: number) {
@@ -454,7 +468,7 @@ class Player {
   seekToTrack(track: Track) {
     if (track.start_sec === null) return;
     this.seek(track.start_sec + this.offset);
-    if (this.audio?.paused) this.audio.play();
+    if (this.audio?.paused) this.resumeAudio();
   }
 
   // Jump the playhead by a relative amount (e.g. −15 / +15 seconds).
@@ -471,7 +485,7 @@ class Player {
       const s = this.tracks[i].start_sec;
       if (s !== null) {
         this.seek(s + this.offset);
-        if (this.audio?.paused) this.audio.play();
+        if (this.audio?.paused) this.resumeAudio();
         return;
       }
     }
@@ -492,7 +506,7 @@ class Player {
       const s = this.tracks[i].start_sec;
       if (s !== null) {
         this.seek(s + this.offset);
-        if (this.audio?.paused) this.audio.play();
+        if (this.audio?.paused) this.resumeAudio();
         return;
       }
     }
@@ -500,20 +514,25 @@ class Player {
   }
 
   setVolume(v: number) {
-    this.volume = Math.max(0, Math.min(1, v));
+    this.volume = normalizeVolume(v, this.volume);
     this.muted = false;
+    if (this.volume > 0) this.preMuteVolume = this.volume;
     if (this.audio) this.audio.volume = this.volume;
-    localStorage.setItem("ab2.volume", String(this.volume));
+    try {
+      localStorage.setItem("ab2.volume", String(this.volume));
+    } catch {
+      /* volume still applies for this session */
+    }
   }
 
   toggleMute() {
     this.muted = !this.muted;
     if (this.muted) {
-      this.preMuteVolume = this.volume;
+      if (this.volume > 0) this.preMuteVolume = this.volume;
       if (this.audio) this.audio.volume = 0;
     } else {
-      this.volume = this.preMuteVolume;
-      if (this.audio) this.audio.volume = this.preMuteVolume;
+      this.volume = normalizeVolume(this.preMuteVolume);
+      if (this.audio) this.audio.volume = this.volume;
     }
   }
 

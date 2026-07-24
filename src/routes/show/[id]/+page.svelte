@@ -14,6 +14,7 @@
   import TrackRow from "$lib/TrackRow.svelte";
   import CatalogNav from "$lib/CatalogNav.svelte";
   import { centerEpisodeRow } from "$lib/episode-scroll";
+  import { LatestRequest } from "$lib/request-gate";
   import { onMount, tick } from "svelte";
 
   function openWfmu(e: MouseEvent) {
@@ -30,6 +31,8 @@
   let episodeListEl = $state<HTMLElement | null>(null);
   let centeredEpisodeId: number | null = null;
   let reverse = $state(false);
+  const detailRequests = new LatestRequest();
+  const playlistRequests = new Map<number, LatestRequest>();
 
   const showId = $derived($page.params.id ?? "");
 
@@ -70,22 +73,26 @@
     });
   }
 
-  async function load(refresh = false) {
-    error = null;
+  async function load(requestedShowId: string, generation: number, refresh = false) {
+    if (detailRequests.isCurrent(generation)) error = null;
     try {
-      const detail = await api.getShow(showId, refresh);
+      const detail = await api.getShow(requestedShowId, refresh);
+      if (!detailRequests.isCurrent(generation)) return;
       show = detail.show;
       episodes = detail.episodes;
     } catch (e) {
-      error = String(e);
+      if (detailRequests.isCurrent(generation)) error = String(e);
     } finally {
-      loading = false;
+      if (detailRequests.isCurrent(generation)) loading = false;
     }
-    await centerRequestedEpisode();
+    if (detailRequests.isCurrent(generation)) await centerRequestedEpisode();
   }
 
   $effect(() => {
-    void showId;
+    const requestedShowId = showId;
+    const generation = detailRequests.begin();
+    for (const request of playlistRequests.values()) request.invalidate();
+    playlistRequests.clear();
     show = null;
     episodes = [];
     expanded = {};
@@ -93,10 +100,14 @@
     reverse = false; // each show opens newest-first
     loading = true;
     // Paint cached episodes, then re-scrape the show page so new episodes appear.
-    (async () => {
-      await load();
-      await load(true);
+    void (async () => {
+      await load(requestedShowId, generation);
+      if (detailRequests.isCurrent(generation)) {
+        await load(requestedShowId, generation, true);
+      }
     })();
+
+    return () => detailRequests.invalidate(generation);
   });
 
   onMount(() => {
@@ -126,28 +137,48 @@
     for (const mq of breakpoints) mq.addEventListener("change", onBreakpoint);
 
     return () => {
-      un.then((f) => f());
+      un.then((f) => f()).catch(() => {});
       for (const mq of breakpoints) mq.removeEventListener("change", onBreakpoint);
     };
   });
 
   async function togglePlaylist(ep: Episode) {
     if (expanded[ep.id]) {
+      playlistRequests.get(ep.id)?.invalidate();
+      playlistRequests.delete(ep.id);
       const { [ep.id]: _, ...rest } = expanded;
       expanded = rest;
       return;
     }
+    const requestedShowId = showId;
+    const request = new LatestRequest();
+    const generation = request.begin();
+    playlistRequests.set(ep.id, request);
     expanded = { ...expanded, [ep.id]: "loading" };
     try {
       const tracks = await api.getPlaylist(ep.id);
+      if (
+        playlistRequests.get(ep.id) !== request ||
+        !request.isCurrent(generation) ||
+        showId !== requestedShowId
+      )
+        return;
       expanded = { ...expanded, [ep.id]: tracks };
       episodes = episodes.map((e) =>
         e.id === ep.id ? { ...e, track_count: tracks.length } : e,
       );
     } catch (e) {
+      if (
+        playlistRequests.get(ep.id) !== request ||
+        !request.isCurrent(generation) ||
+        showId !== requestedShowId
+      )
+        return;
       error = String(e);
       const { [ep.id]: _, ...rest } = expanded;
       expanded = rest;
+    } finally {
+      if (playlistRequests.get(ep.id) === request) playlistRequests.delete(ep.id);
     }
   }
 
@@ -289,11 +320,11 @@
 <a href="/" class="back">← All shows</a>
 
 {#if error}
-  <div class="error">{error} <button class="ghost" onclick={() => (error = null)}>✕</button></div>
+  <div class="error" role="alert">{error} <button class="ghost" aria-label="Dismiss error" onclick={() => (error = null)}>✕</button></div>
 {/if}
 
 {#if loading}
-  <p class="muted">Loading episodes{episodes.length === 0 ? " (scraping show page on first visit)" : ""}…</p>
+  <p class="muted" role="status">Loading episodes{episodes.length === 0 ? " (scraping show page on first visit)" : ""}…</p>
 {:else if show}
   <div class="showhead">
     <div>
@@ -319,13 +350,19 @@
 
   <div class="eplist" bind:this={episodeListEl}>
     {#each orderedEpisodes as ep (ep.id)}
-      <div class="ep" class:current={player.current?.episode.id === ep.id} data-episode-id={ep.id}>
+      <div
+        class="ep"
+        class:current={player.current?.episode.id === ep.id}
+        data-episode-id={ep.id}
+        aria-current={player.current?.episode.id === ep.id ? "true" : undefined}
+      >
         <div class="ep-row">
           {#if progressFrac(ep) > 0}
             <div
               class="ep-prog"
               class:done={ep.completed}
               style="width:{progressFrac(ep) * 100}%"
+              aria-hidden="true"
             ></div>
           {/if}
           <button
@@ -338,6 +375,11 @@
               : player.current?.episode.id === ep.id
                 ? player.playing ? "Pause episode" : "Resume episode"
                 : "Play this episode"}
+            aria-label={!ep.has_audio
+              ? "No audio archive"
+              : player.current?.episode.id === ep.id
+                ? player.playing ? "Pause episode" : "Resume episode"
+                : "Play this episode"}
           >
             {#if ep.has_audio}
               <Icon
@@ -345,9 +387,13 @@
               />
             {:else}–{/if}
           </button>
-          <div class="ep-main" role="button" tabindex="0"
+          <button
+            type="button"
+            class="ep-main"
             onclick={() => togglePlaylist(ep)}
-            onkeydown={(e) => e.key === "Enter" && togglePlaylist(ep)}>
+            aria-expanded={Boolean(expanded[ep.id])}
+            aria-controls={`playlist-${ep.id}`}
+          >
             <span class="ep-date">{ep.air_date ?? "unknown date"}</span>
             {#if ep.title}<span class="ep-title">{ep.title}</span>{/if}
             {#if ep.completed}<span class="badge done">completed</span>{/if}
@@ -358,31 +404,39 @@
                 ↓ {Math.round((downloading[ep.id].bytes / Math.max(downloading[ep.id].total, 1)) * 100)}%
               </span>
             {/if}
-          </div>
+          </button>
           <div class="ep-actions">
-            <button class="mini" onclick={() => playFromHere(ep)} disabled={!ep.has_audio} title="Play from this episode onward"><Icon name="next" /></button>
-            <button class="mini" class:on={ep.favourite} onclick={() => favEpisode(ep)} title="Save episode"><Icon name="save" filled={ep.favourite} /></button>
-            <button class="mini" onclick={() => shareEpisode(show?.name ?? "", ep)} title="Share episode"><Icon name="share" /></button>
+            <button class="mini" onclick={() => playFromHere(ep)} disabled={!ep.has_audio} aria-label="Play from this episode onward" title="Play from this episode onward"><Icon name="next" /></button>
+            <button class="mini" class:on={ep.favourite} onclick={() => favEpisode(ep)} aria-label={ep.favourite ? "Remove episode from favourites" : "Save episode"} aria-pressed={ep.favourite} title="Save episode"><Icon name="save" filled={ep.favourite} /></button>
+            <button class="mini" onclick={() => shareEpisode(show?.name ?? "", ep)} aria-label="Share episode" title="Share episode"><Icon name="share" /></button>
             <button
               class="mini"
               class:on={ep.downloaded}
               onclick={() => download(ep)}
               disabled={!ep.has_audio || ep.downloaded || !!downloading[ep.id]}
               title={ep.downloaded ? "Already downloaded" : "Download for offline"}
+              aria-label={ep.downloaded ? "Already downloaded" : "Download episode for offline playback"}
             ><Icon name="download" /></button>
-            <button class="mini" onclick={() => togglePlaylist(ep)} title="Playlist">
+            <button
+              class="mini"
+              onclick={() => togglePlaylist(ep)}
+              title={expanded[ep.id] ? "Hide playlist" : "Show playlist"}
+              aria-label={expanded[ep.id] ? "Hide playlist" : "Show playlist"}
+              aria-expanded={Boolean(expanded[ep.id])}
+              aria-controls={`playlist-${ep.id}`}
+            >
               {expanded[ep.id] ? "▴" : "▾"}
             </button>
           </div>
         </div>
         {#if expanded[ep.id] === "loading"}
-          <div class="tracks muted">Loading playlist…</div>
+          <div id={`playlist-${ep.id}`} class="tracks muted" role="status">Loading playlist…</div>
         {:else if Array.isArray(expanded[ep.id])}
           {@const tracks = tracksOf(ep)}
           {#if tracks.length === 0}
-            <div class="tracks muted">No playlist recorded for this episode.</div>
+            <div id={`playlist-${ep.id}`} class="tracks muted">No playlist recorded for this episode.</div>
           {:else}
-            <div class="tracks">
+            <div id={`playlist-${ep.id}`} class="tracks">
               {#each tracks as t (t.id)}
                 <TrackRow
                   track={t}
@@ -558,6 +612,11 @@
     min-width: 0;
     cursor: pointer;
     padding: 8px 0;
+    border: 0;
+    background: none;
+    color: inherit;
+    font: inherit;
+    text-align: left;
     display: flex;
     align-items: center;
     gap: 10px;

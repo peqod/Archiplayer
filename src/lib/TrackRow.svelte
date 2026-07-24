@@ -31,6 +31,9 @@
       title={current
         ? playing ? "Pause song" : "Resume song"
         : `Play at ${fmtTime(track.start_sec)}`}
+      aria-label={current
+        ? playing ? "Pause song" : "Resume song"
+        : `Play song at ${fmtTime(track.start_sec)}`}
     ><Icon name={current && playing ? "pause" : "play"} /></button>
   {:else}
     <span class="tplay-spacer" aria-hidden="true"></span>
@@ -44,10 +47,12 @@
       class="mini"
       class:on={track.favourite}
       onclick={onfavourite}
+      aria-label={track.favourite ? "Remove song from favourites" : "Add song to favourites"}
+      aria-pressed={track.favourite}
       title="Star song"
     ><Icon name="star" filled={track.favourite} /></button>
     {#if onshare}
-      <button class="mini" onclick={onshare} title="Share song"><Icon name="share" /></button>
+      <button class="mini" onclick={onshare} aria-label="Share song" title="Share song"><Icon name="share" /></button>
     {/if}
   </div>
 </div>

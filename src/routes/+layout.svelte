@@ -11,7 +11,7 @@
   import Toast from "$lib/Toast.svelte";
   import { page } from "$app/stores";
   import { goto } from "$app/navigation";
-  import { tick } from "svelte";
+  import { onMount, tick } from "svelte";
   import { getCurrentWindow, PhysicalSize } from "@tauri-apps/api/window";
   import { openUrl } from "@tauri-apps/plugin-opener";
 
@@ -60,6 +60,7 @@
   // Mirrors the CSS mini-mode breakpoint so volume can fold to a popover.
   let mini = $state(false);
   let volOpen = $state(false);
+  let miniMedia: MediaQueryList | null = null;
   let applyingWindowSize = false;
   let windowSizeQueued = false;
   let collapseTransitioning = false;
@@ -67,13 +68,19 @@
   if (typeof window !== "undefined") {
     theme.load();
     collapsed = localStorage.getItem("ap.collapsed") === "1";
-    const mq = window.matchMedia("(max-width: 760px)");
-    mini = mq.matches;
-    mq.addEventListener("change", (e) => {
+    miniMedia = window.matchMedia("(max-width: 760px)");
+    mini = miniMedia.matches;
+  }
+
+  onMount(() => {
+    if (!miniMedia) return;
+    const onMiniChange = (e: MediaQueryListEvent) => {
       mini = e.matches;
       volOpen = false; // leaving/entering mini closes any open volume popover
-    });
-  }
+    };
+    miniMedia.addEventListener("change", onMiniChange);
+    return () => miniMedia?.removeEventListener("change", onMiniChange);
+  });
 
   async function applyWindowSize() {
     if (applyingWindowSize) {
@@ -187,6 +194,9 @@
   const volumeIcon = $derived(
     player.muted || player.volume < 0.02 ? "volume-mute" : player.volume < 0.5 ? "volume-quiet" : "volume-loud",
   );
+  const playPauseLabel = $derived(
+    player.loading ? "Loading audio" : player.playing ? "Pause" : "Play",
+  );
 
   function onScrub(e: Event) {
     const v = Number((e.target as HTMLInputElement).value);
@@ -263,7 +273,7 @@
       <Icon name={volumeIcon} size="24px" />
     </button>
     {#if !mini}
-      <input type="range" min="0" max="1" step="0.02" value={player.volume} oninput={onVolume} />
+      <input aria-label="Volume" type="range" min="0" max="1" step="0.02" value={player.volume} oninput={onVolume} />
     {:else if volOpen}
       <div
         class="vol-pop"
@@ -292,6 +302,7 @@
 {/snippet}
 
 <div class="app">
+  <a class="skip-link" href="#main-content">Skip to content</a>
   <header
     class="player"
     class:inactive={!player.current && !player.live}
@@ -300,15 +311,15 @@
     <!-- svelte-ignore a11y_media_has_caption -->
     <audio bind:this={audioEl} preload="none"></audio>
     <div class="p-controls">
-      <button class="pbtn" onclick={() => player.prevEpisode()} disabled={!player.current} title="Previous episode / restart"><Icon name="prev-ep" /></button>
-      <button class="pbtn" onclick={() => player.prevTrack()} disabled={!player.tracks.length} title="Previous song"><Icon name="prev" /></button>
-      <button class="pbtn skip" onclick={() => player.skip(-15)} disabled={!player.current} title="Back 15 seconds">«15</button>
-      <button class="pbtn main" onclick={() => player.toggle()} disabled={!player.current && !player.live} title="Play/pause">
+      <button class="pbtn" onclick={() => player.prevEpisode()} disabled={!player.current} aria-label="Previous episode or restart" title="Previous episode / restart"><Icon name="prev-ep" /></button>
+      <button class="pbtn" onclick={() => player.prevTrack()} disabled={!player.tracks.length} aria-label="Previous song" title="Previous song"><Icon name="prev" /></button>
+      <button class="pbtn skip" onclick={() => player.skip(-15)} disabled={!player.current} aria-label="Back 15 seconds" title="Back 15 seconds">«15</button>
+      <button class="pbtn main" onclick={() => player.toggle()} disabled={!player.current && !player.live} aria-label={playPauseLabel} title={playPauseLabel}>
         {#if player.loading}…{:else if player.playing}<Icon name="playing" size="22px" />{:else}<Icon name="play" size="22px" />{/if}
       </button>
-      <button class="pbtn skip" onclick={() => player.skip(15)} disabled={!player.current} title="Forward 15 seconds">15»</button>
-      <button class="pbtn" onclick={() => player.nextTrack()} disabled={!player.tracks.length} title="Next song"><Icon name="next" /></button>
-      <button class="pbtn" onclick={() => player.nextEpisode()} disabled={!player.current || player.queueIndex >= player.queue.length - 1} title="Next episode"><Icon name="next-ep" /></button>
+      <button class="pbtn skip" onclick={() => player.skip(15)} disabled={!player.current} aria-label="Forward 15 seconds" title="Forward 15 seconds">15»</button>
+      <button class="pbtn" onclick={() => player.nextTrack()} disabled={!player.tracks.length} aria-label="Next song" title="Next song"><Icon name="next" /></button>
+      <button class="pbtn" onclick={() => player.nextEpisode()} disabled={!player.current || player.queueIndex >= player.queue.length - 1} aria-label="Next episode" title="Next episode"><Icon name="next-ep" /></button>
     </div>
     <div class="p-info">
       {#if player.current}
@@ -317,6 +328,8 @@
             class="pfav"
             class:on={player.current.episode.favourite}
             onclick={bookmarkShow}
+            aria-label={player.current.episode.favourite ? "Remove episode from favourites" : "Save this episode"}
+            aria-pressed={player.current.episode.favourite}
             title="Save this episode"
           ><Icon name="save" filled={player.current.episode.favourite} /></button>
           <a href={"/show/" + player.current.episode.show_id}>{player.current.showName}</a>
@@ -331,6 +344,8 @@
             class:on={currentTrack?.favourite}
             onclick={bookmarkSong}
             disabled={!currentTrack}
+            aria-label={currentTrack?.favourite ? "Remove song from favourites" : "Star this song"}
+            aria-pressed={currentTrack?.favourite ?? false}
             title={currentTrack ? "Star this song" : "No song info yet"}
           ><Icon name="star" filled={currentTrack?.favourite ?? false} /></button>
           {#if currentTrack}
@@ -351,6 +366,7 @@
             value={player.currentTime}
             oninput={onScrub}
             disabled={!player.duration}
+            aria-label="Episode position"
           />
           <span class="p-time">{fmtTime(player.duration)}</span>
           {@render volumeControl()}
@@ -362,6 +378,8 @@
             class:on={player.liveEpisode?.episode.favourite}
             onclick={bookmarkLiveEpisode}
             disabled={!player.liveEpisode}
+            aria-label={player.liveEpisode?.episode.favourite ? "Remove live episode from favourites" : "Save this live episode"}
+            aria-pressed={player.liveEpisode?.episode.favourite ?? false}
             title="Save this live episode"
           ><Icon name="save" filled={player.liveEpisode?.episode.favourite ?? false} /></button>
           <span class="live-badge">● LIVE</span>
@@ -376,6 +394,8 @@
             class:on={currentTrack?.favourite}
             onclick={bookmarkLiveSong}
             disabled={!currentTrack}
+            aria-label={currentTrack?.favourite ? "Remove live song from favourites" : "Star this live song"}
+            aria-pressed={currentTrack?.favourite ?? false}
             title={currentTrack ? "Star this song" : "Song has not been persisted yet"}
           ><Icon name="star" filled={currentTrack?.favourite ?? false} /></button>
           {#if currentTrack}
@@ -415,12 +435,14 @@
       <a
         href="/"
         class:active={isActive("/")}
+        aria-current={isActive("/") ? "page" : undefined}
         title={isActive("/") && !collapsed ? "Collapse to player only" : "Shows"}
         onclick={(event) => onNavClick(event, "/")}
       >Shows</a>
       <a
         href="/profile"
         class:active={isActive("/profile")}
+        aria-current={isActive("/profile") ? "page" : undefined}
         title={isActive("/profile") && !collapsed ? "Collapse to player only" : "Profile"}
         onclick={(event) => onNavClick(event, "/profile")}
       >Profile</a>
@@ -433,10 +455,15 @@
     ><span class="d-full">♥ Support WFMU</span><span class="d-mini">♥ WFMU</span></a>
   </nav>
 
-  <main>
+  <main id="main-content" tabindex="-1">
     {@render children()}
   </main>
-  {#if favError}<button class="fav-error" onclick={() => (favError = null)}>{favError} ✕</button>{/if}
+  {#if favError}
+    <div class="fav-error" role="alert">
+      <span>{favError}</span>
+      <button aria-label="Dismiss error" onclick={() => (favError = null)}>✕</button>
+    </div>
+  {/if}
   <Toast />
 </div>
 
@@ -483,6 +510,10 @@
   :global(button) {
     font-family: inherit;
   }
+  :global(:where(a, button, input, summary):not(.vol-v):focus-visible) {
+    outline: 2px solid var(--c-accent) !important;
+    outline-offset: 2px;
+  }
   /* Single-line truncation utility (shared across the player, show list and track rows). */
   :global(.ellipsis) {
     white-space: nowrap;
@@ -494,6 +525,21 @@
     flex-direction: column;
     height: 100vh;
     overflow: hidden; /* shell never scrolls — only <main> does */
+  }
+  .skip-link {
+    position: fixed;
+    top: 8px;
+    left: 8px;
+    z-index: 200;
+    padding: 8px 12px;
+    border-radius: 6px;
+    background: var(--c-accent);
+    color: var(--c-on-accent);
+    font-weight: 700;
+    transform: translateY(calc(-100% - 12px));
+  }
+  .skip-link:focus {
+    transform: translateY(0);
   }
   nav {
     display: flex;
@@ -729,8 +775,17 @@
     padding: 8px 14px;
     border-radius: 8px;
     font-size: 13px;
-    cursor: pointer;
     z-index: 10;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .fav-error button {
+    border: 0;
+    background: none;
+    color: inherit;
+    cursor: pointer;
+    padding: 2px;
   }
   .p-volume {
     display: flex;
@@ -1010,6 +1065,14 @@
     .nav-links a {
       padding: 3px 5px;
       font-size: 13px;
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    :global(*) {
+      scroll-behavior: auto !important;
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
     }
   }
 </style>

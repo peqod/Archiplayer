@@ -44,13 +44,16 @@
   $effect(() => {
     void streamId;
     detail = null;
+    error = null;
     loading = true;
     // Opening the station pulls fresh live data; the interval below keeps it current.
     void load(true);
   });
 
   onMount(() => {
-    const timer = setInterval(() => void load(), 30_000);
+    const timer = setInterval(() => {
+      if (!loading) void load();
+    }, 30_000);
     return () => {
       clearInterval(timer);
       requestGeneration += 1;
@@ -121,7 +124,11 @@
       {/if}
     </div>
     <div class="actions">
-      <button class="primary" onclick={() => player.playLive(stream)}>
+      <button
+        class="primary"
+        onclick={() => player.playLive(stream)}
+        aria-label={player.live?.id === stream.id && player.playing ? `Pause ${stream.name}` : `Listen to ${stream.name}`}
+      >
         <Icon name={player.live?.id === stream.id && player.playing ? "pause" : "play"} />
         {player.live?.id === stream.id && player.playing ? "Pause live" : "Listen live"}
       </button>
@@ -129,10 +136,10 @@
   </div>
 
   {#if error}
-    <div class="error">{error}</div>
+    <div class="error" role="alert">{error}</div>
   {/if}
   {#if detail?.warning}
-    <div class="warning">Showing the last available information. {detail.warning}</div>
+    <div class="warning" role="status">Showing the last available information. {detail.warning}</div>
   {/if}
 
   <section>
@@ -146,7 +153,7 @@
       {/if}
     </div>
     {#if loading && !detail}
-      <div class="tracks muted">Loading live history…</div>
+      <div class="tracks muted" role="status">Loading live history…</div>
     {:else if !detail?.tracks.length}
       <div class="tracks muted">No songs have been observed yet.</div>
     {:else}
@@ -167,7 +174,7 @@
   <section>
     <div class="section-head"><h2>Up next today</h2><span class="meta">Eastern Time</span></div>
     {#if loading && !detail}
-      <div class="schedule muted">Loading schedule…</div>
+      <div class="schedule muted" role="status">Loading schedule…</div>
     {:else if !detail?.upcoming_shows.length}
       <div class="schedule muted">No more scheduled shows are listed for today.</div>
     {:else}
