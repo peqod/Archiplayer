@@ -54,9 +54,17 @@ $tag = "v$Version"
 # --- helpers ----------------------------------------------------------------
 
 function Invoke-Native {
-  param([Parameter(Mandatory)][string]$File, [Parameter(ValueFromRemainingArguments)][string[]]$Arguments)
-  & $File @Arguments
-  if ($LASTEXITCODE -ne 0) { throw "$File $($Arguments -join ' ') failed (exit $LASTEXITCODE)." }
+  # Avoid parameter names such as File/Arguments: PowerShell treats native flags
+  # like `-a` and `-F` as abbreviations for those function parameters instead of
+  # forwarding them to git/gh.
+  param(
+    [Parameter(Mandatory)][string]$Executable,
+    [Parameter(ValueFromRemainingArguments)][string[]]$NativeArgs
+  )
+  & $Executable @NativeArgs
+  if ($LASTEXITCODE -ne 0) {
+    throw "$Executable $($NativeArgs -join ' ') failed (exit $LASTEXITCODE)."
+  }
 }
 
 # Anchored, minimal-diff version bump. Reads/writes raw bytes so JSON is not
