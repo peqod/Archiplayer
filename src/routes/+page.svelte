@@ -8,6 +8,7 @@
   import { selectRandomPlayback } from "$lib/random-show";
   import { LatestRequest } from "$lib/request-gate";
   import { shareShow } from "$lib/share";
+  import { hasExactTrackTimestamp } from "$lib/track-playback";
 
   let shows = $state<Show[]>([]);
   let loading = $state(true);
@@ -198,6 +199,7 @@
   }
 
   async function playTrackHit(hit: TrackHit) {
+    if (!hasExactTrackTimestamp(hit.track.start_sec)) return;
     try {
       const detail = await api.getShow(hit.show_id);
       const ep = detail.episodes.find((e) => e.id === hit.track.episode_id);
@@ -295,10 +297,23 @@
   <h2 class="subhead">Songs <span class="muted">({trackHits.length} from cached playlists)</span></h2>
   <div class="tracklist">
     {#each trackHits.slice(0, 50) as hit}
-      <button class="trackhit" onclick={() => playTrackHit(hit)} title="Play episode at this song">
+      <button
+        class="trackhit"
+        onclick={() => playTrackHit(hit)}
+        disabled={!hasExactTrackTimestamp(hit.track.start_sec)}
+        title={hasExactTrackTimestamp(hit.track.start_sec)
+          ? "Play episode at this song"
+          : "No timestamp available"}
+        aria-label={hasExactTrackTimestamp(hit.track.start_sec)
+          ? `Play ${hit.track.artist ?? "unknown artist"} — ${hit.track.title ?? "unknown song"}`
+          : `Exact-song playback unavailable for ${hit.track.artist ?? "unknown artist"} — ${hit.track.title ?? "unknown song"}: no timestamp`}
+      >
         <span class="t-artist ellipsis">{hit.track.artist ?? "?"}</span>
         <span class="t-title ellipsis">{hit.track.title ?? "?"}</span>
-        <span class="t-meta ellipsis">{hit.show_name} · {hit.air_date ?? ""}</span>
+        <span class="t-meta ellipsis">
+          {hit.show_name} · {hit.air_date ?? ""}
+          {#if !hasExactTrackTimestamp(hit.track.start_sec)} · No timestamp{/if}
+        </span>
       </button>
     {/each}
   </div>
@@ -695,8 +710,12 @@
     cursor: pointer;
     font-size: 13px;
   }
-  .trackhit:hover {
+  .trackhit:hover:not(:disabled) {
     background: var(--c-surface2);
+  }
+  .trackhit:disabled {
+    cursor: not-allowed;
+    opacity: 0.65;
   }
   .t-artist {
     font-weight: 600;

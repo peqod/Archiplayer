@@ -15,6 +15,7 @@
   import CatalogNav from "$lib/CatalogNav.svelte";
   import { centerEpisodeRow } from "$lib/episode-scroll";
   import { LatestRequest } from "$lib/request-gate";
+  import { canPlayExactTrack } from "$lib/track-playback";
   import { onMount, tick } from "svelte";
 
   function openWfmu(e: MouseEvent) {
@@ -235,7 +236,7 @@
   }
 
   async function playTrack(ep: Episode, track: Track) {
-    if (!show) return;
+    if (!show || !canPlayExactTrack(ep.has_audio, track.start_sec)) return;
     if (player.current?.episode.id === ep.id) {
       const activeTrack =
         player.currentTrackIndex >= 0

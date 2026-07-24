@@ -16,6 +16,7 @@
   import Icon from "$lib/Icon.svelte";
   import { LatestRequest } from "$lib/request-gate";
   import { shareShow, shareEpisode, shareTrack, wfmuShowUrl } from "$lib/share";
+  import { hasExactTrackTimestamp } from "$lib/track-playback";
 
   let favs = $state<Favourites | null>(null);
   let stats = $state<Stats | null>(null);
@@ -193,6 +194,15 @@
     }
   }
 
+  async function playFavTrack(
+    episodeId: number,
+    showName: string,
+    startTrackSec: number | null,
+  ) {
+    if (!hasExactTrackTimestamp(startTrackSec)) return;
+    await playFavEpisode(episodeId, showName, startTrackSec);
+  }
+
   async function exportCsv(kind: "favourites" | "listens" | "stats") {
     error = null;
     notice = null;
@@ -331,14 +341,22 @@
           <div class="fav">
             <button
               class="linkish"
-              onclick={() => playFavEpisode(f.track.episode_id, f.show_name, f.track.start_sec)}
-              aria-label={`Play ${f.track.artist ?? "unknown artist"} — ${f.track.title ?? "unknown song"}`}
-              title={f.track.start_sec !== null ? `Play at ${fmtTime(f.track.start_sec)}` : "Play episode"}
+              onclick={() => playFavTrack(f.track.episode_id, f.show_name, f.track.start_sec)}
+              disabled={!hasExactTrackTimestamp(f.track.start_sec)}
+              aria-label={hasExactTrackTimestamp(f.track.start_sec)
+                ? `Play ${f.track.artist ?? "unknown artist"} — ${f.track.title ?? "unknown song"}`
+                : `Exact-song playback unavailable for ${f.track.artist ?? "unknown artist"} — ${f.track.title ?? "unknown song"}: no timestamp`}
+              title={hasExactTrackTimestamp(f.track.start_sec)
+                ? `Play at ${fmtTime(f.track.start_sec)}`
+                : "No timestamp available"}
             ><Icon name="play" /></button>
             <span class="ellip">
               <b>{f.track.artist ?? "?"}</b> — {f.track.title ?? "?"}
             </span>
-            <span class="muted">{f.show_name} · {f.air_date ?? ""}</span>
+            <span class="muted">
+              {f.show_name} · {f.air_date ?? ""}
+              {#if !hasExactTrackTimestamp(f.track.start_sec)} · No timestamp{/if}
+            </span>
             <div class="fav-actions">
               <button class="mini share" onclick={() => shareTrack(f.track, f.show_name, f.air_date, wfmuShowUrl(f.show_id))} aria-label="Share song" title="Share"><Icon name="share" /></button>
               <button class="mini" onclick={() => unfav("track", String(f.track.id))} aria-label="Remove song from favourites" title="Remove"><Icon name="star" filled /></button>
