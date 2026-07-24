@@ -73,10 +73,10 @@
     });
   }
 
-  async function load(requestedShowId: string, generation: number, refresh = false) {
+  async function load(requestedShowId: string, generation: number) {
     if (detailRequests.isCurrent(generation)) error = null;
     try {
-      const detail = await api.getShow(requestedShowId, refresh);
+      const detail = await api.getShow(requestedShowId);
       if (!detailRequests.isCurrent(generation)) return;
       show = detail.show;
       episodes = detail.episodes;
@@ -99,13 +99,9 @@
     centeredEpisodeId = null;
     reverse = false; // each show opens newest-first
     loading = true;
-    // Paint cached episodes, then re-scrape the show page so new episodes appear.
-    void (async () => {
-      await load(requestedShowId, generation);
-      if (detailRequests.isCurrent(generation)) {
-        await load(requestedShowId, generation, true);
-      }
-    })();
+    // The backend serves cached history while applying its freshness policy, avoiding
+    // a second immediate show scrape and repeated archive-year walks.
+    void load(requestedShowId, generation);
 
     return () => detailRequests.invalidate(generation);
   });

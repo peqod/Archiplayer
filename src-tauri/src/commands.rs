@@ -21,9 +21,21 @@ type ListenExportRow = (
     i64,
 );
 const LIVE_PLAYLIST_REFRESH_SECONDS: i64 = 30;
+const CATALOG_CACHE_KEY: &str = "catalog_last_scraped";
+const CATALOG_CACHE_MAX_AGE_SECONDS: i64 = 24 * 60 * 60;
+const SHOW_CACHE_MAX_AGE_SECONDS: i64 = 6 * 60 * 60;
 
 fn db_err(e: rusqlite::Error) -> String {
     format!("db error: {e}")
+}
+
+fn cache_is_stale(last_scraped: Option<i64>, now: i64, max_age_seconds: i64) -> bool {
+    match last_scraped {
+        Some(timestamp) if timestamp <= now => now.saturating_sub(timestamp) >= max_age_seconds,
+        // Missing and future timestamps both need a refresh. Treating a future value as fresh
+        // forever would wedge the cache after a clock correction or a damaged setting.
+        _ => true,
+    }
 }
 
 #[derive(Serialize)]
@@ -106,14 +118,38 @@ pub struct LivePage {
 
 #[tauri::command]
 pub async fn get_catalog(refresh: bool, state: State<'_, AppState>) -> CmdResult<Vec<Show>> {
-    let need_scrape = {
+    let (cached_count, cache_stale) = {
         let db = state.db()?;
-        refresh || db.show_count().map_err(db_err)? == 0
+        let count = db.show_count().map_err(db_err)?;
+        let last_scraped = db
+            .get_setting(CATALOG_CACHE_KEY)
+            .map_err(db_err)?
+            .and_then(|value| value.parse::<i64>().ok());
+        (
+            count,
+            cache_is_stale(
+                last_scraped,
+                crate::db::Db::now(),
+                CATALOG_CACHE_MAX_AGE_SECONDS,
+            ),
+        )
     };
+    let need_scrape = refresh || cached_count == 0 || cache_stale;
     if need_scrape {
-        let html = state.fetcher.get_text(&wfmu::catalog_url()).await?;
+        let html = match state.fetcher.get_text(&wfmu::catalog_url()).await {
+            Ok(html) => html,
+            Err(error) if cached_count > 0 && !refresh => {
+                eprintln!("catalog refresh failed; serving cached shows: {error}");
+                return state.db()?.list_shows().map_err(db_err);
+            }
+            Err(error) => return Err(error),
+        };
         let shows = wfmu::parse_catalog(&html);
         if shows.is_empty() {
+            if cached_count > 0 && !refresh {
+                eprintln!("catalog refresh parsed no shows; serving cached catalog");
+                return state.db()?.list_shows().map_err(db_err);
+            }
             return Err("catalog parse produced no shows (site layout changed?)".into());
         }
         let db = state.db()?;
@@ -121,6 +157,8 @@ pub async fn get_catalog(refresh: bool, state: State<'_, AppState>) -> CmdResult
             db.upsert_show(&s.id, &s.name, s.dj.as_deref(), s.on_air)
                 .map_err(db_err)?;
         }
+        db.set_setting(CATALOG_CACHE_KEY, &crate::db::Db::now().to_string())
+            .map_err(db_err)?;
     }
     state.db()?.list_shows().map_err(db_err)
 }
@@ -131,70 +169,68 @@ pub async fn get_show(
     refresh: bool,
     state: State<'_, AppState>,
 ) -> CmdResult<ShowDetail> {
-    let need_scrape = {
+    let last_scraped = {
         let db = state.db()?;
-        refresh || !db.show_was_scraped(&show_id).map_err(db_err)?
+        db.show_last_scraped(&show_id).map_err(db_err)?
     };
+    let had_cache = last_scraped.is_some();
+    let need_scrape = refresh
+        || cache_is_stale(
+            last_scraped,
+            crate::db::Db::now(),
+            SHOW_CACHE_MAX_AGE_SECONDS,
+        );
     if need_scrape {
-        let html = state.fetcher.get_text(&wfmu::show_url(&show_id)).await?;
-        let episodes = wfmu::parse_show_page(&html);
-        let description = wfmu::parse_show_description(&html);
-        let archive_years = wfmu::parse_show_archive_years(&html, &show_id);
+        let html = match state.fetcher.get_text(&wfmu::show_url(&show_id)).await {
+            Ok(html) if !html.trim().is_empty() => Some(html),
+            Ok(_) if had_cache && !refresh => {
+                eprintln!("show {show_id} refresh was empty; serving cached episodes");
+                None
+            }
+            Ok(_) => return Err("show page was empty".into()),
+            Err(error) if had_cache && !refresh => {
+                eprintln!("show {show_id} refresh failed; serving cached episodes: {error}");
+                None
+            }
+            Err(error) => return Err(error),
+        };
+        if let Some(html) = html {
+            let mut episodes = wfmu::parse_show_page(&html);
+            let description = wfmu::parse_show_description(&html);
 
-        // Upsert episodes from the main page, then chase each archive year.
-        let mut seq: i64 = 0;
-        {
-            let db = state.db()?;
-            for e in &episodes {
-                db.upsert_episode(
-                    e.id,
-                    &show_id,
-                    e.air_date.as_deref(),
-                    e.title.as_deref(),
-                    e.archive_id,
-                    seq,
-                )
-                .map_err(db_err)?;
-                seq += 1;
-            }
-        }
-        // Year pages link back to the show and to each other, so track what we've
-        // already pulled.
-        let mut visited: HashSet<&str> = HashSet::new();
-        for year_path in &archive_years {
-            if !visited.insert(year_path.as_str()) {
-                continue;
-            }
-            let year_url = format!("{}{}", wfmu::BASE, year_path);
-            // A dead year page must not abort the whole show: bailing here would skip
-            // mark_show_scraped and force a full re-scrape on every later visit.
-            let year_html = match state.fetcher.get_text(&year_url).await {
-                Ok(h) => h,
-                Err(e) => {
-                    eprintln!("archive year {year_url} failed: {e}");
-                    continue;
+            // Deep archive hydration is needed once (or for an explicit forced refresh). Routine
+            // TTL refreshes only fetch the current show page; sync_show_episodes keeps the cached
+            // historical tail ordered behind the new rows.
+            if !had_cache || refresh {
+                let archive_years = wfmu::parse_show_archive_years(&html, &show_id);
+                // Year pages link back to the show and to each other, so track what we've
+                // already pulled.
+                let mut visited: HashSet<&str> = HashSet::new();
+                for year_path in &archive_years {
+                    if !visited.insert(year_path.as_str()) {
+                        continue;
+                    }
+                    let year_url = format!("{}{}", wfmu::BASE, year_path);
+                    // A dead year page must not abort the whole show: bailing here would skip
+                    // mark_show_scraped and force a full re-scrape on every later visit.
+                    let year_html = match state.fetcher.get_text(&year_url).await {
+                        Ok(h) => h,
+                        Err(e) => {
+                            eprintln!("archive year {year_url} failed: {e}");
+                            continue;
+                        }
+                    };
+                    episodes.extend(wfmu::parse_show_page(&year_html));
                 }
-            };
-            let year_eps = wfmu::parse_show_page(&year_html);
-            let db = state.db()?;
-            for e in &year_eps {
-                db.upsert_episode(
-                    e.id,
-                    &show_id,
-                    e.air_date.as_deref(),
-                    e.title.as_deref(),
-                    e.archive_id,
-                    seq,
-                )
-                .map_err(db_err)?;
-                seq += 1;
             }
+
+            let mut db = state.db()?;
+            db.sync_show_episodes(&show_id, &episodes).map_err(db_err)?;
+            if let Some(desc) = description {
+                db.set_show_description(&show_id, &desc).map_err(db_err)?;
+            }
+            db.mark_show_scraped(&show_id).map_err(db_err)?;
         }
-        let db = state.db()?;
-        if let Some(desc) = description {
-            db.set_show_description(&show_id, &desc).map_err(db_err)?;
-        }
-        db.mark_show_scraped(&show_id).map_err(db_err)?;
     }
     let db = state.db()?;
     let episodes = db.list_episodes(&show_id).map_err(db_err)?;
@@ -1376,7 +1412,17 @@ pub fn export_csv(kind: String, dest: String, state: State<'_, AppState>) -> Cmd
 
 #[cfg(test)]
 mod tests {
-    use super::{neutralize_csv_cell, write_csv_record};
+    use super::{cache_is_stale, neutralize_csv_cell, write_csv_record};
+
+    #[test]
+    fn cache_freshness_handles_boundaries_and_bad_timestamps() {
+        let now = 10_000;
+        let max_age = 300;
+        assert!(cache_is_stale(None, now, max_age));
+        assert!(!cache_is_stale(Some(now - max_age + 1), now, max_age));
+        assert!(cache_is_stale(Some(now - max_age), now, max_age));
+        assert!(cache_is_stale(Some(now + 1), now, max_age));
+    }
 
     #[test]
     fn csv_cells_that_can_start_formulas_are_neutralized() {

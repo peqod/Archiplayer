@@ -122,7 +122,11 @@ Rust application ── SQLite library, favourites, history and settings
 
 WFMU does not expose an official archive API. Archiplayer parses the public KenzoDB pages on demand, limits those page requests to one per second, and caches results rather than crawling the site.
 
-Opening the app makes one request (the A–Z show index). Every other page is fetched only on click — one request each, capped at 1/sec, and cached after. No bulk download, no “download all”.
+The app refreshes the A–Z index at most once per day. The first visit to a show hydrates its
+linked archive-year pages at a strict one-request-per-second rate; later visits use that local
+history and refresh only the current show page after six hours. Playlist pages are fetched on
+demand and cached. If WFMU is temporarily unavailable, previously cached catalog and show data
+remain usable. There is no bulk audio download or “download all”.
 
 | Data | Public source |
 |---|---|

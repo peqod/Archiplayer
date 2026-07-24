@@ -24,10 +24,10 @@
   const PAGE_SIZE = 60;
   let visibleCount = $state(PAGE_SIZE);
 
-  async function load(refresh: boolean, generation: number) {
+  async function load(generation: number) {
     if (catalogRequests.isCurrent(generation)) error = null;
     try {
-      const next = await api.getCatalog(refresh);
+      const next = await api.getCatalog();
       if (catalogRequests.isCurrent(generation)) shows = next;
     } catch (e) {
       if (catalogRequests.isCurrent(generation)) error = String(e);
@@ -46,13 +46,10 @@
     else if (sp.get("fav") === "1") letterFilter = "★";
     else if (letter) letterFilter = letter;
 
-    // Paint cached catalog instantly, then re-scrape WFMU so the alphabet picks up
-    // new shows. Ignore both completions if this route has already been destroyed.
+    // The backend serves a fresh-enough cached catalog immediately and refreshes stale
+    // data on demand. Ignore the completion if this route has already been destroyed.
     const generation = catalogRequests.begin();
-    void (async () => {
-      await load(false, generation);
-      if (catalogRequests.isCurrent(generation)) await load(true, generation);
-    })();
+    void load(generation);
 
     return () => catalogRequests.invalidate(generation);
   });
