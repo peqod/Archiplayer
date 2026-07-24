@@ -1,5 +1,6 @@
 use rusqlite::{params, Connection, OptionalExtension};
 use serde::Serialize;
+use std::collections::HashSet;
 use std::path::Path;
 
 #[derive(Debug, Clone, Serialize)]
@@ -160,6 +161,11 @@ impl Db {
                 "ALTER TABLE shows ADD COLUMN description TEXT",
             ),
             (
+                "shows",
+                "is_live",
+                "ALTER TABLE shows ADD COLUMN is_live INTEGER NOT NULL DEFAULT 0",
+            ),
+            (
                 "episodes",
                 "resume_sec",
                 "ALTER TABLE episodes ADD COLUMN resume_sec INTEGER",
@@ -193,9 +199,8 @@ impl Db {
         for (table, column, sql) in migrations {
             let exists = {
                 let mut stmt = tx.prepare(&format!("PRAGMA table_info({table})"))?;
-                let columns = stmt.query_map([], |row| row.get::<_, String>(1))?;
-                let found = columns.filter_map(Result::ok).any(|name| name == column);
-                found
+                let mut columns = stmt.query_map([], |row| row.get::<_, String>(1))?;
+                columns.any(|name| name.is_ok_and(|name| name == column))
             };
             if !exists {
                 tx.execute(sql, [])?;
@@ -205,7 +210,10 @@ impl Db {
             "CREATE UNIQUE INDEX IF NOT EXISTS idx_tracks_episode_source
              ON tracks(episode_id, source_id) WHERE source_id IS NOT NULL;",
         )?;
-        tx.pragma_update(None, "user_version", 2)?;
+        // Retroactively flag synthetic live rows created before the is_live column existed,
+        // so they stop appearing in the catalog. Real show ids never start with "live-".
+        tx.execute_batch("UPDATE shows SET is_live = 1 WHERE id LIKE 'live-%';")?;
+        tx.pragma_update(None, "user_version", 3)?;
         tx.commit()
     }
 
@@ -236,7 +244,7 @@ impl Db {
             "SELECT s.id, s.name, s.dj, s.description, s.on_air, s.last_scraped,
                     (SELECT COUNT(*) FROM episodes e WHERE e.show_id = s.id),
                     EXISTS(SELECT 1 FROM favourites f WHERE f.kind='show' AND f.ref_id = s.id)
-             FROM shows s ORDER BY s.name COLLATE NOCASE",
+             FROM shows s WHERE s.is_live = 0 ORDER BY s.name COLLATE NOCASE",
         )?;
         let rows = stmt.query_map([], |r| {
             Ok(Show {
@@ -263,7 +271,16 @@ impl Db {
 
     pub fn show_count(&self) -> Result<i64, rusqlite::Error> {
         self.conn
-            .query_row("SELECT COUNT(*) FROM shows", [], |r| r.get(0))
+            .query_row("SELECT COUNT(*) FROM shows WHERE is_live = 0", [], |r| {
+                r.get(0)
+            })
+    }
+
+    /// Flag a synthetic live-station row so the ordinary catalog and search never surface it.
+    pub fn set_show_live(&self, id: &str) -> Result<(), rusqlite::Error> {
+        self.conn
+            .execute("UPDATE shows SET is_live=1 WHERE id=?1", params![id])?;
+        Ok(())
     }
 
     pub fn mark_show_scraped(&self, id: &str) -> Result<(), rusqlite::Error> {
@@ -274,13 +291,12 @@ impl Db {
         Ok(())
     }
 
-    pub fn show_was_scraped(&self, id: &str) -> Result<bool, rusqlite::Error> {
-        let scraped: Option<i64> = self.conn.query_row(
+    pub fn show_last_scraped(&self, id: &str) -> Result<Option<i64>, rusqlite::Error> {
+        self.conn.query_row(
             "SELECT last_scraped FROM shows WHERE id=?1",
             params![id],
             |r| r.get(0),
-        )?;
-        Ok(scraped.is_some())
+        )
     }
 
     pub fn upsert_episode(
@@ -311,6 +327,63 @@ impl Db {
             ],
         )?;
         Ok(())
+    }
+
+    /// Merge a freshly parsed front page into a show's cached episode history.
+    ///
+    /// Parsed rows keep their upstream order at the front. Cached rows that are not on the
+    /// current page are retained behind them, with unique sequence values, so a lightweight
+    /// refresh does not need to re-fetch every archive-year page just to preserve ordering.
+    pub fn sync_show_episodes(
+        &mut self,
+        show_id: &str,
+        episodes: &[crate::wfmu::ParsedEpisode],
+    ) -> Result<(), rusqlite::Error> {
+        let tx = self.conn.transaction()?;
+        let existing: Vec<i64> = {
+            let mut statement =
+                tx.prepare("SELECT id FROM episodes WHERE show_id=?1 ORDER BY seq, id")?;
+            let rows = statement
+                .query_map([show_id], |row| row.get(0))?
+                .collect::<Result<_, _>>()?;
+            rows
+        };
+
+        let mut order = Vec::with_capacity(episodes.len() + existing.len());
+        let mut seen = HashSet::with_capacity(episodes.len() + existing.len());
+        for episode in episodes {
+            if seen.insert(episode.id) {
+                order.push(episode.id);
+            }
+            tx.execute(
+                "INSERT INTO episodes (id, show_id, air_date, title, archive_id, has_audio, seq)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, 0)
+                 ON CONFLICT(id) DO UPDATE SET
+                   show_id=?2, air_date=COALESCE(?3, air_date), title=COALESCE(?4, title),
+                   archive_id=COALESCE(?5, archive_id),
+                   has_audio=CASE WHEN ?5 IS NULL THEN has_audio ELSE ?6 END",
+                params![
+                    episode.id,
+                    show_id,
+                    episode.air_date,
+                    episode.title,
+                    episode.archive_id,
+                    episode.archive_id.is_some() as i64,
+                ],
+            )?;
+        }
+        for id in existing {
+            if seen.insert(id) {
+                order.push(id);
+            }
+        }
+        for (seq, id) in order.into_iter().enumerate() {
+            tx.execute(
+                "UPDATE episodes SET seq=?2 WHERE id=?1 AND show_id=?3",
+                params![id, seq as i64, show_id],
+            )?;
+        }
+        tx.commit()
     }
 
     pub fn list_episodes(&self, show_id: &str) -> Result<Vec<Episode>, rusqlite::Error> {
@@ -785,6 +858,17 @@ impl Db {
         Ok(())
     }
 
+    /// The stored destination path of a download, without touching the row.
+    pub fn download_path(&self, episode_id: i64) -> Result<Option<String>, rusqlite::Error> {
+        self.conn
+            .query_row(
+                "SELECT path FROM downloads WHERE episode_id=?1",
+                [episode_id],
+                |r| r.get(0),
+            )
+            .optional()
+    }
+
     pub fn remove_download(&self, episode_id: i64) -> Result<Option<String>, rusqlite::Error> {
         let path: Option<String> = self
             .conn
@@ -805,7 +889,7 @@ impl Db {
 #[cfg(test)]
 mod tests {
     use super::{Db, TrackSyncMode};
-    use crate::wfmu::{ParsedRecentTrack, ParsedTrack};
+    use crate::wfmu::{ParsedEpisode, ParsedRecentTrack, ParsedTrack};
     use rusqlite::{params, Connection};
 
     #[test]
@@ -832,7 +916,7 @@ mod tests {
             .conn
             .pragma_query_value(None, "user_version", |row| row.get(0))
             .expect("schema version");
-        assert_eq!(version, 2);
+        assert_eq!(version, 3);
         let offset_column: i64 = db
             .conn
             .query_row(
@@ -842,6 +926,82 @@ mod tests {
             )
             .expect("offset column");
         assert_eq!(offset_column, 1);
+        let is_live_column: i64 = db
+            .conn
+            .query_row(
+                "SELECT COUNT(*) FROM pragma_table_info('shows') WHERE name='is_live'",
+                [],
+                |row| row.get(0),
+            )
+            .expect("is_live column");
+        assert_eq!(is_live_column, 1);
+        drop(db);
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn live_shows_are_hidden_from_catalog() {
+        let path = std::env::temp_dir().join(format!(
+            "archiplayer-islive-{}-{}.db",
+            std::process::id(),
+            Db::now()
+        ));
+        let db = Db::open(&path).expect("open is_live test db");
+        db.upsert_show("BK", "Beware of the Blog", None, false)
+            .unwrap();
+        db.upsert_show("live-drummer", "Drummer (live)", None, true)
+            .unwrap();
+        db.set_show_live("live-drummer").unwrap();
+
+        // The synthetic live row is excluded from the count and the A–Z listing.
+        assert_eq!(db.show_count().unwrap(), 1);
+        let shows = db.list_shows().unwrap();
+        assert_eq!(shows.len(), 1);
+        assert_eq!(shows[0].id, "BK");
+        drop(db);
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn shallow_show_refresh_keeps_cached_history_in_stable_order() {
+        let path = std::env::temp_dir().join(format!(
+            "archiplayer-show-refresh-{}-{}.db",
+            std::process::id(),
+            Db::now()
+        ));
+        let mut db = Db::open(&path).expect("open show refresh test db");
+        db.upsert_show("WA", "Wake", None, true).unwrap();
+        for (seq, id) in [30, 20, 10].into_iter().enumerate() {
+            db.upsert_episode(id, "WA", None, None, Some(id), seq as i64)
+                .unwrap();
+        }
+
+        let current_page = [
+            ParsedEpisode {
+                id: 40,
+                air_date: Some("July 24, 2026".into()),
+                title: Some("New".into()),
+                archive_id: Some(40),
+            },
+            ParsedEpisode {
+                id: 30,
+                air_date: Some("July 17, 2026".into()),
+                title: Some("Updated".into()),
+                archive_id: Some(30),
+            },
+        ];
+        db.sync_show_episodes("WA", &current_page).unwrap();
+
+        let episodes = db.list_episodes("WA").unwrap();
+        assert_eq!(
+            episodes
+                .iter()
+                .map(|episode| episode.id)
+                .collect::<Vec<_>>(),
+            vec![40, 30, 20, 10]
+        );
+        assert_eq!(episodes[1].title.as_deref(), Some("Updated"));
+
         drop(db);
         let _ = std::fs::remove_file(path);
     }
@@ -993,7 +1153,7 @@ mod tests {
             played_at: 1_752_500_000,
             air_date: "2026-07-14".into(),
         };
-        db.sync_provider_tracks(-10, "wfmugtd", &[provider.clone()])
+        db.sync_provider_tracks(-10, "wfmugtd", std::slice::from_ref(&provider))
             .unwrap();
         db.sync_provider_tracks(-10, "wfmugtd", &[provider])
             .unwrap();

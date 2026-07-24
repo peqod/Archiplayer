@@ -36,6 +36,14 @@ pub fn run() {
             let data_dir = app.path().app_data_dir()?;
             std::fs::create_dir_all(&data_dir)?;
             let database = db::Db::open(&data_dir.join("library.db"))?;
+            // Re-grant asset access to a persisted custom download folder. Tauri does not
+            // persist the dialog's runtime scope grant across restarts, so without this,
+            // downloads saved outside $APPDATA/downloads stop playing after a relaunch.
+            if let Ok(Some(dir)) = database.get_setting("download_dir") {
+                if !dir.trim().is_empty() {
+                    let _ = app.asset_protocol_scope().allow_directory(&dir, true);
+                }
+            }
             app.manage(AppState {
                 db: Mutex::new(database),
                 fetcher: wfmu::Fetcher::new(),

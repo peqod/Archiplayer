@@ -8,13 +8,15 @@
     type DownloadRow,
   } from "$lib/api";
   import { player } from "$lib/player.svelte";
-  import { open, save } from "@tauri-apps/plugin-dialog";
+  import { confirm, open, save } from "@tauri-apps/plugin-dialog";
   import { revealItemInDir } from "@tauri-apps/plugin-opener";
   import { listen } from "@tauri-apps/api/event";
   import { onMount } from "svelte";
   import ThemePicker from "$lib/ThemePicker.svelte";
   import Icon from "$lib/Icon.svelte";
+  import { LatestRequest } from "$lib/request-gate";
   import { shareShow, shareEpisode, shareTrack, wfmuShowUrl } from "$lib/share";
+  import { hasExactTrackTimestamp } from "$lib/track-playback";
 
   let favs = $state<Favourites | null>(null);
   let stats = $state<Stats | null>(null);
@@ -24,38 +26,52 @@
   let error = $state<string | null>(null);
   let notice = $state<string | null>(null);
   let showBanner = $state(false);
-
-  $effect(() => {
-    showBanner = localStorage.getItem("ab2.hideLocalBanner") !== "1";
-  });
+  let mounted = false;
+  const profileRequests = new LatestRequest();
+  const downloadRequests = new LatestRequest();
 
   function dismissBanner() {
     showBanner = false;
-    localStorage.setItem("ab2.hideLocalBanner", "1");
+    try {
+      localStorage.setItem("ab2.hideLocalBanner", "1");
+    } catch {
+      /* dismissal still applies for this visit */
+    }
   }
 
   async function load() {
+    const generation = profileRequests.begin();
     error = null;
     try {
-      [favs, stats] = await Promise.all([api.listFavourites(), api.getStats()]);
+      const [nextFavs, nextStats] = await Promise.all([
+        api.listFavourites(),
+        api.getStats(),
+      ]);
+      if (!profileRequests.isCurrent(generation)) return;
+      favs = nextFavs;
+      stats = nextStats;
     } catch (e) {
-      error = String(e);
+      if (profileRequests.isCurrent(generation)) error = String(e);
     }
   }
-  load();
 
   async function loadDownloads() {
+    const generation = downloadRequests.begin();
     error = null;
     try {
-      downloads = await api.listDownloads();
-      downloadDir = await api.getDownloadDir();
+      const [nextDownloads, nextDownloadDir] = await Promise.all([
+        api.listDownloads(),
+        api.getDownloadDir(),
+      ]);
+      if (!downloadRequests.isCurrent(generation)) return;
+      downloads = nextDownloads;
+      downloadDir = nextDownloadDir;
     } catch (e) {
-      error = String(e);
+      if (downloadRequests.isCurrent(generation)) error = String(e);
     } finally {
-      dlLoading = false;
+      if (downloadRequests.isCurrent(generation)) dlLoading = false;
     }
   }
-  loadDownloads();
 
   async function changeDownloadDir() {
     try {
@@ -78,13 +94,23 @@
   }
 
   onMount(() => {
+    mounted = true;
+    try {
+      showBanner = localStorage.getItem("ab2.hideLocalBanner") !== "1";
+    } catch {
+      showBanner = true;
+    }
+    void load();
+    void loadDownloads();
+
     const un = listen<{ episode_id: number; bytes: number; total: number; status: string }>(
       "download-progress",
       (e) => {
+        if (!mounted) return;
         const p = e.payload;
         const known = downloads.some((r) => r.download.episode_id === p.episode_id);
         if (!known || p.status === "done") {
-          loadDownloads();
+          void loadDownloads();
           return;
         }
         downloads = downloads.map((r) =>
@@ -95,7 +121,10 @@
       },
     );
     return () => {
-      un.then((f) => f());
+      mounted = false;
+      profileRequests.invalidate();
+      downloadRequests.invalidate();
+      un.then((f) => f()).catch(() => {});
     };
   });
 
@@ -112,6 +141,14 @@
 
   async function removeDownload(row: DownloadRow) {
     try {
+      const label = row.show_name
+        ? `${row.show_name}${row.air_date ? ` — ${row.air_date}` : ""}`
+        : `episode #${row.download.episode_id}`;
+      const accepted = await confirm(`Delete the offline copy of ${label}?`, {
+        title: "Delete download",
+        kind: "warning",
+      });
+      if (!accepted) return;
       await api.deleteDownload(row.download.episode_id);
       downloads = downloads.filter((r) => r.download.episode_id !== row.download.episode_id);
     } catch (e) {
@@ -157,6 +194,15 @@
     }
   }
 
+  async function playFavTrack(
+    episodeId: number,
+    showName: string,
+    startTrackSec: number | null,
+  ) {
+    if (!hasExactTrackTimestamp(startTrackSec)) return;
+    await playFavEpisode(episodeId, showName, startTrackSec);
+  }
+
   async function exportCsv(kind: "favourites" | "listens" | "stats") {
     error = null;
     notice = null;
@@ -182,8 +228,8 @@
   </div>
 {/if}
 
-{#if error}<div class="error">{error}</div>{/if}
-{#if notice}<div class="notice">{notice}</div>{/if}
+{#if error}<div class="error" role="alert">{error}</div>{/if}
+{#if notice}<div class="notice" role="status">{notice}</div>{/if}
 
 <div class="cols">
   <details class="fold col-fold" open>
@@ -257,8 +303,8 @@
             <a href={"/show/" + f.show.id}>{f.show.name}</a>
             {#if f.show.dj}<span class="muted">with {f.show.dj}</span>{/if}
             <div class="fav-actions">
-              <button class="mini share" onclick={() => shareShow(f.show)} title="Share"><Icon name="share" /></button>
-              <button class="mini" onclick={() => unfav("show", f.show.id)} title="Remove"><Icon name="star" filled /></button>
+              <button class="mini share" onclick={() => shareShow(f.show)} aria-label={`Share ${f.show.name}`} title="Share"><Icon name="share" /></button>
+              <button class="mini" onclick={() => unfav("show", f.show.id)} aria-label={`Remove ${f.show.name} from favourites`} title="Remove"><Icon name="star" filled /></button>
             </div>
           </div>
         {:else}
@@ -274,13 +320,14 @@
               class="linkish"
               onclick={() => playFavEpisode(f.episode.id, f.show_name)}
               disabled={!f.episode.has_audio}
+              aria-label={`Play ${f.show_name} episode`}
               title="Play"
             ><Icon name="play" /></button>
             <span>{f.show_name} — {f.episode.air_date ?? ""}</span>
             {#if f.episode.title}<span class="muted ellip">{f.episode.title}</span>{/if}
             <div class="fav-actions">
-              <button class="mini share" onclick={() => shareEpisode(f.show_name, f.episode)} title="Share"><Icon name="share" /></button>
-              <button class="mini" onclick={() => unfav("episode", String(f.episode.id))} title="Remove"><Icon name="star" filled /></button>
+              <button class="mini share" onclick={() => shareEpisode(f.show_name, f.episode)} aria-label={`Share ${f.show_name} episode`} title="Share"><Icon name="share" /></button>
+              <button class="mini" onclick={() => unfav("episode", String(f.episode.id))} aria-label={`Remove ${f.show_name} episode from favourites`} title="Remove"><Icon name="star" filled /></button>
             </div>
           </div>
         {:else}
@@ -294,16 +341,25 @@
           <div class="fav">
             <button
               class="linkish"
-              onclick={() => playFavEpisode(f.track.episode_id, f.show_name, f.track.start_sec)}
-              title={f.track.start_sec !== null ? `Play at ${fmtTime(f.track.start_sec)}` : "Play episode"}
+              onclick={() => playFavTrack(f.track.episode_id, f.show_name, f.track.start_sec)}
+              disabled={!hasExactTrackTimestamp(f.track.start_sec)}
+              aria-label={hasExactTrackTimestamp(f.track.start_sec)
+                ? `Play ${f.track.artist ?? "unknown artist"} — ${f.track.title ?? "unknown song"}`
+                : `Exact-song playback unavailable for ${f.track.artist ?? "unknown artist"} — ${f.track.title ?? "unknown song"}: no timestamp`}
+              title={hasExactTrackTimestamp(f.track.start_sec)
+                ? `Play at ${fmtTime(f.track.start_sec)}`
+                : "No timestamp available"}
             ><Icon name="play" /></button>
             <span class="ellip">
               <b>{f.track.artist ?? "?"}</b> — {f.track.title ?? "?"}
             </span>
-            <span class="muted">{f.show_name} · {f.air_date ?? ""}</span>
+            <span class="muted">
+              {f.show_name} · {f.air_date ?? ""}
+              {#if !hasExactTrackTimestamp(f.track.start_sec)} · No timestamp{/if}
+            </span>
             <div class="fav-actions">
-              <button class="mini share" onclick={() => shareTrack(f.track, f.show_name, f.air_date, wfmuShowUrl(f.show_id))} title="Share"><Icon name="share" /></button>
-              <button class="mini" onclick={() => unfav("track", String(f.track.id))} title="Remove"><Icon name="star" filled /></button>
+              <button class="mini share" onclick={() => shareTrack(f.track, f.show_name, f.air_date, wfmuShowUrl(f.show_id))} aria-label="Share song" title="Share"><Icon name="share" /></button>
+              <button class="mini" onclick={() => unfav("track", String(f.track.id))} aria-label="Remove song from favourites" title="Remove"><Icon name="star" filled /></button>
             </div>
           </div>
         {:else}
@@ -345,6 +401,7 @@
             class="dl-play"
             onclick={() => playDownload(row)}
             disabled={!row.show_id || row.download.status !== "done"}
+            aria-label="Play offline copy"
             title="Play offline copy"
           ><Icon name="play" /></button>
           <div class="dl-info">
@@ -370,9 +427,10 @@
             class="dl-open"
             onclick={() => revealDownload(row)}
             disabled={row.download.status !== "done"}
+            aria-label="Show download in file explorer"
             title="Show in file explorer"
           >📁</button>
-          <button class="dl-del" onclick={() => removeDownload(row)} title="Delete file">🗑</button>
+          <button class="dl-del" onclick={() => removeDownload(row)} aria-label="Delete downloaded file" title="Delete file">🗑</button>
         </div>
       {/each}
     </div>

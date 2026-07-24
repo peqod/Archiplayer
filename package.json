@@ -10,7 +10,12 @@
     "build": "vite build",
     "preview": "vite preview",
     "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
+    "test": "npm run test:player && npm run test:episode-scroll && npm run test:random-show && npm run test:frontend-guards && npm run test:track-playback",
     "test:player": "node --experimental-strip-types tests/playback-transition.test.mjs",
+    "test:episode-scroll": "node --experimental-strip-types tests/episode-scroll.test.mjs",
+    "test:random-show": "node --experimental-strip-types tests/random-show.test.mjs",
+    "test:frontend-guards": "node --experimental-strip-types tests/frontend-guards.test.mjs",
+    "test:track-playback": "node --experimental-strip-types tests/track-playback.test.mjs",
     "check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
     "tauri": "tauri"
   },

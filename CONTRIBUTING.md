@@ -16,13 +16,18 @@ Install the prerequisites in the README, then run:
 ```sh
 npm ci
 npm run check
+npm test
 npm run build
+cargo fmt --manifest-path src-tauri/Cargo.toml --check
+cargo clippy --manifest-path src-tauri/Cargo.toml --locked --all-targets --all-features -- -D warnings
 cargo test --manifest-path src-tauri/Cargo.toml --locked
 ```
+
+On Windows, dot-source `. .\build-env.ps1` before the Cargo commands so they use
+the required MSVC toolchain and SDK environment.
 
 The live smoke test is ignored by default because it performs network requests. Only run it when working on the WFMU integration, and do not loop it.
 
 ## Pull requests
 
 Explain the user-visible result, note which platforms you tested, and attach before/after images for interface changes. Keep unrelated refactors separate. Database changes must include a migration path from an existing library rather than requiring users to delete local data.
-

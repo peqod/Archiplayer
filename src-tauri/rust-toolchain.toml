@@ -1,4 +1,4 @@
 [toolchain]
-# Bare "stable" resolves to stable-{default host}, which is MSVC on Windows.
-# Naming the triple here breaks cargo on Linux and macOS.
+# Keep the repository default host-portable. Windows entry points dot-source
+# build-env.ps1, which explicitly selects stable-x86_64-pc-windows-msvc.
 channel = "stable"

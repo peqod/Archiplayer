@@ -11,7 +11,7 @@
   import Toast from "$lib/Toast.svelte";
   import { page } from "$app/stores";
   import { goto } from "$app/navigation";
-  import { tick } from "svelte";
+  import { onMount, tick } from "svelte";
   import { getCurrentWindow, PhysicalSize } from "@tauri-apps/api/window";
   import { openUrl } from "@tauri-apps/plugin-opener";
 
@@ -41,6 +41,8 @@
       await goto("/show/" + selection.show.id, {
         state: { centerEpisodeId: selection.episodes[selection.index].id },
       });
+      // In minimal (collapsed) view, size the window for playback before the header expands.
+      if (collapsed) await growForPlayback();
       await player.playQueue(items, selection.index);
     } catch (err) {
       favError = String(err);
@@ -57,9 +59,13 @@
   let headerEl: HTMLElement;
   let expandedWidth = 0;
   let expandedHeight = 0;
+  // Last measured collapsed height while a track was loaded. Lets feelingLucky pre-grow
+  // the window to the playing size before the header expands, so it never clips.
+  let playingCompactHeight = 0;
   // Mirrors the CSS mini-mode breakpoint so volume can fold to a popover.
   let mini = $state(false);
   let volOpen = $state(false);
+  let miniMedia: MediaQueryList | null = null;
   let applyingWindowSize = false;
   let windowSizeQueued = false;
   let collapseTransitioning = false;
@@ -67,13 +73,19 @@
   if (typeof window !== "undefined") {
     theme.load();
     collapsed = localStorage.getItem("ap.collapsed") === "1";
-    const mq = window.matchMedia("(max-width: 760px)");
-    mini = mq.matches;
-    mq.addEventListener("change", (e) => {
+    miniMedia = window.matchMedia("(max-width: 760px)");
+    mini = miniMedia.matches;
+  }
+
+  onMount(() => {
+    if (!miniMedia) return;
+    const onMiniChange = (e: MediaQueryListEvent) => {
       mini = e.matches;
       volOpen = false; // leaving/entering mini closes any open volume popover
-    });
-  }
+    };
+    miniMedia.addEventListener("change", onMiniChange);
+    return () => miniMedia?.removeEventListener("change", onMiniChange);
+  });
 
   async function applyWindowSize() {
     if (applyingWindowSize) {
@@ -91,6 +103,8 @@
         // Tauri setSize targets the client area. Resize to the native minimum
         // width and the measured player + tab height.
         const compact = Math.ceil((headerEl?.offsetHeight ?? 0) + (navEl?.offsetHeight ?? 0));
+        // Remember the collapsed height while playing so feelingLucky can pre-size to it.
+        if (compact > 0 && (player.current || player.live)) playingCompactHeight = compact;
         const width = Math.round(COMPACT_WIDTH * scale);
         const height = Math.round(compact * scale);
         if (
@@ -121,6 +135,27 @@
         windowSizeQueued = false;
         void applyWindowSize();
       }
+    }
+  }
+
+  // Collapsed idle -> playing grows the header from one row to three synchronously, but the
+  // window resize is async. Pre-grow the window to the playing height first so the header
+  // expands into it (no nav clip / transport shift); the ResizeObserver then settles the exact
+  // height. Grows only — the observer handles any final shrink.
+  async function growForPlayback() {
+    if (!collapsed) return;
+    try {
+      const win = getCurrentWindow();
+      const scale = await win.scaleFactor();
+      const physical = await win.innerSize();
+      const targetLogical = playingCompactHeight > 0 ? playingCompactHeight : 200;
+      const width = Math.round(COMPACT_WIDTH * scale);
+      const height = Math.round(targetLogical * scale);
+      if (height > physical.height + 1) {
+        await win.setSize(new PhysicalSize(width, height));
+      }
+    } catch {
+      /* not in Tauri / no window perms — the header still expands, just without the pre-grow */
     }
   }
 
@@ -186,6 +221,9 @@
 
   const volumeIcon = $derived(
     player.muted || player.volume < 0.02 ? "volume-mute" : player.volume < 0.5 ? "volume-quiet" : "volume-loud",
+  );
+  const playPauseLabel = $derived(
+    player.loading ? "Loading audio" : player.playing ? "Pause" : "Play",
   );
 
   function onScrub(e: Event) {
@@ -263,7 +301,7 @@
       <Icon name={volumeIcon} size="24px" />
     </button>
     {#if !mini}
-      <input type="range" min="0" max="1" step="0.02" value={player.volume} oninput={onVolume} />
+      <input aria-label="Volume" type="range" min="0" max="1" step="0.02" value={player.volume} oninput={onVolume} />
     {:else if volOpen}
       <div
         class="vol-pop"
@@ -291,7 +329,8 @@
   </div>
 {/snippet}
 
-<div class="app">
+<div class="app" class:collapsed={collapsed}>
+  <a class="skip-link" href="#main-content">Skip to content</a>
   <header
     class="player"
     class:inactive={!player.current && !player.live}
@@ -300,15 +339,15 @@
     <!-- svelte-ignore a11y_media_has_caption -->
     <audio bind:this={audioEl} preload="none"></audio>
     <div class="p-controls">
-      <button class="pbtn" onclick={() => player.prevEpisode()} disabled={!player.current} title="Previous episode / restart"><Icon name="prev-ep" /></button>
-      <button class="pbtn" onclick={() => player.prevTrack()} disabled={!player.tracks.length} title="Previous song"><Icon name="prev" /></button>
-      <button class="pbtn skip" onclick={() => player.skip(-15)} disabled={!player.current} title="Back 15 seconds">«15</button>
-      <button class="pbtn main" onclick={() => player.toggle()} disabled={!player.current && !player.live} title="Play/pause">
+      <button class="pbtn" onclick={() => player.prevEpisode()} disabled={!player.current} aria-label="Previous episode or restart" title="Previous episode / restart"><Icon name="prev-ep" /></button>
+      <button class="pbtn" onclick={() => player.prevTrack()} disabled={!player.tracks.length} aria-label="Previous song" title="Previous song"><Icon name="prev" /></button>
+      <button class="pbtn skip" onclick={() => player.skip(-15)} disabled={!player.current} aria-label="Back 15 seconds" title="Back 15 seconds">«15</button>
+      <button class="pbtn main" onclick={() => player.toggle()} disabled={!player.current && !player.live} aria-label={playPauseLabel} title={playPauseLabel}>
         {#if player.loading}…{:else if player.playing}<Icon name="playing" size="22px" />{:else}<Icon name="play" size="22px" />{/if}
       </button>
-      <button class="pbtn skip" onclick={() => player.skip(15)} disabled={!player.current} title="Forward 15 seconds">15»</button>
-      <button class="pbtn" onclick={() => player.nextTrack()} disabled={!player.tracks.length} title="Next song"><Icon name="next" /></button>
-      <button class="pbtn" onclick={() => player.nextEpisode()} disabled={!player.current || player.queueIndex >= player.queue.length - 1} title="Next episode"><Icon name="next-ep" /></button>
+      <button class="pbtn skip" onclick={() => player.skip(15)} disabled={!player.current} aria-label="Forward 15 seconds" title="Forward 15 seconds">15»</button>
+      <button class="pbtn" onclick={() => player.nextTrack()} disabled={!player.tracks.length} aria-label="Next song" title="Next song"><Icon name="next" /></button>
+      <button class="pbtn" onclick={() => player.nextEpisode()} disabled={!player.current || player.queueIndex >= player.queue.length - 1} aria-label="Next episode" title="Next episode"><Icon name="next-ep" /></button>
     </div>
     <div class="p-info">
       {#if player.current}
@@ -317,6 +356,8 @@
             class="pfav"
             class:on={player.current.episode.favourite}
             onclick={bookmarkShow}
+            aria-label={player.current.episode.favourite ? "Remove episode from favourites" : "Save this episode"}
+            aria-pressed={player.current.episode.favourite}
             title="Save this episode"
           ><Icon name="save" filled={player.current.episode.favourite} /></button>
           <a href={"/show/" + player.current.episode.show_id}>{player.current.showName}</a>
@@ -331,6 +372,8 @@
             class:on={currentTrack?.favourite}
             onclick={bookmarkSong}
             disabled={!currentTrack}
+            aria-label={currentTrack?.favourite ? "Remove song from favourites" : "Star this song"}
+            aria-pressed={currentTrack?.favourite ?? false}
             title={currentTrack ? "Star this song" : "No song info yet"}
           ><Icon name="star" filled={currentTrack?.favourite ?? false} /></button>
           {#if currentTrack}
@@ -351,6 +394,7 @@
             value={player.currentTime}
             oninput={onScrub}
             disabled={!player.duration}
+            aria-label="Episode position"
           />
           <span class="p-time">{fmtTime(player.duration)}</span>
           {@render volumeControl()}
@@ -362,6 +406,8 @@
             class:on={player.liveEpisode?.episode.favourite}
             onclick={bookmarkLiveEpisode}
             disabled={!player.liveEpisode}
+            aria-label={player.liveEpisode?.episode.favourite ? "Remove live episode from favourites" : "Save this live episode"}
+            aria-pressed={player.liveEpisode?.episode.favourite ?? false}
             title="Save this live episode"
           ><Icon name="save" filled={player.liveEpisode?.episode.favourite ?? false} /></button>
           <span class="live-badge">● LIVE</span>
@@ -376,6 +422,8 @@
             class:on={currentTrack?.favourite}
             onclick={bookmarkLiveSong}
             disabled={!currentTrack}
+            aria-label={currentTrack?.favourite ? "Remove live song from favourites" : "Star this live song"}
+            aria-pressed={currentTrack?.favourite ?? false}
             title={currentTrack ? "Star this song" : "Song has not been persisted yet"}
           ><Icon name="star" filled={currentTrack?.favourite ?? false} /></button>
           {#if currentTrack}
@@ -415,12 +463,14 @@
       <a
         href="/"
         class:active={isActive("/")}
+        aria-current={isActive("/") ? "page" : undefined}
         title={isActive("/") && !collapsed ? "Collapse to player only" : "Shows"}
         onclick={(event) => onNavClick(event, "/")}
       >Shows</a>
       <a
         href="/profile"
         class:active={isActive("/profile")}
+        aria-current={isActive("/profile") ? "page" : undefined}
         title={isActive("/profile") && !collapsed ? "Collapse to player only" : "Profile"}
         onclick={(event) => onNavClick(event, "/profile")}
       >Profile</a>
@@ -433,10 +483,15 @@
     ><span class="d-full">♥ Support WFMU</span><span class="d-mini">♥ WFMU</span></a>
   </nav>
 
-  <main>
+  <main id="main-content" tabindex="-1">
     {@render children()}
   </main>
-  {#if favError}<button class="fav-error" onclick={() => (favError = null)}>{favError} ✕</button>{/if}
+  {#if favError}
+    <div class="fav-error" role="alert">
+      <span>{favError}</span>
+      <button aria-label="Dismiss error" onclick={() => (favError = null)}>✕</button>
+    </div>
+  {/if}
   <Toast />
 </div>
 
@@ -483,6 +538,10 @@
   :global(button) {
     font-family: inherit;
   }
+  :global(:where(a, button, input, summary):not(.vol-v):focus-visible) {
+    outline: 2px solid var(--c-accent) !important;
+    outline-offset: 2px;
+  }
   /* Single-line truncation utility (shared across the player, show list and track rows). */
   :global(.ellipsis) {
     white-space: nowrap;
@@ -493,7 +552,25 @@
     display: flex;
     flex-direction: column;
     height: 100vh;
-    overflow: hidden; /* shell never scrolls — only <main> does */
+    /* clip (not hidden): hidden is still script-scrollable, so an episode
+       scrollIntoView() inside <main> would scroll the whole shell and shove the
+       player header off the top. clip makes the shell a non-scroll container. */
+    overflow: clip; /* shell never scrolls — only <main> does */
+  }
+  .skip-link {
+    position: fixed;
+    top: 8px;
+    left: 8px;
+    z-index: 200;
+    padding: 8px 12px;
+    border-radius: 6px;
+    background: var(--c-accent);
+    color: var(--c-on-accent);
+    font-weight: 700;
+    transform: translateY(calc(-100% - 12px));
+  }
+  .skip-link:focus {
+    transform: translateY(0);
   }
   nav {
     display: flex;
@@ -562,6 +639,13 @@
     flex: 1 1 auto;
     overflow-y: auto;
     padding: 20px;
+  }
+  /* Player-only (collapsed) view: the window shrinks to player + nav, but that
+     resize is async and floored by minHeight, so the frame is briefly taller than
+     the content. Hide the routed page so its sticky search bar can never leak in
+     below the nav. Kept mounted + in flow, so scroll and size-restore survive. */
+  .app.collapsed main {
+    visibility: hidden;
   }
   .player {
     flex: 0 0 auto;
@@ -729,8 +813,17 @@
     padding: 8px 14px;
     border-radius: 8px;
     font-size: 13px;
-    cursor: pointer;
     z-index: 10;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .fav-error button {
+    border: 0;
+    background: none;
+    color: inherit;
+    cursor: pointer;
+    padding: 2px;
   }
   .p-volume {
     display: flex;
@@ -798,10 +891,6 @@
       --mini-volume-track: clamp(5px, calc(4.257px + 0.229vw), 6px);
       --mini-volume-thumb: clamp(13px, calc(11.514px + 0.459vw), 15px);
       --mini-volume-input: clamp(84px, calc(69.138px + 4.587vw), 104px);
-    }
-    .player.inactive {
-      gap: clamp(8px, calc(5.028px + 0.917vw), 12px);
-      padding-top: clamp(10px, calc(7.028px + 0.917vw), 14px);
     }
     .p-controls {
       justify-content: center;
@@ -1010,6 +1099,14 @@
     .nav-links a {
       padding: 3px 5px;
       font-size: 13px;
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    :global(*) {
+      scroll-behavior: auto !important;
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
     }
   }
 </style>

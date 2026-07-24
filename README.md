@@ -47,9 +47,10 @@ Download the matching file from the [latest release](../../releases/latest).
 ## Build from source
 
 > [!NOTE]
-> Published releases (Windows, macOS, Linux) are built from this source in CI. The detailed local walkthrough below is Windows-first; macOS and Linux build with the standard Tauri toolchain, with a step-by-step guide tracked in issue [#1](https://github.com/peqod/Archiplayer/issues/1).
+> Local desktop bundles must be built on their target operating system. The commands below match
+> the Windows, macOS, and Ubuntu jobs used for published releases.
 
-You need [Node.js 20 or newer](https://nodejs.org/), npm, [Rust via rustup](https://rustup.rs/), and Git.
+You need [Node.js 22.6 or newer](https://nodejs.org/), npm, [Rust via rustup](https://rustup.rs/), and Git.
 
 Clone the repository, then run the common setup:
 
@@ -62,16 +63,81 @@ npm ci
 ### Windows (x64)
 
 1. Install **Visual Studio Build Tools** with the **Desktop development with C++** workload. It must include MSVC v143, a Windows 10/11 SDK, and WebView2 (WebView2 ships with Windows 11).
-2. Install Rust from [rustup.rs](https://rustup.rs/). The MSVC toolchain is pinned in `src-tauri/rust-toolchain.toml`, so rustup installs `stable-x86_64-pc-windows-msvc` automatically on the first `cargo` run. No manual `rustup default` is needed.
+2. Install Rust from [rustup.rs](https://rustup.rs/), then run `rustup toolchain install stable-x86_64-pc-windows-msvc`. The repository-wide toolchain remains host-portable; the Windows helpers explicitly select this MSVC toolchain without changing your rustup default.
 3. Install JS dependencies: `npm ci`.
 4. **Run in development:** `npm run dev:windows`. This dot-sources `build-env.ps1` to load `link.exe` plus the Windows SDK, then starts `tauri dev`. To reuse your current shell instead, run `. .\build-env.ps1` once, then `npm run tauri dev`.
 5. **Build the installer:** `npm run build:windows`. The NSIS installer is copied to the repository root as `Archiplayer_<version>_x64-setup.exe` (and remains available under `src-tauri/target/release/bundle/nsis/`).
 
 > If `cargo` reports a file lock ("used by another process"), stop a running `archiplayer.exe` first (`taskkill /F /IM archiplayer.exe`), then rebuild.
 
-### macOS and Linux
+### macOS (universal)
 
-Published releases include macOS (universal `.dmg`) and Linux (AppImage / deb), built in CI with the standard Tauri toolchain. A detailed local build walkthrough for macOS and Linux is tracked in issue [#1](https://github.com/peqod/Archiplayer/issues/1) ([PRD](docs/prd/cross-platform-build-instructions.md)).
+The universal DMG runs natively on both Apple Silicon and Intel Macs.
+
+1. Install Apple's desktop build tools with `xcode-select --install`. If you install full Xcode
+   instead, launch it once so it can finish setup.
+2. Add both macOS Rust targets:
+
+   ```sh
+   rustup target add aarch64-apple-darwin x86_64-apple-darwin
+   ```
+
+3. **Run in development** for the Mac you are using:
+
+   ```sh
+   npm run tauri dev
+   ```
+
+4. **Build the universal DMG:**
+
+   ```sh
+   npm run tauri build -- --target universal-apple-darwin --bundles dmg
+   ```
+
+The unsigned installer is written to
+`src-tauri/target/universal-apple-darwin/release/bundle/dmg/`.
+
+### Linux (Ubuntu 22.04+/Debian 12, x64)
+
+1. Install WebKitGTK 4.1 and the build and packaging dependencies:
+
+   ```sh
+   sudo apt update
+   sudo apt install libwebkit2gtk-4.1-dev \
+     build-essential \
+     curl \
+     wget \
+     file \
+     libxdo-dev \
+     libssl-dev \
+     libayatana-appindicator3-dev \
+     librsvg2-dev \
+     patchelf
+   ```
+
+2. **Run in development:**
+
+   ```sh
+   npm run tauri dev
+   ```
+
+3. **Build both Linux packages:**
+
+   ```sh
+   npm run tauri build -- --bundles appimage,deb
+   ```
+
+The unsigned artifacts are written to:
+
+- `src-tauri/target/release/bundle/appimage/` (`.AppImage`)
+- `src-tauri/target/release/bundle/deb/` (`.deb`)
+
+To smoke-test the AppImage, make it executable and run it:
+
+```sh
+chmod +x src-tauri/target/release/bundle/appimage/*.AppImage
+./src-tauri/target/release/bundle/appimage/*.AppImage
+```
 
 ## Develop and test
 
@@ -82,19 +148,22 @@ npm ci
 npm run tauri dev
 ```
 
-On Windows, use the helper that discovers Visual Studio Build Tools and loads `link.exe` plus the Windows SDK into the shell:
+On Windows, use the helper that selects `stable-x86_64-pc-windows-msvc`, discovers Visual Studio Build Tools, and loads `link.exe` plus the Windows SDK into the shell:
 
 ```powershell
 npm run dev:windows
 ```
 
-If you prefer to keep using the current PowerShell session, run `. .\build-env.ps1` once and then use the ordinary Tauri commands.
+If you prefer to keep using the current PowerShell session, run `. .\build-env.ps1` once and then use the ordinary Tauri and Cargo commands.
 
 Run the deterministic checks before opening a pull request:
 
 ```sh
 npm run check
+npm test
 npm run build
+cargo fmt --manifest-path src-tauri/Cargo.toml --check
+cargo clippy --manifest-path src-tauri/Cargo.toml --locked --all-targets --all-features -- -D warnings
 cargo test --manifest-path src-tauri/Cargo.toml --locked
 ```
 
@@ -119,7 +188,11 @@ Rust application ── SQLite library, favourites, history and settings
 
 WFMU does not expose an official archive API. Archiplayer parses the public KenzoDB pages on demand, limits those page requests to one per second, and caches results rather than crawling the site.
 
-Opening the app makes one request (the A–Z show index). Every other page is fetched only on click — one request each, capped at 1/sec, and cached after. No bulk download, no “download all”.
+The app refreshes the A–Z index at most once per day. The first visit to a show hydrates its
+linked archive-year pages at a strict one-request-per-second rate; later visits use that local
+history and refresh only the current show page after six hours. Playlist pages are fetched on
+demand and cached. If WFMU is temporarily unavailable, previously cached catalog and show data
+remain usable. There is no bulk audio download or “download all”.
 
 | Data | Public source |
 |---|---|
@@ -136,7 +209,7 @@ Tauri chooses the operating system’s application-data directory for `org.archi
 
 ## Releases
 
-Pull requests and main-branch pushes run frontend checks, Rust tests, and native no-bundle builds on Windows, macOS, and Ubuntu. A semantic version tag such as `v0.2.0` creates a **draft** GitHub Release with:
+Pull requests and main-branch pushes run frontend checks, all standalone JavaScript suites, denied-warnings Rust formatting and Clippy gates, Rust tests, and native no-bundle builds on Windows, macOS, and Ubuntu. A semantic version tag such as `v0.2.0` creates a **draft** GitHub Release with:
 
 - Windows x64 NSIS installer
 - macOS universal DMG

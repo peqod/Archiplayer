@@ -10,8 +10,10 @@ export function wfmuShowUrl(id: string): string {
   return "https://wfmu.org/playlists/" + id;
 }
 
-export function wfmuEpisodeUrl(archiveId: number): string {
-  return "https://wfmu.org/playlists/shows/" + archiveId;
+// WFMU playlist pages are keyed by the episode (playlist) id — the same id the backend
+// uses to fetch a playlist — not by archive_id (which keys the archive audio player).
+export function wfmuEpisodeUrl(episodeId: number): string {
+  return "https://wfmu.org/playlists/shows/" + episodeId;
 }
 
 interface ShareData {
@@ -52,8 +54,7 @@ export function shareShow(show: Show): Promise<void> {
 }
 
 export function shareEpisode(showName: string, ep: Episode): Promise<void> {
-  const url =
-    ep.archive_id != null ? wfmuEpisodeUrl(ep.archive_id) : wfmuShowUrl(ep.show_id);
+  const url = wfmuEpisodeUrl(ep.id);
   return shareContent({
     title: showName,
     text: `${showName} — ${ep.air_date ?? ""}${ep.title ? " · " + ep.title : ""}`,

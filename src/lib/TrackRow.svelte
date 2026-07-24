@@ -1,6 +1,7 @@
 <script lang="ts">
   import { fmtTime, type Track } from "$lib/api";
   import Icon from "$lib/Icon.svelte";
+  import { canPlayExactTrack } from "$lib/track-playback";
 
   let {
     track,
@@ -21,21 +22,36 @@
     onfavourite: () => void;
     onshare?: () => void;
   } = $props();
+
+  const exactPlaybackAvailable = $derived(
+    canPlayExactTrack(playable, track.start_sec),
+  );
 </script>
 
 <div class="track" class:now={current} aria-current={current ? "true" : undefined}>
-  {#if playable && onplay && track.start_sec !== null}
+  {#if playable && onplay}
     <button
       class="tplay"
-      onclick={onplay}
-      title={current
-        ? playing ? "Pause song" : "Resume song"
-        : `Play at ${fmtTime(track.start_sec)}`}
-    ><Icon name={current && playing ? "pause" : "play"} /></button>
+      onclick={exactPlaybackAvailable ? onplay : undefined}
+      disabled={!exactPlaybackAvailable}
+      title={!exactPlaybackAvailable
+        ? "No timestamp available"
+        : current
+          ? playing ? "Pause song" : "Resume song"
+          : `Play at ${fmtTime(track.start_sec!)}`}
+      aria-label={!exactPlaybackAvailable
+        ? "Exact-song playback unavailable: no timestamp"
+        : current
+          ? playing ? "Pause song" : "Resume song"
+          : `Play song at ${fmtTime(track.start_sec!)}`}
+    ><Icon name={exactPlaybackAvailable && current && playing ? "pause" : "play"} /></button>
   {:else}
     <span class="tplay-spacer" aria-hidden="true"></span>
   {/if}
-  <span class="ttime">{timeLabel ?? (track.start_sec !== null ? fmtTime(track.start_sec) : "–")}</span>
+  <span
+    class="ttime"
+    title={timeLabel === null && track.start_sec === null ? "No timestamp available" : undefined}
+  >{timeLabel ?? (track.start_sec !== null ? fmtTime(track.start_sec) : "No time")}</span>
   <span class="tartist ellipsis">{track.artist ?? ""}</span>
   <span class="ttitle ellipsis">{track.title ?? ""}</span>
   <span class="talbum ellipsis">{track.album ?? ""}</span>
@@ -44,10 +60,12 @@
       class="mini"
       class:on={track.favourite}
       onclick={onfavourite}
+      aria-label={track.favourite ? "Remove song from favourites" : "Add song to favourites"}
+      aria-pressed={track.favourite}
       title="Star song"
     ><Icon name="star" filled={track.favourite} /></button>
     {#if onshare}
-      <button class="mini" onclick={onshare} title="Share song"><Icon name="share" /></button>
+      <button class="mini" onclick={onshare} aria-label="Share song" title="Share song"><Icon name="share" /></button>
     {/if}
   </div>
 </div>
@@ -86,6 +104,10 @@
   }
   .tplay:hover:not(:disabled) {
     color: var(--c-accent);
+  }
+  .tplay:disabled {
+    cursor: not-allowed;
+    opacity: 0.4;
   }
   .ttime {
     color: var(--c-dim);

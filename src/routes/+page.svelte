@@ -6,7 +6,9 @@
   import { onMount } from "svelte";
   import Icon from "$lib/Icon.svelte";
   import { selectRandomPlayback } from "$lib/random-show";
+  import { LatestRequest } from "$lib/request-gate";
   import { shareShow } from "$lib/share";
+  import { hasExactTrackTimestamp } from "$lib/track-playback";
 
   let shows = $state<Show[]>([]);
   let loading = $state(true);
@@ -17,27 +19,23 @@
   let reverse = $state(false);
   let busyShow = $state<string | null>(null);
   let randomBusy = $state(false);
-  let searchTimer: ReturnType<typeof setTimeout> | undefined;
+  const catalogRequests = new LatestRequest();
+  const searchRequests = new LatestRequest();
 
   const PAGE_SIZE = 60;
   let visibleCount = $state(PAGE_SIZE);
 
-  async function load(refresh = false) {
-    error = null;
+  async function load(generation: number) {
+    if (catalogRequests.isCurrent(generation)) error = null;
     try {
-      shows = await api.getCatalog(refresh);
+      const next = await api.getCatalog();
+      if (catalogRequests.isCurrent(generation)) shows = next;
     } catch (e) {
-      error = String(e);
+      if (catalogRequests.isCurrent(generation)) error = String(e);
     } finally {
-      loading = false;
+      if (catalogRequests.isCurrent(generation)) loading = false;
     }
   }
-  // Paint cached catalog instantly, then re-scrape wfmu so the alphabet picks up
-  // any new audition/show without blocking the view.
-  (async () => {
-    await load();
-    await load(true);
-  })();
 
   // Seed the filter from URL params once, so the show-view CatalogNav bar can deep-link
   // back into a filtered catalog (?q= / ?letter= / ?fav=1). No params = home as usual.
@@ -48,6 +46,13 @@
     if (q) query = q;
     else if (sp.get("fav") === "1") letterFilter = "★";
     else if (letter) letterFilter = letter;
+
+    // The backend serves a fresh-enough cached catalog immediately and refreshes stale
+    // data on demand. Ignore the completion if this route has already been destroyed.
+    const generation = catalogRequests.begin();
+    void load(generation);
+
+    return () => catalogRequests.invalidate(generation);
   });
 
   const letters = $derived.by(() => {
@@ -97,22 +102,29 @@
 
   $effect(() => {
     const q = query.trim();
-    clearTimeout(searchTimer);
+    const generation = searchRequests.begin();
+    trackHits = [];
     if (!q) {
-      trackHits = [];
-      return;
+      return () => searchRequests.invalidate(generation);
     }
-    searchTimer = setTimeout(async () => {
+
+    const timer = setTimeout(async () => {
       try {
         const r = await api.search(q);
-        trackHits = r.tracks;
+        if (searchRequests.isCurrent(generation)) trackHits = r.tracks;
       } catch {
-        trackHits = [];
+        if (searchRequests.isCurrent(generation)) trackHits = [];
       }
     }, 250);
+
+    return () => {
+      clearTimeout(timer);
+      searchRequests.invalidate(generation);
+    };
   });
 
   async function launchShow(show: Show) {
+    if (busyShow !== null) return;
     busyShow = show.id;
     try {
       const detail = await api.getShow(show.id);
@@ -187,6 +199,7 @@
   }
 
   async function playTrackHit(hit: TrackHit) {
+    if (!hasExactTrackTimestamp(hit.track.start_sec)) return;
     try {
       const detail = await api.getShow(hit.show_id);
       const ep = detail.episodes.find((e) => e.id === hit.track.episode_id);
@@ -208,6 +221,7 @@
     <input
       class="search"
       type="search"
+      aria-label="Search shows, DJs, and cached songs"
       placeholder="Search shows, DJs — and songs from cached playlists…"
       bind:value={query}
     />
@@ -222,23 +236,24 @@
 </div>
 
 {#if error}
-  <div class="error">{error} <button class="ghost" onclick={() => (error = null)}>✕</button></div>
+  <div class="error" role="alert">{error} <button class="ghost" aria-label="Dismiss error" onclick={() => (error = null)}>✕</button></div>
 {/if}
 
 {#if !query}
-  <div class="alpha">
+  <div class="alpha" role="group" aria-label="Filter shows">
     <button
       class="fav-filter"
       class:on={letterFilter === "★"}
+      aria-pressed={letterFilter === "★"}
       onclick={() => (letterFilter = letterFilter === "★" ? null : "★")}
       title="Show only favourited shows"
     >★ Favourites{favCount ? ` (${favCount})` : ""}</button>
-    <span class="alpha-sep"></span>
-    <button class:on={letterFilter === null} onclick={() => (letterFilter = null)}>All</button>
+    <span class="alpha-sep" aria-hidden="true"></span>
+    <button aria-pressed={letterFilter === null} class:on={letterFilter === null} onclick={() => (letterFilter = null)}>All</button>
     {#each letters as l}
-      <button class:on={letterFilter === l} onclick={() => (letterFilter = letterFilter === l ? null : l)}>{l}</button>
+      <button aria-pressed={letterFilter === l} class:on={letterFilter === l} onclick={() => (letterFilter = letterFilter === l ? null : l)}>{l}</button>
     {/each}
-    <span class="alpha-gap"></span>
+    <span class="alpha-gap" aria-hidden="true"></span>
     <button
       class="rev"
       class:on={reverse}
@@ -260,6 +275,7 @@
           class:on={player.live?.id === s.id}
           href={"/live/" + s.id}
           onclick={() => void player.playLive(s)}
+          aria-label={(player.live?.id === s.id && player.playing ? "Pause " : "Play ") + s.name + " and open live details"}
           title={(player.live?.id === s.id && player.playing ? "Pause" : "Play") + " " + s.name + " and open live details"}
         >
           <span class="lc-play" aria-hidden="true">
@@ -276,15 +292,28 @@
 {/if}
 
 {#if loading}
-  <p class="muted">Loading catalog{shows.length === 0 ? " (first run scrapes wfmu.org — a few seconds)" : ""}…</p>
+  <p class="muted" role="status">Loading catalog{shows.length === 0 ? " (first run scrapes wfmu.org — a few seconds)" : ""}…</p>
 {:else if query && trackHits.length}
   <h2 class="subhead">Songs <span class="muted">({trackHits.length} from cached playlists)</span></h2>
   <div class="tracklist">
     {#each trackHits.slice(0, 50) as hit}
-      <button class="trackhit" onclick={() => playTrackHit(hit)} title="Play episode at this song">
+      <button
+        class="trackhit"
+        onclick={() => playTrackHit(hit)}
+        disabled={!hasExactTrackTimestamp(hit.track.start_sec)}
+        title={hasExactTrackTimestamp(hit.track.start_sec)
+          ? "Play episode at this song"
+          : "No timestamp available"}
+        aria-label={hasExactTrackTimestamp(hit.track.start_sec)
+          ? `Play ${hit.track.artist ?? "unknown artist"} — ${hit.track.title ?? "unknown song"}`
+          : `Exact-song playback unavailable for ${hit.track.artist ?? "unknown artist"} — ${hit.track.title ?? "unknown song"}: no timestamp`}
+      >
         <span class="t-artist ellipsis">{hit.track.artist ?? "?"}</span>
         <span class="t-title ellipsis">{hit.track.title ?? "?"}</span>
-        <span class="t-meta ellipsis">{hit.show_name} · {hit.air_date ?? ""}</span>
+        <span class="t-meta ellipsis">
+          {hit.show_name} · {hit.air_date ?? ""}
+          {#if !hasExactTrackTimestamp(hit.track.start_sec)} · No timestamp{/if}
+        </span>
       </button>
     {/each}
   </div>
@@ -309,13 +338,20 @@
         </span>
       </a>
       <div class="row-actions">
-        <button class="rbtn play" onclick={(e) => playAll(show, e)} title="Play all archives, oldest first">
+        <button class="rbtn play" onclick={(e) => playAll(show, e)} disabled={busyShow !== null} title="Play all archives, oldest first">
           {#if busyShow === show.id}…{:else}<Icon name="play" /> Play all{/if}
         </button>
-        <button class="rbtn star" class:on={show.favourite} onclick={(e) => toggleFav(show, e)} title="Favourite">
+        <button
+          class="rbtn star"
+          class:on={show.favourite}
+          onclick={(e) => toggleFav(show, e)}
+          aria-label={show.favourite ? `Remove ${show.name} from favourites` : `Add ${show.name} to favourites`}
+          aria-pressed={show.favourite}
+          title="Favourite"
+        >
           <Icon name="star" filled={show.favourite} />
         </button>
-        <button class="rbtn share" onclick={(e) => share(show, e)} title="Share">
+        <button class="rbtn share" onclick={(e) => share(show, e)} aria-label={`Share ${show.name}`} title="Share">
           <Icon name="share" />
         </button>
       </div>
@@ -645,6 +681,10 @@
   .rbtn:hover {
     filter: brightness(1.1);
   }
+  .rbtn:disabled {
+    cursor: wait;
+    opacity: 0.55;
+  }
   .more {
     text-align: center;
     margin: 18px 0;
@@ -670,8 +710,12 @@
     cursor: pointer;
     font-size: 13px;
   }
-  .trackhit:hover {
+  .trackhit:hover:not(:disabled) {
     background: var(--c-surface2);
+  }
+  .trackhit:disabled {
+    cursor: not-allowed;
+    opacity: 0.65;
   }
   .t-artist {
     font-weight: 600;
@@ -679,5 +723,47 @@
   .t-meta {
     color: var(--c-dim);
     text-align: right;
+  }
+  @media (hover: none) {
+    .row-actions {
+      opacity: 1;
+    }
+  }
+  @media (max-width: 760px) {
+    .trackhit {
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+      grid-template-areas:
+        "artist title"
+        "meta meta";
+      row-gap: 3px;
+    }
+    .t-artist {
+      grid-area: artist;
+    }
+    .t-title {
+      grid-area: title;
+    }
+    .t-meta {
+      grid-area: meta;
+      text-align: left;
+    }
+  }
+  @media (max-width: 520px) {
+    .head {
+      align-items: stretch;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .row {
+      flex-wrap: wrap;
+    }
+    .row-main {
+      flex-basis: 100%;
+    }
+    .row-actions {
+      width: 100%;
+      justify-content: flex-end;
+      opacity: 1;
+    }
   }
 </style>
