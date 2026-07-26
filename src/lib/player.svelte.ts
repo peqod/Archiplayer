@@ -8,6 +8,7 @@ import {
   type Track,
 } from "./api";
 import { isAbortError, PlaybackTransitions } from "./playback-transition";
+import { trackMarkSeconds } from "./track-playback";
 import { normalizeVolume } from "./volume";
 
 export interface QueueItem {
@@ -33,7 +34,7 @@ class Player {
   // Archive pre-roll offset (seconds) for the current episode: audio position of the
   // show's playlist zero. Playlist `start_sec` values are show-relative, so the audio
   // position of a track is `start_sec + offset`. 0 for old archives with no lead-in.
-  private offset = 0;
+  private offset = $state(0);
 
   queue = $state<QueueItem[]>([]);
   queueIndex = $state(-1);
@@ -81,6 +82,12 @@ class Player {
     }
     return idx;
   });
+
+  // Audio-time positions of the playlist entries the scrubber marks. Live has no
+  // seekable timeline, so it never marks.
+  trackMarks = $derived(
+    this.live ? [] : trackMarkSeconds(this.tracks, this.offset, this.duration),
+  );
 
   attach(el: HTMLAudioElement) {
     if (this.audio === el) return;

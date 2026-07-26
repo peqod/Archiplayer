@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { LatestRequest } from "../src/lib/request-gate.ts";
-import { normalizeVolume } from "../src/lib/volume.ts";
+import { normalizeVolume, VOLUME_TICKS } from "../src/lib/volume.ts";
 import { restingAnchor } from "../src/lib/back-anchor.ts";
 import { playGlyph } from "../src/lib/play-icon.ts";
 
@@ -37,6 +37,19 @@ test("persisted volume is finite and clamped to the media range", () => {
   assert.equal(normalizeVolume("not-a-number", 0.6), 0.6);
   assert.equal(normalizeVolume("not-a-number", Number.NaN), 1);
   assert.equal(normalizeVolume(null), 1);
+});
+
+test("the volume scale is a 10% grid with the midpoint called out", () => {
+  assert.deepEqual(
+    VOLUME_TICKS.map((t) => t.pct),
+    [0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100],
+  );
+  const size = (pct) => VOLUME_TICKS.find((t) => t.pct === pct).size;
+  assert.equal(size(50), 6);
+  assert.equal(size(0), 4);
+  assert.equal(size(100), 4);
+  // Every other tick is the small one, so 50% reads as the middle at a glance.
+  for (const pct of [10, 20, 30, 40, 60, 70, 80, 90]) assert.equal(size(pct), 2);
 });
 
 // <main> spans y 120..800; the back link rests 20px into it.

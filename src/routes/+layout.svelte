@@ -4,6 +4,7 @@
   import "@fontsource/inter/700.css";
   import "@fontsource/inter/800.css";
   import { player, type QueueItem } from "$lib/player.svelte";
+  import { VOLUME_TICKS } from "$lib/volume";
   import { api, fmtTime } from "$lib/api";
   import { selectRandomPlayback } from "$lib/random-show";
   import { theme } from "$lib/theme.svelte";
@@ -241,6 +242,15 @@
   const playPauseLabel = $derived(
     player.loading ? "Loading audio" : player.playing ? "Pause" : "Play",
   );
+  // Painted-slider fill/thumb offsets. Both sliders read them from --hsl-level.
+  const seekLevel = $derived(
+    player.duration ? `${(player.currentTime / player.duration) * 100}%` : "0%",
+  );
+  const volumeLevel = $derived(`${(player.muted ? 0 : player.volume) * 100}%`);
+  // Playlist marks as track-relative percentages; empty for untimecoded playlists.
+  const seekMarks = $derived(
+    player.duration ? player.trackMarks.map((sec) => (sec / player.duration) * 100) : [],
+  );
 
   function onScrub(e: Event) {
     const v = Number((e.target as HTMLInputElement).value);
@@ -357,21 +367,35 @@
       <Icon name={volumeIcon} size="24px" />
     </button>
     {#if !mini}
-      <input aria-label="Volume" type="range" min="0" max="1" step="0.02" value={player.volume} oninput={onVolume} />
+      <div class="hsl vol-h" style={`--hsl-level: ${volumeLevel}`}>
+        <input
+          class="sl-input"
+          aria-label="Volume"
+          type="range"
+          min="0"
+          max="1"
+          step="0.02"
+          value={player.volume}
+          oninput={onVolume}
+        />
+        <span class="hsl-track" aria-hidden="true">
+          <span class="hsl-fill"></span>
+          {#each VOLUME_TICKS as tick (tick.pct)}
+            <span class="hsl-tick" style={`left: ${tick.pct}%; width: ${tick.size / 2}px`}></span>
+          {/each}
+          <span class="hsl-thumb"></span>
+        </span>
+      </div>
     {:else}
       <!-- Stays mounted so opacity can transition; visibility keeps it out of the
            tab order and away from the pointer while folded. -->
       <div
         class="vol-pop"
-        style={`--volume-level: ${(player.muted ? 0 : player.volume) * 100}%`}
+        style={`--volume-level: ${volumeLevel}`}
       >
         <div class="vol-slider">
-          <span class="vol-track" aria-hidden="true">
-            <span class="vol-fill"></span>
-            <span class="vol-thumb"></span>
-          </span>
           <input
-            class="vol-v"
+            class="vol-v sl-input"
             aria-label="Volume"
             aria-orientation="vertical"
             type="range"
@@ -381,6 +405,13 @@
             value={player.volume}
             oninput={onVolume}
           />
+          <span class="vol-track" aria-hidden="true">
+            <span class="vol-fill"></span>
+            {#each VOLUME_TICKS as tick (tick.pct)}
+              <span class="vol-tick" style={`bottom: ${tick.pct}%; height: ${tick.size / 2}px`}></span>
+            {/each}
+            <span class="vol-thumb"></span>
+          </span>
         </div>
       </div>
     {/if}
@@ -444,16 +475,28 @@
         </div>
         <div class="p-scrub">
           <span class="p-time">{fmtTime(player.currentTime)}</span>
-          <input
-            type="range"
-            min="0"
-            max={player.duration || 0}
-            step="1"
-            value={player.currentTime}
-            oninput={onScrub}
-            disabled={!player.duration}
-            aria-label="Episode position"
-          />
+          <div class="hsl seek" class:off={!player.duration} style={`--hsl-level: ${seekLevel}`}>
+            <!-- Input first so the paint can key its focus ring off it with `~`. It is
+                 transparent and the paint ignores the pointer, so order costs nothing. -->
+            <input
+              class="sl-input"
+              type="range"
+              min="0"
+              max={player.duration || 0}
+              step="1"
+              value={player.currentTime}
+              oninput={onScrub}
+              disabled={!player.duration}
+              aria-label="Episode position"
+            />
+            <span class="hsl-track" aria-hidden="true">
+              <span class="hsl-fill"></span>
+              {#each seekMarks as pct (pct)}
+                <span class="hsl-tick mark" style={`left: ${pct}%`}></span>
+              {/each}
+              <span class="hsl-thumb"></span>
+            </span>
+          </div>
           <span class="p-time">{fmtTime(player.duration)}</span>
           {@render volumeControl()}
         </div>
@@ -581,6 +624,9 @@
     --pbtn-main-size: 42px;   /* transport main play/pause button */
     --pctl-gap: 8px;          /* gap between transport buttons */
     --player-gap: 18px;       /* gap between player sections */
+    --hsl-h: 18px;            /* row height of a painted horizontal slider */
+    --hsl-track: 3px;         /* its bar thickness — thin, so ticks clear it */
+    --hsl-thumb: 12px;        /* its knob diameter */
   }
   :global(*) {
     box-sizing: border-box;
@@ -602,7 +648,8 @@
   :global(button) {
     font-family: inherit;
   }
-  :global(:where(a, button, input, summary):not(.vol-v):focus-visible) {
+  /* Painted sliders hide their native input, so the ring is drawn on the track instead. */
+  :global(:where(a, button, input, summary):not(.sl-input):focus-visible) {
     outline: 2px solid var(--c-accent) !important;
     outline-offset: 2px;
   }
@@ -841,9 +888,85 @@
     gap: 10px;
     margin-top: 4px;
   }
-  .p-scrub input {
+  /* Horizontal sliders are custom-painted for the same reason the mini volume is: the
+     WebView does not style native ranges reliably, and only a painted track lets the
+     ticks line up with where the thumb actually travels. */
+  .hsl {
+    position: relative;
     flex: 1 1 auto;
-    accent-color: var(--c-accent);
+    min-width: 0;
+    height: var(--hsl-h);
+    --hsl-inset: calc(var(--hsl-thumb) / 2);
+  }
+  .hsl-track {
+    /* Inset by half a thumb, so a tick at N% sits under the thumb at N%. */
+    position: absolute;
+    top: 50%;
+    right: var(--hsl-inset);
+    left: var(--hsl-inset);
+    height: var(--hsl-track);
+    overflow: visible;
+    transform: translateY(-50%);
+    background: var(--c-border);
+    border-radius: 999px;
+    pointer-events: none;
+  }
+  .hsl-fill {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    width: var(--hsl-level);
+    background: var(--c-accent);
+    border-radius: inherit;
+  }
+  .hsl-thumb {
+    position: absolute;
+    top: 50%;
+    left: var(--hsl-level);
+    width: var(--hsl-thumb);
+    height: var(--hsl-thumb);
+    transform: translate(-50%, -50%);
+    background: var(--c-accent);
+    border: 2px solid var(--c-surface);
+    border-radius: 50%;
+    box-shadow: 0 0 0 1px var(--c-border);
+  }
+  /* Scale ticks and playlist marks are cut into the bar rather than drawn over it:
+     a notch in the player colour, painted after the fill so it reads the same on
+     filled and unfilled stretches. Emphasis is width, since depth is fixed. */
+  .hsl-tick {
+    position: absolute;
+    top: 0;
+    height: 100%;
+    transform: translateX(-50%);
+    background: var(--c-surface);
+    pointer-events: none;
+  }
+  .hsl-tick.mark {
+    width: 2px;
+  }
+  .hsl .sl-input {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    opacity: 0;
+    cursor: pointer;
+    touch-action: none;
+  }
+  /* Keyboard focus only. WCAG 2.4.7 wants an indicator for keyboard traversal, not for
+     a click, and :focus-within would ring the bar every time it is grabbed. The halo
+     rides the playhead so the indicator sits where the arrow keys act. */
+  .sl-input:focus-visible ~ .hsl-track .hsl-thumb {
+    box-shadow: 0 0 0 1px var(--c-border), 0 0 0 4px var(--c-accent);
+  }
+  .hsl.off {
+    opacity: 0.4;
+  }
+  .hsl.off .sl-input {
+    cursor: default;
   }
   .p-time {
     font-size: 12px;
@@ -905,9 +1028,9 @@
     color: var(--c-dim);
     position: relative;
   }
-  .p-volume input {
+  .p-volume .vol-h {
+    flex: 0 0 auto;
     width: 119px; /* 90px + 32% */
-    accent-color: var(--c-accent);
   }
   .pvol-btn {
     background: none;
@@ -949,6 +1072,8 @@
       --mini-skip-font: clamp(9px, calc(7.514px + 0.459vw), 11px);
       --mini-scrub-gap: clamp(8px, calc(6.514px + 0.459vw), 10px);
       --mini-scrub-height: clamp(28px, calc(25.028px + 0.917vw), 32px);
+      --mini-seek-h: clamp(16px, calc(14.514px + 0.459vw), 18px);
+      --mini-seek-thumb: clamp(11px, calc(10.257px + 0.229vw), 12px);
       --mini-volume-column: clamp(28px, calc(25.028px + 0.917vw), 32px);
       --mini-time-font: clamp(11px, calc(10.257px + 0.229vw), 12px);
       --mini-time-width: clamp(40px, calc(34.055px + 1.835vw), 48px);
@@ -1008,9 +1133,11 @@
       min-height: var(--mini-scrub-height);
       width: 100%;
     }
-    .p-scrub > input[type="range"] {
-      min-width: 0;
+    .p-scrub > .hsl.seek {
+      grid-column: 2;
       width: 100%;
+      height: var(--mini-seek-h);
+      --hsl-thumb: var(--mini-seek-thumb);
     }
     .p-scrub .p-volume {
       margin-left: 0;
@@ -1090,6 +1217,15 @@
       background: var(--c-accent);
       border-radius: inherit;
     }
+    /* Same notch as the desktop bar, laid on its side. */
+    .vol-tick {
+      position: absolute;
+      right: 0;
+      left: 0;
+      transform: translateY(50%);
+      background: var(--c-surface);
+      pointer-events: none;
+    }
     .vol-thumb {
       position: absolute;
       bottom: var(--volume-level);
@@ -1115,8 +1251,8 @@
       cursor: pointer;
       touch-action: none;
     }
-    .vol-slider:focus-within .vol-track {
-      box-shadow: 0 0 0 2px var(--c-surface), 0 0 0 4px var(--c-accent);
+    .vol-v:focus-visible ~ .vol-track .vol-thumb {
+      box-shadow: 0 0 0 1px var(--c-border), 0 0 0 4px var(--c-accent);
     }
 
     /* Compact the nav so the tabs stay readable. */
