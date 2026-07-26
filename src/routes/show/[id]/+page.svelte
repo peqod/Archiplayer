@@ -13,6 +13,7 @@
   import { shareShow, shareEpisode, shareTrack, wfmuEpisodeUrl } from "$lib/share";
   import TrackRow from "$lib/TrackRow.svelte";
   import CatalogNav from "$lib/CatalogNav.svelte";
+  import BackButton from "$lib/BackButton.svelte";
   import { centerEpisodeRow } from "$lib/episode-scroll";
   import { LatestRequest } from "$lib/request-gate";
   import { canPlayExactTrack } from "$lib/track-playback";
@@ -314,7 +315,7 @@
 
 <CatalogNav bind:reverse />
 
-<a href="/" class="back">← All shows</a>
+<BackButton />
 
 {#if error}
   <div class="error" role="alert">{error} <button class="ghost" aria-label="Dismiss error" onclick={() => (error = null)}>✕</button></div>
@@ -460,11 +461,6 @@
 {/if}
 
 <style>
-  .back {
-    display: inline-block;
-    margin-bottom: 12px;
-    color: var(--c-dim);
-  }
   .error {
     background: var(--c-surface2);
     border: 1px solid var(--c-danger);

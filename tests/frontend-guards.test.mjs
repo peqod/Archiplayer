@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { LatestRequest } from "../src/lib/request-gate.ts";
 import { normalizeVolume } from "../src/lib/volume.ts";
+import { restingAnchor } from "../src/lib/back-anchor.ts";
 
 function test(name, body) {
   body();
@@ -35,4 +36,33 @@ test("persisted volume is finite and clamped to the media range", () => {
   assert.equal(normalizeVolume("not-a-number", 0.6), 0.6);
   assert.equal(normalizeVolume("not-a-number", Number.NaN), 1);
   assert.equal(normalizeVolume(null), 1);
+});
+
+// <main> spans y 120..800; the back link rests 20px into it.
+const MAIN = { top: 120, left: 0, bottom: 800 };
+const PAD = { left: 12, top: 6 };
+
+test("the floating back pill lands where the inline link's text was", () => {
+  const back = { top: 140, left: 20, bottom: 160 };
+
+  assert.deepEqual(restingAnchor(back, MAIN, 0, PAD), { left: 8, top: 134 });
+  assert.deepEqual(restingAnchor(back, MAIN, 0, { left: 0, top: 0 }), { left: 20, top: 140 });
+});
+
+test("the resting anchor is the same however far <main> has scrolled", () => {
+  const atRest = restingAnchor({ top: 140, left: 20, bottom: 160 }, MAIN, 0, PAD);
+  // Scrolled 600px: the link has left the viewport, so its rect moved up by 600.
+  const scrolled = restingAnchor({ top: -460, left: 20, bottom: -440 }, MAIN, 600, PAD);
+
+  assert.deepEqual(scrolled, atRest);
+});
+
+test("the anchor stays inside the scroll area", () => {
+  // A link above <main> (impossible in flow, but reachable mid-resize) clamps down.
+  assert.equal(restingAnchor({ top: 0, left: 20, bottom: 20 }, MAIN, 0, PAD).top, 120);
+  // A link near the bottom keeps a 48px guard so the pill is never half off-screen.
+  assert.equal(restingAnchor({ top: 790, left: 20, bottom: 810 }, MAIN, 0, PAD).top, 752);
+  // A viewport shorter than the guard collapses to the top edge, never above it.
+  const squashed = { top: 120, left: 0, bottom: 150 };
+  assert.equal(restingAnchor({ top: 140, left: 20, bottom: 160 }, squashed, 0, PAD).top, 120);
 });

@@ -57,6 +57,7 @@
   let collapsed = $state(false);
   let navEl: HTMLElement;
   let headerEl: HTMLElement;
+  let mainEl: HTMLElement;
   let expandedWidth = 0;
   let expandedHeight = 0;
   // Last measured collapsed height while a track was loaded. Lets feelingLucky pre-grow
@@ -197,6 +198,13 @@
       return;
     }
     if (collapsed) void toggleCollapse();
+  }
+
+  // The brand is a scroll-to-top control, not a link. The shell never scrolls, so
+  // this has to target <main>; the Shows tab remains the way home.
+  function scrollMainToTop() {
+    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    mainEl?.scrollTo({ top: 0, behavior: reducedMotion ? "auto" : "smooth" });
   }
 
   function supportWfmu(e: MouseEvent) {
@@ -454,11 +462,17 @@
   </header>
 
   <nav bind:this={navEl}>
-    <a class="brand" href="/">
+    <button
+      class="brand"
+      type="button"
+      onclick={scrollMainToTop}
+      title="Scroll to top"
+      aria-label="Scroll to top"
+    >
       <img class="brand-logo" src="/logo.gif" alt="Archiplayer" width="34" height="34" />
       <span class="brand-name">Archiplayer</span>
       <span class="brand-sub">WFMU</span>
-    </a>
+    </button>
     <div class="nav-links">
       <a
         href="/"
@@ -483,7 +497,7 @@
     ><span class="d-full">♥ Support WFMU</span><span class="d-mini">♥ WFMU</span></a>
   </nav>
 
-  <main id="main-content" tabindex="-1">
+  <main id="main-content" bind:this={mainEl} tabindex="-1">
     {@render children()}
   </main>
   {#if favError}
@@ -586,6 +600,13 @@
     align-items: center;
     gap: 9px;
     color: inherit;
+    /* Button reset: it scrolls <main> to the top instead of navigating. */
+    background: none;
+    border: 0;
+    padding: 0;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
   }
   .brand:hover {
     text-decoration: none;

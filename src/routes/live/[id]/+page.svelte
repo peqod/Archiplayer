@@ -8,6 +8,7 @@
     type Track,
   } from "$lib/api";
   import Icon from "$lib/Icon.svelte";
+  import BackButton from "$lib/BackButton.svelte";
   import TrackRow from "$lib/TrackRow.svelte";
   import { player } from "$lib/player.svelte";
   import { onMount } from "svelte";
@@ -103,7 +104,7 @@
   }
 </script>
 
-<a class="back" href="/">← All shows</a>
+<BackButton />
 
 {#if !stream}
   <div class="error">Unknown live station.</div>
@@ -202,7 +203,6 @@
 {/if}
 
 <style>
-  .back { display: inline-block; margin-bottom: 12px; color: var(--c-dim); }
   .showhead { display: flex; justify-content: space-between; align-items: flex-start; gap: 20px; margin-bottom: 18px; flex-wrap: wrap; }
   h1 { margin: 0 0 4px; font-size: 26px; }
   h2 { margin: 0; font-size: 17px; }
