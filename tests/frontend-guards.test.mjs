@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { LatestRequest } from "../src/lib/request-gate.ts";
 import { normalizeVolume } from "../src/lib/volume.ts";
 import { restingAnchor } from "../src/lib/back-anchor.ts";
+import { playGlyph } from "../src/lib/play-icon.ts";
 
 function test(name, body) {
   body();
@@ -65,4 +66,13 @@ test("the anchor stays inside the scroll area", () => {
   // A viewport shorter than the guard collapses to the top edge, never above it.
   const squashed = { top: 120, left: 0, bottom: 150 };
   assert.equal(restingAnchor({ top: 140, left: 20, bottom: 160 }, squashed, 0, PAD).top, 120);
+});
+
+test("play controls show player state, not the click action", () => {
+  assert.equal(playGlyph(true, true), "playing");
+  assert.equal(playGlyph(true, false), "pause");
+  // Rows that aren't the loaded item stay on the plain triangle even while
+  // something else is playing — otherwise every idle row would show pause bars.
+  assert.equal(playGlyph(false, true), "play");
+  assert.equal(playGlyph(false, false), "play");
 });

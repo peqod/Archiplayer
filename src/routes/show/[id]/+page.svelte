@@ -10,6 +10,7 @@
   import { listen } from "@tauri-apps/api/event";
   import { openUrl } from "@tauri-apps/plugin-opener";
   import Icon from "$lib/Icon.svelte";
+  import { playGlyph } from "$lib/play-icon";
   import { shareShow, shareEpisode, shareTrack, wfmuEpisodeUrl } from "$lib/share";
   import TrackRow from "$lib/TrackRow.svelte";
   import CatalogNav from "$lib/CatalogNav.svelte";
@@ -380,9 +381,7 @@
                 : "Play this episode"}
           >
             {#if ep.has_audio}
-              <Icon
-                name={player.current?.episode.id === ep.id && player.playing ? "pause" : "play"}
-              />
+              <Icon name={playGlyph(player.current?.episode.id === ep.id, player.playing)} />
             {:else}–{/if}
           </button>
           <button

@@ -5,6 +5,7 @@
   import { page } from "$app/stores";
   import { onMount } from "svelte";
   import Icon from "$lib/Icon.svelte";
+  import { playGlyph } from "$lib/play-icon";
   import { selectRandomPlayback } from "$lib/random-show";
   import { LatestRequest } from "$lib/request-gate";
   import { shareShow } from "$lib/share";
@@ -279,7 +280,7 @@
           title={(player.live?.id === s.id && player.playing ? "Pause" : "Play") + " " + s.name + " and open live details"}
         >
           <span class="lc-play" aria-hidden="true">
-            <Icon name={player.live?.id === s.id && player.playing ? "pause" : "play"} />
+            <Icon name={playGlyph(player.live?.id === s.id, player.playing)} />
           </span>
           <span class="lc-text">
             <span class="lc-name ellipsis">{s.name}</span>

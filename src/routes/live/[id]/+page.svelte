@@ -9,6 +9,7 @@
   } from "$lib/api";
   import Icon from "$lib/Icon.svelte";
   import BackButton from "$lib/BackButton.svelte";
+  import { playGlyph } from "$lib/play-icon";
   import TrackRow from "$lib/TrackRow.svelte";
   import { player } from "$lib/player.svelte";
   import { onMount } from "svelte";
@@ -130,7 +131,7 @@
         onclick={() => player.playLive(stream)}
         aria-label={player.live?.id === stream.id && player.playing ? `Pause ${stream.name}` : `Listen to ${stream.name}`}
       >
-        <Icon name={player.live?.id === stream.id && player.playing ? "pause" : "play"} />
+        <Icon name={playGlyph(player.live?.id === stream.id, player.playing)} />
         {player.live?.id === stream.id && player.playing ? "Pause live" : "Listen live"}
       </button>
     </div>

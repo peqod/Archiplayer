@@ -8,6 +8,7 @@
   import { selectRandomPlayback } from "$lib/random-show";
   import { theme } from "$lib/theme.svelte";
   import Icon from "$lib/Icon.svelte";
+  import { playGlyph } from "$lib/play-icon";
   import Toast from "$lib/Toast.svelte";
   import { page } from "$app/stores";
   import { goto } from "$app/navigation";
@@ -66,6 +67,9 @@
   // Mirrors the CSS mini-mode breakpoint so volume can fold to a popover.
   let mini = $state(false);
   let volOpen = $state(false);
+  // Grace period before an un-hovered mini volume popover folds away.
+  const VOL_CLOSE_DELAY = 1000;
+  let volCloseTimer: ReturnType<typeof setTimeout> | null = null;
   let miniMedia: MediaQueryList | null = null;
   let applyingWindowSize = false;
   let windowSizeQueued = false;
@@ -82,10 +86,14 @@
     if (!miniMedia) return;
     const onMiniChange = (e: MediaQueryListEvent) => {
       mini = e.matches;
+      cancelVolClose();
       volOpen = false; // leaving/entering mini closes any open volume popover
     };
     miniMedia.addEventListener("change", onMiniChange);
-    return () => miniMedia?.removeEventListener("change", onMiniChange);
+    return () => {
+      miniMedia?.removeEventListener("change", onMiniChange);
+      cancelVolClose();
+    };
   });
 
   async function applyWindowSize() {
@@ -243,8 +251,42 @@
   }
   // Desktop: icon toggles mute. Mini: icon opens the folded vertical slider.
   function onVolClick() {
+    cancelVolClose();
     if (mini) volOpen = !volOpen;
     else player.toggleMute();
+  }
+
+  function cancelVolClose() {
+    if (volCloseTimer === null) return;
+    clearTimeout(volCloseTimer);
+    volCloseTimer = null;
+  }
+
+  // The mini popover overlays a window only a few hundred pixels wide, so it folds
+  // itself away once the pointer leaves rather than sitting open. Keyboard focus
+  // inside keeps it up, and touch (no mouseleave) still closes by tapping the icon.
+  // Only two things may hold the popover open once the pointer is gone: a keyboard
+  // focus ring inside the panel, or a slider drag still in progress. Plain focus is
+  // not enough — clicking the toggle, or the slider, leaves focus sitting there.
+  function volHeldOpen(panel: Element | null): boolean {
+    const active = document.activeElement;
+    if (!panel || !active || !panel.contains(active)) return false;
+    return active.matches(":focus-visible") || active.matches(":active");
+  }
+
+  function scheduleVolClose(panel: Element | null) {
+    cancelVolClose();
+    volCloseTimer = setTimeout(() => {
+      volCloseTimer = null;
+      // Re-arm instead of giving up: a drag that outlives the delay ends with the
+      // pointer already outside, so no second mouseleave would ever arrive.
+      if (volHeldOpen(panel)) scheduleVolClose(panel);
+      else volOpen = false;
+    }, VOL_CLOSE_DELAY);
+  }
+
+  function onVolLeave(event: MouseEvent) {
+    scheduleVolClose((event.currentTarget as HTMLElement).querySelector(".vol-pop"));
   }
 
   const currentTrack = $derived(
@@ -297,7 +339,13 @@
 </script>
 
 {#snippet volumeControl()}
-  <div class="p-volume" class:open={mini && volOpen}>
+  <div
+    class="p-volume"
+    class:open={mini && volOpen}
+    onmouseenter={cancelVolClose}
+    onmouseleave={onVolLeave}
+    role="presentation"
+  >
     <button
       class="pvol-btn"
       type="button"
@@ -310,7 +358,9 @@
     </button>
     {#if !mini}
       <input aria-label="Volume" type="range" min="0" max="1" step="0.02" value={player.volume} oninput={onVolume} />
-    {:else if volOpen}
+    {:else}
+      <!-- Stays mounted so opacity can transition; visibility keeps it out of the
+           tab order and away from the pointer while folded. -->
       <div
         class="vol-pop"
         style={`--volume-level: ${(player.muted ? 0 : player.volume) * 100}%`}
@@ -351,7 +401,7 @@
       <button class="pbtn" onclick={() => player.prevTrack()} disabled={!player.tracks.length} aria-label="Previous song" title="Previous song"><Icon name="prev" /></button>
       <button class="pbtn skip" onclick={() => player.skip(-15)} disabled={!player.current} aria-label="Back 15 seconds" title="Back 15 seconds">«15</button>
       <button class="pbtn main" onclick={() => player.toggle()} disabled={!player.current && !player.live} aria-label={playPauseLabel} title={playPauseLabel}>
-        {#if player.loading}…{:else if player.playing}<Icon name="playing" size="22px" />{:else}<Icon name="play" size="22px" />{/if}
+        {#if player.loading}…{:else}<Icon name={playGlyph(!!player.current || !!player.live, player.playing)} size="22px" />{/if}
       </button>
       <button class="pbtn skip" onclick={() => player.skip(15)} disabled={!player.current} aria-label="Forward 15 seconds" title="Forward 15 seconds">15»</button>
       <button class="pbtn" onclick={() => player.nextTrack()} disabled={!player.tracks.length} aria-label="Next song" title="Next song"><Icon name="next" /></button>
@@ -856,7 +906,7 @@
     position: relative;
   }
   .p-volume input {
-    width: 90px;
+    width: 119px; /* 90px + 32% */
     accent-color: var(--c-accent);
   }
   .pvol-btn {
@@ -967,6 +1017,7 @@
       grid-column: 4;
       justify-self: end;
       min-width: var(--mini-volume-column);
+      z-index: 20; /* unconditional: the popover must clear the scrub row mid-fade */
     }
     .p-time {
       font-size: var(--mini-time-font);
@@ -989,17 +1040,29 @@
       border: 1px solid var(--c-border);
       border-radius: 7px;
       z-index: 1;
+      opacity: 0;
+      visibility: hidden;
+      /* Delay visibility so it only flips after the fade has finished. */
+      transition:
+        opacity 160ms ease,
+        visibility 0s linear 160ms;
     }
-    .p-volume.open {
-      z-index: 20;
+    .p-volume.open .vol-pop {
+      opacity: 1;
+      visibility: visible;
+      transition: opacity 160ms ease;
+    }
+    /* Constant stacking, not gated on .open, so the button stays above the panel
+       while it fades back out. */
+    .p-volume .pvol-btn {
+      position: relative;
+      z-index: 2;
     }
     .p-volume.open .pvol-btn {
       width: var(--mini-volume-column);
       height: var(--mini-volume-column);
       padding: 2px;
       justify-content: center;
-      position: relative;
-      z-index: 2;
     }
     .vol-slider {
       position: relative;

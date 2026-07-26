@@ -1,6 +1,7 @@
 <script lang="ts">
   import { fmtTime, type Track } from "$lib/api";
   import Icon from "$lib/Icon.svelte";
+  import { playGlyph } from "$lib/play-icon";
   import { canPlayExactTrack } from "$lib/track-playback";
 
   let {
@@ -44,7 +45,7 @@
         : current
           ? playing ? "Pause song" : "Resume song"
           : `Play song at ${fmtTime(track.start_sec!)}`}
-    ><Icon name={exactPlaybackAvailable && current && playing ? "pause" : "play"} /></button>
+    ><Icon name={playGlyph(exactPlaybackAvailable && current, playing)} /></button>
   {:else}
     <span class="tplay-spacer" aria-hidden="true"></span>
   {/if}
