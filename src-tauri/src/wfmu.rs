@@ -316,20 +316,30 @@ pub fn validate_audio_url(raw: &str) -> Result<reqwest::Url, String> {
 }
 
 fn decode_entities(s: &str) -> String {
-    s.replace("&amp;", "&")
-        .replace("&quot;", "\"")
+    // &amp; decodes last: doing it first turns a literal "&amp;lt;" into "&lt;" and then
+    // into "<", double-decoding text that was correctly escaped upstream.
+    s.replace("&quot;", "\"")
         .replace("&#039;", "'")
         .replace("&#39;", "'")
         .replace("&lt;", "<")
         .replace("&gt;", ">")
         .replace("&nbsp;", " ")
         .replace("&minus;", "-")
+        .replace("&amp;", "&")
 }
 
 fn strip_tags(s: &str) -> String {
+    static BLOCK: OnceLock<Regex> = OnceLock::new();
     static TAG: OnceLock<Regex> = OnceLock::new();
-    let re = TAG.get_or_init(|| Regex::new(r"<[^>]*>").unwrap());
-    re.replace_all(s, " ").into_owned()
+    // Script and style bodies are not text a reader ever sees, but the tag pattern below
+    // only removes the delimiters, so their JS and CSS would otherwise survive as literal
+    // words and end up rendered in a title or a track field.
+    let block = BLOCK.get_or_init(|| {
+        Regex::new(r"(?is)<script\b[^>]*>.*?</script\s*>|<style\b[^>]*>.*?</style\s*>").unwrap()
+    });
+    let tag = TAG.get_or_init(|| Regex::new(r"<[^>]*>").unwrap());
+    tag.replace_all(&block.replace_all(s, " "), " ")
+        .into_owned()
 }
 
 fn clean_text(s: &str) -> String {
@@ -348,6 +358,45 @@ fn non_empty(s: String) -> Option<String> {
     } else {
         Some(s)
     }
+}
+
+/// Fragments that only ever come from page chrome — WFMU's head scripts, its stylesheet
+/// and its login widget. No real artist, song, album or label carries them.
+///
+/// The match is case-sensitive on purpose: the library holds a real song called "Function
+/// At The Junction", which a case-insensitive `function ` would throw away.
+const CHROME_MARKERS: [&str; 8] = [
+    "document.",
+    "function ",
+    "font-family",
+    "KDBFav",
+    "{",
+    "}",
+    "</",
+    "/*",
+];
+
+/// Reject a parsed row that is page chrome rather than a track.
+///
+/// The playlist parsers below slice raw HTML by heuristics, so a template they don't
+/// recognize can hand back a chunk of the document itself. This is the one gate that
+/// keeps such a chunk from reaching the library: a row that fails it is dropped, and an
+/// episode whose every row fails ends up with no playlist rather than a garbage one.
+///
+/// Caps are set well clear of real data (the widest values observed in a full library are
+/// artist 74, title 194, album 102, label 57). `comments` is deliberately exempt from both
+/// checks — DJ notes legitimately run to thousands of characters.
+pub fn plausible_track(track: &ParsedTrack) -> bool {
+    let sane = |field: &Option<String>, cap: usize| match field {
+        None => true,
+        Some(text) => {
+            text.chars().count() <= cap && !CHROME_MARKERS.iter().any(|m| text.contains(m))
+        }
+    };
+    sane(&track.artist, 160)
+        && sane(&track.title, 300)
+        && sane(&track.album, 200)
+        && sane(&track.label, 120)
 }
 
 /// Convert a WFMU short date ("MM.DD.YY", as it appears in the playlist-index link
@@ -1128,7 +1177,6 @@ pub fn parse_hms(s: &str) -> Option<i64> {
     }
 }
 
-/// Parse a playlist page (https://wfmu.org/playlists/shows/{epId}) into tracks.
 /// Collect a table cell's text while skipping WFMU's `KDBFavIcon` helper spans.
 /// Those spans hold the song-star, jump/comment buttons and a hidden
 /// `..._summary_html` block ("Title" by "Artist"); their text would otherwise
@@ -1155,7 +1203,31 @@ fn cell_text_without_helpers(td: scraper::ElementRef) -> String {
     out
 }
 
+/// Parse a playlist page (https://wfmu.org/playlists/shows/{epId}) into tracks.
+///
+/// Three templates exist and each gets its own pass: the modern `col_*` table, and the two
+/// free-form shapes deep-archive DJs use, which mirror each other around the song star —
+/// text before it (Kenny G's Hour of Pain, /playlists/KG) and text after it (Teenage
+/// Wasteland, /playlists/TW). Every pass runs through
+/// [`plausible_track`] before its result counts: a pass that only manages to scrape page
+/// chrome yields nothing and the next one gets a turn, and when none of them produces a
+/// real track the episode is reported as having no playlist.
 pub fn parse_playlist(html: &str) -> Vec<ParsedTrack> {
+    for parse in [
+        parse_playlist_tabular,
+        parse_playlist_freeform,
+        parse_playlist_star_first,
+    ] {
+        let tracks: Vec<ParsedTrack> = parse(html).into_iter().filter(plausible_track).collect();
+        if !tracks.is_empty() {
+            return tracks;
+        }
+    }
+    Vec::new()
+}
+
+/// Parse the modern template, where every track is a table row of `col_*` cells.
+fn parse_playlist_tabular(html: &str) -> Vec<ParsedTrack> {
     static TIME: OnceLock<Regex> = OnceLock::new();
     let time_re = TIME.get_or_init(|| Regex::new(r"(\d+:\d{1,2}:\d{2})").unwrap());
 
@@ -1202,11 +1274,6 @@ pub fn parse_playlist(html: &str) -> Vec<ParsedTrack> {
             start_sec,
         });
     }
-    // Deep-archive DJs (e.g. Kenny G's Hour of Pain, /playlists/KG) use a free-form
-    // "comment" template with no col_* table, so the tabular pass finds nothing.
-    if tracks.is_empty() {
-        return parse_playlist_freeform(html);
-    }
     tracks
 }
 
@@ -1217,19 +1284,26 @@ pub fn parse_playlist(html: &str) -> Vec<ParsedTrack> {
 fn parse_playlist_freeform(html: &str) -> Vec<ParsedTrack> {
     static SONG: OnceLock<Regex> = OnceLock::new();
     static START: OnceLock<Regex> = OnceLock::new();
+    static SEPARATOR: OnceLock<Regex> = OnceLock::new();
     let song_span =
         SONG.get_or_init(|| Regex::new(r#"<span[^>]*class="KDBFavIcon KDBsong""#).unwrap());
     let start_re = START.get_or_init(|| Regex::new(r"starttime=(\d+:\d{1,2}:\d{2})").unwrap());
+    // Some pages write the separator as <BR><BR> or <br /><br />.
+    let separator = SEPARATOR.get_or_init(|| Regex::new(r"(?i)<br\s*/?>\s*<br\s*/?>").unwrap());
 
     let mut tracks = Vec::new();
-    for segment in html.split("<br><br>") {
+    for segment in separator.split(html) {
         // Only segments carrying a song star are real tracks.
         let Some(m) = song_span.find(segment) else {
             continue;
         };
-        // Text before the star holds ">Artist | Title".
+        // Text before the star holds ">Artist | Title". The marker is required: when a page
+        // uses none of the separators above, the split yields the whole document as one
+        // segment, and without this anchor its head and chrome become a single bogus track.
         let head = clean_text(&segment[..m.start()]);
-        let head = head.trim_start_matches('>').trim();
+        let Some(head) = head.strip_prefix('>').map(str::trim) else {
+            continue;
+        };
         if head.is_empty() {
             continue;
         }
@@ -1251,6 +1325,73 @@ fn parse_playlist_freeform(html: &str) -> Vec<ParsedTrack> {
             label: None,
             comments: None,
             start_sec,
+        });
+    }
+    tracks
+}
+
+/// Fallback parser for the "star first" playlist template (e.g. Teenage Wasteland,
+/// /playlists/TW, February 23 2020). It mirrors the template above: the KDBsong star opens
+/// each track and the text follows it, as
+/// "Title - <B>Artist</B> (CD: Album) Year [Label]", one `<BR>` per track. The medium in
+/// front of the album varies ("CD:", "7\" EP:"), and the trailing year and label are
+/// optional.
+fn parse_playlist_star_first(html: &str) -> Vec<ParsedTrack> {
+    static SONG: OnceLock<Regex> = OnceLock::new();
+    static BOLD: OnceLock<Regex> = OnceLock::new();
+    static BREAK: OnceLock<Regex> = OnceLock::new();
+    let song_span =
+        SONG.get_or_init(|| Regex::new(r#"<span[^>]*class="KDBFavIcon KDBsong""#).unwrap());
+    let bold = BOLD.get_or_init(|| Regex::new(r"(?is)<b\b[^>]*>(.*?)</b\s*>").unwrap());
+    let line_break = BREAK.get_or_init(|| Regex::new(r"(?i)<br\s*/?>").unwrap());
+
+    // Text between brackets, with the "CD:"-style medium prefix dropped from an album.
+    let bracketed = |text: &str, open: char, close: char, drop_prefix: bool| -> Option<String> {
+        let inner = text.split_once(open)?.1.split_once(close)?.0;
+        let inner = match inner.split_once(':') {
+            Some((_, rest)) if drop_prefix => rest,
+            _ => inner,
+        };
+        non_empty(inner.trim().to_string())
+    };
+
+    let stars: Vec<_> = song_span.find_iter(html).collect();
+    let mut tracks = Vec::new();
+    for (index, star) in stars.iter().enumerate() {
+        // The star span wraps only a link and an image, so the first close ends it.
+        let Some(offset) = html[star.end()..].find("</span>") else {
+            continue;
+        };
+        let body_start = star.end() + offset + "</span>".len();
+        let body_end = stars
+            .get(index + 1)
+            .map(|next| next.start())
+            .unwrap_or(html.len());
+        let body = &html[body_start..body_end];
+        let body = match line_break.find(body) {
+            Some(br) => &body[..br.start()],
+            None => body,
+        };
+
+        let artist = bold
+            .captures(body)
+            .map(|c| clean_text(&c[1]))
+            .and_then(non_empty);
+        let (head, tail) = match bold.find(body) {
+            Some(m) => (&body[..m.start()], clean_text(&body[m.end()..])),
+            None => (body, String::new()),
+        };
+        let title = non_empty(clean_text(head).trim_end_matches('-').trim().to_string());
+        if artist.is_none() && title.is_none() {
+            continue;
+        }
+        tracks.push(ParsedTrack {
+            artist,
+            title,
+            album: bracketed(&tail, '(', ')', true),
+            label: bracketed(&tail, '[', ']', false),
+            comments: None,
+            start_sec: None,
         });
     }
     tracks
@@ -1294,6 +1435,16 @@ mod tests {
             .join("tests/fixtures")
             .join(name);
         std::fs::read_to_string(path).expect("fixture readable")
+    }
+
+    #[test]
+    fn decode_entities_does_not_double_decode() {
+        assert_eq!(decode_entities("a &amp;lt; b"), "a &lt; b");
+        assert_eq!(
+            decode_entities("Sun Ra &amp; His Arkestra"),
+            "Sun Ra & His Arkestra"
+        );
+        assert_eq!(decode_entities("&lt;tag&gt;"), "<tag>");
     }
 
     #[test]
@@ -1691,6 +1842,89 @@ Peter Sellers
         assert_eq!(tracks[1].artist.as_deref(), Some("Peter Sellers"));
         assert_eq!(tracks[1].title.as_deref(), Some("Singing in the rain"));
         assert_eq!(tracks[1].start_sec, Some(32 * 60 + 14));
+    }
+
+    #[test]
+    fn star_first_playlist_parses_tracks_instead_of_page_chrome() {
+        // Real case: Teenage Wasteland (TW), February 23 2020. No col_* table, no <br><br>
+        // separators, and the track text follows its star rather than preceding it. The
+        // free-form pass used to swallow the whole document as one track whose artist was
+        // the page's own scripts and stylesheet.
+        let tracks = parse_playlist(&fixture("playlist_91603.html"));
+        assert_eq!(tracks.len(), 37);
+        assert_eq!(tracks[0].title.as_deref(), Some("Torn Up"));
+        assert_eq!(
+            tracks[0].artist.as_deref(),
+            Some("Mal Thursday & The Cheetahs")
+        );
+        assert_eq!(
+            tracks[0].album.as_deref(),
+            Some("It's All Going By Too Fast")
+        );
+        assert_eq!(tracks[0].label.as_deref(), Some("Chunk Archives"));
+        assert_eq!(tracks[1].title.as_deref(), Some("Mendocino"));
+        assert_eq!(tracks[1].artist.as_deref(), Some("The Sir Douglas Quintet"));
+        assert_eq!(tracks[1].album.as_deref(), Some("Interpreta En Espanol"));
+
+        // No track may carry page chrome: the head's scripts, styles or login widget.
+        for track in &tracks {
+            let text = format!(
+                "{} {}",
+                track.artist.as_deref().unwrap_or(""),
+                track.title.as_deref().unwrap_or("")
+            );
+            for leak in ["KDBFav", "function", "document.domain", "font-family"] {
+                assert!(!text.contains(leak), "chrome leaked into a track: {text}");
+            }
+        }
+    }
+
+    #[test]
+    fn a_page_the_parsers_cannot_read_yields_no_playlist_at_all() {
+        // The reported failure: a star-bearing page whose text is the frameset redirect
+        // script and the login widget. Whatever a pass scrapes off it is page chrome, so
+        // parse_playlist must report no playlist rather than hand the chrome to the library.
+        let html = r##"<script>document.domain="wfmu.org";
+if (top.KDBInPlaylistFrameset) { top.location.replace('https://wfmu.org/playlists/shows/91603'); }</script>
+<style>div.image_caption { text-align:center; font-size: small; }</style>
+<span style="color: red">&gt;</span>
+<span class="KDBFavIcon KDBsong" id="KDBsong-1"><a href="x">star</a></span>
+Login/Logout Register | Please enable inline frames!
+function kdb_login_iframeResize(id){ var size_el = document.getElementById(id); }"##;
+        assert!(parse_playlist(html).is_empty());
+    }
+
+    #[test]
+    fn plausible_track_gates_on_chrome_not_on_long_dj_notes() {
+        let track = |artist: &str, comments: Option<&str>| ParsedTrack {
+            artist: non_empty(artist.to_string()),
+            title: Some("Song".into()),
+            album: None,
+            label: None,
+            comments: comments.map(str::to_string),
+            start_sec: None,
+        };
+        // DJ notes legitimately run to thousands of characters and are never gated.
+        assert!(plausible_track(&track(
+            "Real Artist",
+            Some(&"note ".repeat(800))
+        )));
+        // Real values top out far below the caps; a field this wide is a slab of page.
+        assert!(!plausible_track(&track(&"x".repeat(200), None)));
+        // Chrome markers fail at any length.
+        assert!(!plausible_track(&track(
+            "document.domain=\"wfmu.org\"",
+            None
+        )));
+        assert!(!plausible_track(&track("a { font-family: verdana }", None)));
+    }
+
+    #[test]
+    fn script_and_style_bodies_never_become_text() {
+        let html = r#"<style> a.highslide img { max-width:335px; } </style>
+            <script>document.domain="wfmu.org";</script>
+            <b>Real Title</b>"#;
+        assert_eq!(clean_text(html), "Real Title");
     }
 
     #[test]

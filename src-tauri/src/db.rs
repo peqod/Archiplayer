@@ -148,8 +148,33 @@ impl Db {
         conn.execute_batch("PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON;")?;
         conn.execute_batch(SCHEMA)?;
         Self::migrate(&mut conn)?;
-        let fts = conn.execute_batch(FTS_SCHEMA).is_ok();
+        // A half-populated index would silently drop results, so a failed backfill falls
+        // back to the LIKE search path rather than failing the whole open.
+        let fts = conn.execute_batch(FTS_SCHEMA).is_ok() && Self::backfill_fts(&mut conn).is_ok();
         Ok(Db { conn, fts })
+    }
+
+    /// Rows only enter `tracks_fts` while syncing a playlist, so a database written before
+    /// FTS existed, or one whose index creation failed once and later succeeded, keeps its
+    /// tracks permanently unsearchable. Rebuild whenever the index and the table disagree.
+    /// The index can also run *ahead* of the table: `migrate` deletes track rows before the
+    /// FTS table is even attached, so its leftovers are cleared here.
+    fn backfill_fts(conn: &mut Connection) -> Result<(), rusqlite::Error> {
+        let indexed: i64 =
+            conn.query_row("SELECT COUNT(*) FROM tracks_fts", [], |row| row.get(0))?;
+        let total: i64 = conn.query_row("SELECT COUNT(*) FROM tracks", [], |row| row.get(0))?;
+        if indexed == total {
+            return Ok(());
+        }
+        let tx = conn.transaction()?;
+        tx.execute("DELETE FROM tracks_fts", [])?;
+        // Mirrors the sync inserts: ids are stored as text, artist/title/album keep their NULLs.
+        tx.execute(
+            "INSERT INTO tracks_fts (artist, title, album, track_id, episode_id)
+             SELECT artist, title, album, CAST(id AS TEXT), CAST(episode_id AS TEXT) FROM tracks",
+            [],
+        )?;
+        tx.commit()
     }
 
     fn migrate(conn: &mut Connection) -> Result<(), rusqlite::Error> {
@@ -213,8 +238,65 @@ impl Db {
         // Retroactively flag synthetic live rows created before the is_live column existed,
         // so they stop appearing in the catalog. Real show ids never start with "live-".
         tx.execute_batch("UPDATE shows SET is_live = 1 WHERE id LIKE 'live-%';")?;
-        tx.pragma_update(None, "user_version", 3)?;
+        let version: i64 = tx.pragma_query_value(None, "user_version", |row| row.get(0))?;
+        if version < 4 {
+            Self::purge_implausible_tracks(&tx)?;
+        }
+        tx.pragma_update(None, "user_version", 4)?;
         tx.commit()
+    }
+
+    /// One-off repair for playlists cached before the parsers learned to reject page chrome.
+    /// Those rows hold a slab of the show page — its head scripts, stylesheet and login
+    /// widget — in the artist and title columns, and nothing would ever replace them:
+    /// `get_playlist` re-scrapes only when `episodes.last_scraped` is NULL. Drop the bad rows
+    /// and clear that stamp so the fixed parser gets a turn the next time the episode opens.
+    fn purge_implausible_tracks(tx: &rusqlite::Transaction) -> Result<(), rusqlite::Error> {
+        let doomed: Vec<(i64, i64)> = {
+            let mut stmt =
+                tx.prepare("SELECT id, episode_id, artist, title, album, label FROM tracks")?;
+            let rows = stmt.query_map([], |row| {
+                let track = crate::wfmu::ParsedTrack {
+                    artist: row.get(2)?,
+                    title: row.get(3)?,
+                    album: row.get(4)?,
+                    label: row.get(5)?,
+                    comments: None,
+                    start_sec: None,
+                };
+                Ok((row.get::<_, i64>(0)?, row.get::<_, i64>(1)?, track))
+            })?;
+            rows.filter_map(|row| match row {
+                Ok((id, episode_id, track)) if !crate::wfmu::plausible_track(&track) => {
+                    Some(Ok((id, episode_id)))
+                }
+                Ok(_) => None,
+                Err(e) => Some(Err(e)),
+            })
+            .collect::<Result<_, _>>()?
+        };
+        if doomed.is_empty() {
+            return Ok(());
+        }
+        for (id, _) in &doomed {
+            tx.execute("DELETE FROM tracks WHERE id=?1", params![id])?;
+            // The track's favourite would otherwise outlive it as an unreachable row.
+            tx.execute(
+                "DELETE FROM favourites WHERE kind='track' AND ref_id=?1",
+                params![id.to_string()],
+            )?;
+        }
+        // tracks_fts is attached after this runs, so backfill_fts clears its leftovers.
+        let mut episodes: Vec<i64> = doomed.into_iter().map(|(_, episode)| episode).collect();
+        episodes.sort_unstable();
+        episodes.dedup();
+        for episode_id in episodes {
+            tx.execute(
+                "UPDATE episodes SET last_scraped=NULL WHERE id=?1",
+                params![episode_id],
+            )?;
+        }
+        Ok(())
     }
 
     pub fn now() -> i64 {
@@ -299,6 +381,9 @@ impl Db {
         )
     }
 
+    /// `seq` is `None` for callers with no ordering opinion, such as the live-status path
+    /// that meets a hosted episode mid-broadcast. Those keep whatever ordering a show-page
+    /// scrape already established instead of resetting it to the top of the list.
     pub fn upsert_episode(
         &self,
         id: i64,
@@ -306,16 +391,16 @@ impl Db {
         air_date: Option<&str>,
         title: Option<&str>,
         archive_id: Option<i64>,
-        seq: i64,
+        seq: Option<i64>,
     ) -> Result<(), rusqlite::Error> {
         self.conn.execute(
             "INSERT INTO episodes (id, show_id, air_date, title, archive_id, has_audio, seq)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, COALESCE(?7, 0))
              ON CONFLICT(id) DO UPDATE SET
                show_id=?2, air_date=COALESCE(?3, air_date), title=COALESCE(?4, title),
                archive_id=COALESCE(?5, archive_id),
                has_audio=CASE WHEN ?5 IS NULL THEN has_audio ELSE ?6 END,
-               seq=?7",
+               seq=COALESCE(?7, seq)",
             params![
                 id,
                 show_id,
@@ -527,6 +612,27 @@ impl Db {
                         tx.last_insert_rowid()
                     };
                     synced.push((track_id, track));
+                }
+                // A snapshot is authoritative about its own length, so a playlist that
+                // shrank must lose its tail — otherwise rows from an earlier, longer parse
+                // survive forever. An *empty* snapshot is not treated as authoritative: a
+                // fetch that failed or a template the parsers didn't recognize must not
+                // destroy a good cached playlist, so the existing rows stay put.
+                if !tracks.is_empty() {
+                    let surplus: Vec<i64> = existing
+                        .iter()
+                        .filter(|(seq, _)| *seq >= tracks.len() as i64)
+                        .map(|(_, id)| *id)
+                        .collect();
+                    for id in surplus {
+                        tx.execute("DELETE FROM tracks WHERE id=?1", params![id])?;
+                        if fts {
+                            tx.execute(
+                                "DELETE FROM tracks_fts WHERE track_id=?1",
+                                params![id.to_string()],
+                            )?;
+                        }
+                    }
                 }
             }
             TrackSyncMode::AppendObservations => {
@@ -916,7 +1022,7 @@ mod tests {
             .conn
             .pragma_query_value(None, "user_version", |row| row.get(0))
             .expect("schema version");
-        assert_eq!(version, 3);
+        assert_eq!(version, 4);
         let offset_column: i64 = db
             .conn
             .query_row(
@@ -963,6 +1069,44 @@ mod tests {
     }
 
     #[test]
+    fn upsert_without_a_seq_keeps_the_scraped_ordering() {
+        let path = std::env::temp_dir().join(format!(
+            "archiplayer-live-seq-{}-{}.db",
+            std::process::id(),
+            Db::now()
+        ));
+        let db = Db::open(&path).expect("open live seq test db");
+        db.upsert_show("WA", "Wake", None, true).unwrap();
+        db.upsert_episode(30, "WA", None, Some("Scraped"), Some(30), Some(4))
+            .unwrap();
+
+        // The live-status path meets the same hosted episode mid-broadcast.
+        db.upsert_episode(30, "WA", None, Some("On air"), None, None)
+            .unwrap();
+
+        let (seq, title): (i64, String) = db
+            .conn
+            .query_row("SELECT seq, title FROM episodes WHERE id=30", [], |row| {
+                Ok((row.get(0)?, row.get(1)?))
+            })
+            .unwrap();
+        assert_eq!(seq, 4);
+        assert_eq!(title, "On air");
+
+        // A fresh episode with no ordering opinion still lands on the schema default.
+        db.upsert_episode(31, "WA", None, Some("New"), None, None)
+            .unwrap();
+        let fresh: i64 = db
+            .conn
+            .query_row("SELECT seq FROM episodes WHERE id=31", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(fresh, 0);
+
+        drop(db);
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
     fn shallow_show_refresh_keeps_cached_history_in_stable_order() {
         let path = std::env::temp_dir().join(format!(
             "archiplayer-show-refresh-{}-{}.db",
@@ -972,7 +1116,7 @@ mod tests {
         let mut db = Db::open(&path).expect("open show refresh test db");
         db.upsert_show("WA", "Wake", None, true).unwrap();
         for (seq, id) in [30, 20, 10].into_iter().enumerate() {
-            db.upsert_episode(id, "WA", None, None, Some(id), seq as i64)
+            db.upsert_episode(id, "WA", None, None, Some(id), Some(seq as i64))
                 .unwrap();
         }
 
@@ -1015,7 +1159,7 @@ mod tests {
         ));
         let mut db = Db::open(&path).expect("open live test db");
         db.upsert_show("LIVE", "Live", None, true).unwrap();
-        db.upsert_episode(-1, "LIVE", None, Some("Live"), None, 0)
+        db.upsert_episode(-1, "LIVE", None, Some("Live"), None, None)
             .unwrap();
         let first = ParsedTrack {
             artist: Some("Artist one".into()),
@@ -1045,7 +1189,7 @@ mod tests {
         assert!(merged[0].favourite);
 
         let observed_episode = -2;
-        db.upsert_episode(observed_episode, "LIVE", None, Some("Observed"), None, 0)
+        db.upsert_episode(observed_episode, "LIVE", None, Some("Observed"), None, None)
             .unwrap();
         db.sync_tracks(
             observed_episode,
@@ -1078,6 +1222,132 @@ mod tests {
     }
 
     #[test]
+    fn snapshot_drops_a_shrunken_tail_but_never_on_an_empty_parse() {
+        let path = std::env::temp_dir().join(format!(
+            "archiplayer-snapshot-{}-{}.db",
+            std::process::id(),
+            Db::now()
+        ));
+        let mut db = Db::open(&path).expect("open snapshot test db");
+        db.upsert_show("WA", "Wake", None, false).unwrap();
+        db.upsert_episode(500, "WA", None, Some("Episode"), None, None)
+            .unwrap();
+        let track = |n: i64| ParsedTrack {
+            artist: Some(format!("Artist {n}")),
+            title: Some(format!("Track {n}")),
+            album: None,
+            label: None,
+            comments: None,
+            start_sec: None,
+        };
+
+        db.sync_tracks(
+            500,
+            &[track(1), track(2), track(3)],
+            TrackSyncMode::Snapshot,
+        )
+        .unwrap();
+        assert_eq!(db.list_tracks(500).unwrap().len(), 3);
+
+        // A shorter snapshot is authoritative: rows 2 and 3 go.
+        db.sync_tracks(500, &[track(1)], TrackSyncMode::Snapshot)
+            .unwrap();
+        let remaining = db.list_tracks(500).unwrap();
+        assert_eq!(remaining.len(), 1);
+        assert_eq!(remaining[0].title.as_deref(), Some("Track 1"));
+
+        // An empty one is not: a failed fetch must not wipe a good cached playlist.
+        db.sync_tracks(500, &[], TrackSyncMode::Snapshot).unwrap();
+        assert_eq!(db.list_tracks(500).unwrap().len(), 1);
+
+        drop(db);
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn migration_purges_cached_page_chrome_and_forces_a_rescrape() {
+        let path = std::env::temp_dir().join(format!(
+            "archiplayer-purge-{}-{}.db",
+            std::process::id(),
+            Db::now()
+        ));
+        let good_id;
+        let bad_id;
+        {
+            let mut db = Db::open(&path).expect("open purge test db");
+            db.upsert_show("TW", "Teenage Wasteland", None, false)
+                .unwrap();
+            db.upsert_episode(91603, "TW", Some("February 23, 2020"), None, None, None)
+                .unwrap();
+            // What the old parser stored: the whole page as one track.
+            db.sync_tracks(
+                91603,
+                &[
+                    ParsedTrack {
+                        artist: Some("document.domain=\"wfmu.org\"; if (top.KDBInPlaylistFrameset) { top.location.replace('x'); }".into()),
+                        title: Some("Register | Please enable inline frames! function kdb_login_iframeResize(id){}".into()),
+                        album: None,
+                        label: None,
+                        comments: None,
+                        start_sec: None,
+                    },
+                    ParsedTrack {
+                        artist: Some("Mal Thursday & The Cheetahs".into()),
+                        title: Some("Torn Up".into()),
+                        album: None,
+                        label: None,
+                        comments: None,
+                        start_sec: None,
+                    },
+                ],
+                TrackSyncMode::Snapshot,
+            )
+            .unwrap();
+            let cached = db.list_tracks(91603).unwrap();
+            bad_id = cached[0].id;
+            good_id = cached[1].id;
+            db.toggle_favourite("track", &bad_id.to_string()).unwrap();
+            // Pretend the rows predate the repair.
+            db.conn
+                .pragma_update(None, "user_version", 3)
+                .expect("rewind schema version");
+        }
+
+        let db = Db::open(&path).expect("reopen and repair");
+        let repaired = db.list_tracks(91603).unwrap();
+        assert_eq!(repaired.len(), 1);
+        assert_eq!(repaired[0].id, good_id);
+
+        // Nothing points at the deleted row any more, in favourites or in the search index.
+        let orphan_favourites: i64 = db
+            .conn
+            .query_row(
+                "SELECT COUNT(*) FROM favourites WHERE kind='track' AND ref_id=?1",
+                params![bad_id.to_string()],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(orphan_favourites, 0);
+        if db.fts {
+            let orphan_index: i64 = db
+                .conn
+                .query_row(
+                    "SELECT COUNT(*) FROM tracks_fts WHERE track_id=?1",
+                    params![bad_id.to_string()],
+                    |row| row.get(0),
+                )
+                .unwrap();
+            assert_eq!(orphan_index, 0);
+        }
+
+        // The stamp is cleared, so get_playlist re-scrapes with the fixed parser.
+        assert!(!db.episode_tracks_scraped(91603).unwrap());
+
+        drop(db);
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
     fn live_playlist_refresh_detects_missing_and_stale_snapshots() {
         let path = std::env::temp_dir().join(format!(
             "archiplayer-live-refresh-{}-{}.db",
@@ -1086,7 +1356,7 @@ mod tests {
         ));
         let mut db = Db::open(&path).expect("open live refresh test db");
         db.upsert_show("LIVE", "Live", None, true).unwrap();
-        db.upsert_episode(-3, "LIVE", None, Some("Live"), None, 0)
+        db.upsert_episode(-3, "LIVE", None, Some("Live"), None, None)
             .unwrap();
         assert!(db.episode_tracks_stale(-3, 30).unwrap());
 
@@ -1130,7 +1400,7 @@ mod tests {
             Some("2026-07-14"),
             Some("Live"),
             None,
-            0,
+            None,
         )
         .unwrap();
         let observed = ParsedTrack {
@@ -1163,6 +1433,63 @@ mod tests {
         assert_eq!(tracks[0].source_id.as_deref(), Some("wfmugtd:row-1"));
         assert_eq!(tracks[0].played_at, Some(1_752_500_000));
         assert!(tracks[0].favourite);
+        drop(db);
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn opening_backfills_a_search_index_that_trails_the_tracks_table() {
+        let path = std::env::temp_dir().join(format!(
+            "archiplayer-fts-backfill-{}-{}.db",
+            std::process::id(),
+            Db::now()
+        ));
+        let mut db = Db::open(&path).expect("open fts backfill test db");
+        assert!(db.fts);
+        db.upsert_show("BK", "Beware of the Blog", None, false)
+            .unwrap();
+        db.upsert_episode(70, "BK", None, Some("Episode"), None, None)
+            .unwrap();
+        let track = ParsedTrack {
+            artist: Some("Neu".into()),
+            title: Some("Hallogallo".into()),
+            album: None,
+            label: None,
+            comments: None,
+            start_sec: Some(0),
+        };
+        db.sync_tracks(70, &[track], TrackSyncMode::Snapshot)
+            .unwrap();
+        let track_id = db.list_tracks(70).unwrap()[0].id;
+
+        // Stand in for a database whose tracks were written before the index existed.
+        db.conn.execute("DELETE FROM tracks_fts", []).unwrap();
+        drop(db);
+
+        let db = Db::open(&path).expect("reopen fts backfill test db");
+        assert!(db.fts);
+        let (indexed, total): (i64, i64) = db
+            .conn
+            .query_row(
+                "SELECT (SELECT COUNT(*) FROM tracks_fts), (SELECT COUNT(*) FROM tracks)",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .unwrap();
+        assert_eq!(indexed, total);
+        assert_eq!(indexed, 1);
+
+        let indexed_track: (i64, i64) = db
+            .conn
+            .query_row(
+                "SELECT CAST(track_id AS INTEGER), CAST(episode_id AS INTEGER)
+                 FROM tracks_fts WHERE tracks_fts MATCH 'Hallogallo'",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .unwrap();
+        assert_eq!(indexed_track, (track_id, 70));
+
         drop(db);
         let _ = std::fs::remove_file(path);
     }

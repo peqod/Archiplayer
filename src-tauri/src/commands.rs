@@ -327,13 +327,14 @@ pub async fn get_live_status(
     if synthetic_show {
         db.set_show_live(&show_id).map_err(db_err)?;
     }
+    // No seq: a hosted episode met through live status keeps the ordering its show page gave it.
     db.upsert_episode(
         episode_id,
         &show_id,
         air_date.as_deref(),
         episode_title,
         None,
-        0,
+        None,
     )
     .map_err(db_err)?;
     // The main FM homepage exposes the active playlist but no current-song fields.
@@ -422,7 +423,7 @@ pub async fn get_live_page(
                 Some(&date),
                 Some("Live history"),
                 None,
-                0,
+                None,
             )
             .map_err(db_err)?;
             db.sync_provider_tracks(episode_id, station.rethink_code, &tracks)
@@ -658,9 +659,7 @@ pub async fn resolve_audio(episode_id: i64, state: State<'_, AppState>) -> CmdRe
             let a = wfmu::parse_playlist_archive(&html)
                 .ok_or("this episode has no audio archive (playlist only)")?;
             state
-                .db
-                .lock()
-                .unwrap()
+                .db()?
                 .set_episode_archive(episode_id, a)
                 .map_err(db_err)?;
             a
@@ -877,7 +876,14 @@ pub fn search(query: String, state: State<'_, AppState>) -> CmdResult<SearchResu
         });
     }
     let db = state.db()?;
-    let like = format!("%{}%", q.replace('%', "").replace('_', " "));
+    // Escape LIKE metacharacters (and the escape character itself) rather than stripping
+    // them, so a literal "%" or "_" in the query still matches instead of vanishing.
+    let like = format!(
+        "%{}%",
+        q.replace('\\', "\\\\")
+            .replace('%', "\\%")
+            .replace('_', "\\_")
+    );
     let shows: Vec<Show> = db
         .list_shows()
         .map_err(db_err)?
@@ -909,7 +915,7 @@ pub fn search(query: String, state: State<'_, AppState>) -> CmdResult<SearchResu
          FROM tracks t
          JOIN episodes e ON e.id = t.episode_id
          JOIN shows s ON s.id = e.show_id
-         WHERE (t.artist LIKE ?1 OR t.title LIKE ?1 OR t.album LIKE ?1) AND s.is_live = 0 LIMIT 200"
+         WHERE (t.artist LIKE ?1 ESCAPE '\\' OR t.title LIKE ?1 ESCAPE '\\' OR t.album LIKE ?1 ESCAPE '\\') AND s.is_live = 0 LIMIT 200"
     };
     let param: String = if db.fts {
         // FTS5 query syntax: quote each term to avoid operator injection.
@@ -961,9 +967,7 @@ pub fn record_listen(
     state: State<'_, AppState>,
 ) -> CmdResult<()> {
     state
-        .db
-        .lock()
-        .unwrap()
+        .db()?
         .record_listen(
             &session_id,
             episode_id,
@@ -999,6 +1003,9 @@ pub fn set_download_dir(dir: String, app: AppHandle, state: State<'_, AppState>)
     // folder would otherwise stop playing after a relaunch (the startup grant in run() covers
     // subsequent launches). Granting the default $APPDATA/downloads dir again is harmless.
     if !dir.trim().is_empty() {
+        if !Path::new(&dir).is_dir() {
+            return Err("download folder does not exist".into());
+        }
         app.asset_protocol_scope()
             .allow_directory(&dir, true)
             .map_err(|e| format!("could not grant folder access: {e}"))?;
@@ -1212,6 +1219,9 @@ fn create_csv_temp(dest: &Path) -> CmdResult<(PathBuf, std::fs::File)> {
         .parent()
         .filter(|path| !path.as_os_str().is_empty())
         .unwrap_or_else(|| Path::new("."));
+    if !parent.is_dir() {
+        return Err("export destination folder does not exist".into());
+    }
     let filename = dest
         .file_name()
         .ok_or("CSV destination must name a file")?
