@@ -288,6 +288,13 @@ Push-Main
 Confirm-TagPush
 New-AndPushTag
 
+# Everything past this point reads a release that a dry run never created.
+if ($WhatIfPreference) {
+  Write-Host ""
+  Write-Host "Dry run complete. Nothing was bumped, committed, pushed or tagged." -ForegroundColor Green
+  return
+}
+
 if ($NoWatch) {
   Write-Host ""
   Write-Host "Tag pushed. CI is building. Not watching (-NoWatch)." -ForegroundColor Green
