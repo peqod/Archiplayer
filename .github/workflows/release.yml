@@ -15,11 +15,15 @@ jobs:
         include:
           - platform: windows-latest
             args: --bundles nsis
-          - platform: macos-latest
-            args: --target universal-apple-darwin --bundles dmg
+          # macOS distribution is paused. To resume, restore the leg:
+          #   - platform: macos-latest
+          #     args: --target universal-apple-darwin --bundles dmg
+          # and put back the RUSTUP_TOOLCHAIN / targets ternaries on
+          # matrix.platform, plus the _universal.dmg entry in
+          # scripts/release.ps1 and the mac matcher in site/site.js.
     runs-on: ${{ matrix.platform }}
     env:
-      RUSTUP_TOOLCHAIN: ${{ matrix.platform == 'windows-latest' && 'stable-x86_64-pc-windows-msvc' || 'stable' }}
+      RUSTUP_TOOLCHAIN: stable-x86_64-pc-windows-msvc
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -27,24 +31,39 @@ jobs:
           node-version: 22
           cache: npm
       - uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: ${{ matrix.platform == 'macos-latest' && 'x86_64-apple-darwin,aarch64-apple-darwin' || '' }}
       - uses: swatinem/rust-cache@v2
         with:
           workspaces: src-tauri
       - run: npm ci
       - name: Verify release versions
         run: node scripts/verify-release-version.mjs ${{ github.ref_name }}
+      # The release notes are the CHANGELOG.md section for this tag. tauri-action
+      # has no releaseBodyPath input, so the text travels as a step output.
+      # release.ps1 runs the same extract before the tag push, so a missing
+      # section fails while failing is still free.
+      - name: Build release notes
+        id: notes
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Extract first, into a file: a failure then aborts the step before
+          # anything half-written reaches $GITHUB_OUTPUT.
+          node scripts/extract-changelog.mjs "${{ github.ref_name }}" > release-notes.txt
+          {
+            echo 'body<<CHANGELOG_EOF'
+            cat release-notes.txt
+            echo
+            echo 'These community builds are unsigned. Read the installation notes on the project site before opening them.'
+            echo CHANGELOG_EOF
+          } >> "$GITHUB_OUTPUT"
+          rm release-notes.txt
       - uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           tagName: ${{ github.ref_name }}
           releaseName: Archiplayer ${{ github.ref_name }}
-          releaseBody: |
-            Archiplayer for Windows and macOS. Linux builds are coming soon.
-
-            These community builds are currently unsigned. Read the installation notes on the project site before opening them.
+          releaseBody: ${{ steps.notes.outputs.body }}
           releaseDraft: true
           prerelease: false
           args: ${{ matrix.args }}

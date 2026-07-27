@@ -153,7 +153,21 @@ function Update-AllVersions {
 
 function Invoke-VersionGate {
   Write-Host "Verifying version consistency..."
+  # -WhatIf skips the bump, so the manifests still hold the previous version and
+  # the tag check would always fail. Skipping keeps the dry run honest.
+  if ($WhatIfPreference) {
+    Write-Host "  skipped: nothing was bumped under -WhatIf."
+    return
+  }
   Invoke-Native node scripts/verify-release-version.mjs $tag
+}
+
+# CI reads the release notes out of CHANGELOG.md. Run the same extract here so a
+# missing section stops the release before the tag push, not after it.
+function Invoke-ChangelogGate {
+  Write-Host "Verifying the changelog entry..."
+  Invoke-Native node scripts/extract-changelog.mjs $tag | Out-Null
+  Write-Host "  ok: CHANGELOG.md has a section for $tag."
 }
 
 function New-ReleaseCommit {
@@ -235,7 +249,9 @@ function Assert-DraftAssets {
   if (-not $rel) { throw "No release found for $tag after CI. Aborting." }
 
   $names = @($rel.assets | ForEach-Object { $_.name })
-  $required = @('_x64-setup.exe', '_universal.dmg', 'SHA256SUMS.txt')
+  # macOS distribution is paused; add '_universal.dmg' back here when the
+  # release.yml matrix gets its macos-latest leg again.
+  $required = @('_x64-setup.exe', 'SHA256SUMS.txt')
   $missing = @()
   foreach ($needle in $required) {
     if (-not ($names | Where-Object { $_ -like "*$needle" })) { $missing += $needle }
@@ -243,7 +259,7 @@ function Assert-DraftAssets {
   if ($missing.Count -gt 0) {
     throw "Release $tag is missing assets: $($missing -join ', '). A platform build likely failed (checksums is skipped when any leg fails). Do NOT publish; fix and re-tag."
   }
-  Write-Host "  all 3 assets present: $($names -join ', ')"
+  Write-Host "  all $($required.Count) assets present: $($names -join ', ')"
   return $rel
 }
 
@@ -266,6 +282,7 @@ Write-Host "=== Archiplayer release $tag ===" -ForegroundColor Cyan
 Assert-Preconditions
 Update-AllVersions
 Invoke-VersionGate
+Invoke-ChangelogGate
 New-ReleaseCommit
 Push-Main
 Confirm-TagPush
