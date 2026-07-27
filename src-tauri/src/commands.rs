@@ -25,6 +25,18 @@ const CATALOG_CACHE_KEY: &str = "catalog_last_scraped";
 const CATALOG_CACHE_MAX_AGE_SECONDS: i64 = 24 * 60 * 60;
 const SHOW_CACHE_MAX_AGE_SECONDS: i64 = 6 * 60 * 60;
 
+fn broadcast_duration_for_tracks(
+    duration_sec: Option<i64>,
+    tracks: &[wfmu::ParsedTrack],
+) -> Option<i64> {
+    duration_sec.filter(|duration| {
+        tracks
+            .iter()
+            .filter_map(|track| track.start_sec)
+            .all(|start| start < *duration)
+    })
+}
+
 fn db_err(e: rusqlite::Error) -> String {
     format!("db error: {e}")
 }
@@ -50,6 +62,12 @@ pub struct AudioSource {
     pub local: bool,
     /// Archive pre-roll offset in seconds (0 when unknown / old mp3-era archives).
     pub offset_sec: i64,
+}
+
+#[derive(Serialize)]
+pub struct PlaylistPayload {
+    pub tracks: Vec<Track>,
+    pub broadcast_duration_sec: Option<i64>,
 }
 
 #[derive(Serialize)]
@@ -248,35 +266,61 @@ pub async fn get_playlist(
     episode_id: i64,
     refresh: bool,
     state: State<'_, AppState>,
-) -> CmdResult<Vec<Track>> {
-    let need_scrape = {
+) -> CmdResult<PlaylistPayload> {
+    let (tracks_scraped, timing_checked) = {
         let db = state.db()?;
-        refresh || !db.episode_tracks_scraped(episode_id).map_err(db_err)?
+        (
+            db.episode_tracks_scraped(episode_id).map_err(db_err)?,
+            db.episode_playlist_timing_checked(episode_id)
+                .map_err(db_err)?,
+        )
     };
+    let need_scrape = refresh || !tracks_scraped || !timing_checked;
     if need_scrape {
-        let html = state
+        let fetched = state
             .fetcher
             .get_text(&wfmu::playlist_url(episode_id))
-            .await?;
-        let tracks = wfmu::parse_playlist(&html);
-        // The playlist page also carries the pop-up-player link; use it to fill in an
-        // archive id for episodes whose show-index block had none, so they become playable.
-        let discovered = wfmu::parse_playlist_archive(&html);
-        let mut db = state.db()?;
-        db.sync_tracks(episode_id, &tracks, TrackSyncMode::Snapshot)
-            .map_err(db_err)?;
-        if let Some(archive) = discovered {
-            if db
-                .get_episode(episode_id)
-                .map(|e| e.archive_id.is_none())
-                .unwrap_or(false)
-            {
-                db.set_episode_archive(episode_id, archive)
+            .await;
+        match fetched {
+            Ok(html) => {
+                let tracks = wfmu::parse_playlist(&html);
+                let meta = wfmu::parse_playlist_meta(&html);
+                // A show can change slots over its lifetime while an old playlist page
+                // retains the current header. Never accept a boundary that would cut off
+                // one of that episode's own timestamped rows.
+                let broadcast_duration_sec =
+                    broadcast_duration_for_tracks(meta.broadcast_duration_sec, &tracks);
+                // The playlist page also carries the pop-up-player link; use it to fill in an
+                // archive id for episodes whose show-index block had none, so they become playable.
+                let discovered = wfmu::parse_playlist_archive(&html);
+                let mut db = state.db()?;
+                db.sync_tracks(episode_id, &tracks, TrackSyncMode::Snapshot)
                     .map_err(db_err)?;
+                db.set_episode_broadcast_duration(episode_id, broadcast_duration_sec)
+                    .map_err(db_err)?;
+                if let Some(archive) = discovered {
+                    if db
+                        .get_episode(episode_id)
+                        .map(|e| e.archive_id.is_none())
+                        .unwrap_or(false)
+                    {
+                        db.set_episode_archive(episode_id, archive)
+                            .map_err(db_err)?;
+                    }
+                }
             }
+            // A timing-only migration must not make an already-cached playlist unusable
+            // offline. Keep the marker unset so a later online request can retry.
+            Err(_) if tracks_scraped && !refresh => {}
+            Err(error) => return Err(error),
         }
     }
-    state.db()?.list_tracks(episode_id).map_err(db_err)
+    let db = state.db()?;
+    let episode = db.get_episode(episode_id).map_err(db_err)?;
+    Ok(PlaylistPayload {
+        tracks: db.list_tracks(episode_id).map_err(db_err)?,
+        broadcast_duration_sec: episode.broadcast_duration_sec,
+    })
 }
 
 #[tauri::command]
@@ -1422,7 +1466,10 @@ pub fn export_csv(kind: String, dest: String, state: State<'_, AppState>) -> Cmd
 
 #[cfg(test)]
 mod tests {
-    use super::{cache_is_stale, neutralize_csv_cell, write_csv_record};
+    use super::{
+        broadcast_duration_for_tracks, cache_is_stale, neutralize_csv_cell, write_csv_record,
+    };
+    use crate::wfmu::ParsedTrack;
 
     #[test]
     fn cache_freshness_handles_boundaries_and_bad_timestamps() {
@@ -1432,6 +1479,30 @@ mod tests {
         assert!(!cache_is_stale(Some(now - max_age + 1), now, max_age));
         assert!(cache_is_stale(Some(now - max_age), now, max_age));
         assert!(cache_is_stale(Some(now + 1), now, max_age));
+    }
+
+    #[test]
+    fn historical_schedule_never_cuts_off_timestamped_playlist_rows() {
+        let track = |start_sec| ParsedTrack {
+            artist: Some("Artist".into()),
+            title: Some("Track".into()),
+            album: None,
+            label: None,
+            comments: None,
+            start_sec,
+        };
+        assert_eq!(
+            broadcast_duration_for_tracks(Some(3 * 60 * 60), &[track(Some(10_790))]),
+            Some(3 * 60 * 60)
+        );
+        assert_eq!(
+            broadcast_duration_for_tracks(Some(2 * 60 * 60), &[track(Some(10_790))]),
+            None
+        );
+        assert_eq!(
+            broadcast_duration_for_tracks(Some(3 * 60 * 60), &[track(None)]),
+            Some(3 * 60 * 60)
+        );
     }
 
     #[test]

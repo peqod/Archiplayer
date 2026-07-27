@@ -5,8 +5,17 @@ import {
   type LiveSong,
   type LiveStatus,
   type LiveStream,
+  type PlaylistPayload,
   type Track,
 } from "./api";
+import {
+  effectiveArchiveDuration,
+  scheduledArchiveEndReached,
+} from "./archive-timing";
+import {
+  auditionFadeInGain,
+  auditionFadeOutGain,
+} from "./audition-fade";
 import { isAbortError, PlaybackTransitions } from "./playback-transition";
 import { trackMarkSeconds } from "./track-playback";
 import { normalizeVolume } from "./volume";
@@ -48,13 +57,23 @@ class Player {
   private liveTrackIndex = $state(-1);
   private liveStatusTimer: ReturnType<typeof setInterval> | null = null;
   private liveRefreshGeneration: number | null = null;
-  private livePlaylistLoads = new Map<number, Promise<Track[]>>();
+  private livePlaylistLoads = new Map<number, Promise<PlaylistPayload>>();
   private transitions = new PlaybackTransitions();
   tracks = $state<Track[]>([]);
   playing = $state(false);
   loading = $state(false);
   currentTime = $state(0);
-  duration = $state(0);
+  private mediaDuration = $state(0);
+  private broadcastDuration = $state<number | null>(null);
+  duration = $derived(
+    this.live
+      ? this.mediaDuration
+      : effectiveArchiveDuration(
+          this.mediaDuration,
+          this.offset,
+          this.broadcastDuration,
+        ),
+  );
   volume = $state(1);
   muted = $state(false);
   private preMuteVolume = 1;
@@ -67,6 +86,11 @@ class Player {
   private tickAccum = 0;
   private lastTickTime = 0;
   private pendingSeek: number | null = null;
+  private completionHandled = false;
+  private fadeGain = 1;
+  private fadeFrame: number | null = null;
+  private fadeMode: "in" | "out" | null = null;
+  private fadeInPending = false;
 
   current = $derived(this.queueIndex >= 0 ? this.queue[this.queueIndex] : null);
 
@@ -100,24 +124,44 @@ class Player {
     }
     this.volume = normalizeVolume(saved);
     this.preMuteVolume = this.volume > 0 ? this.volume : 1;
-    el.volume = this.volume;
+    this.applyAudioVolume();
 
     el.addEventListener("timeupdate", () => {
       this.currentTime = el.currentTime;
       this.accumulateListen();
+      this.updateEndFade();
+      this.finishAtScheduledEndIfNeeded();
     });
-    el.addEventListener("durationchange", () => (this.duration = el.duration || 0));
+    el.addEventListener("durationchange", () => {
+      this.mediaDuration = el.duration || 0;
+      this.updateEndFade();
+      this.finishAtScheduledEndIfNeeded();
+    });
     el.addEventListener("play", () => {
       this.playing = true;
       this.lastTickTime = performance.now();
+      if (!this.live && this.fadeInPending) {
+        this.fadeInPending = false;
+        this.startFadeIn();
+      } else {
+        this.updateEndFade();
+      }
     });
     el.addEventListener("pause", () => {
       this.playing = false;
+      if (this.fadeMode === "in") {
+        this.stopFadeAnimation();
+        this.setFadeGain(1);
+      } else {
+        this.stopFadeAnimation();
+      }
       this.flushListen(false);
     });
     el.addEventListener("ended", () => {
+      if (this.completionHandled) return;
+      this.completionHandled = true;
       this.finishSession(true);
-      this.nextEpisode();
+      void this.nextEpisode();
     });
     el.addEventListener("loadedmetadata", () => {
       if (this.pendingSeek !== null) {
@@ -236,7 +280,9 @@ class Player {
     this.clearLiveStatusPolling();
     this.tracks = [];
     this.currentTime = 0;
-    this.duration = 0;
+    this.mediaDuration = 0;
+    this.broadcastDuration = item.episode.broadcast_duration_sec;
+    this.completionHandled = false;
     this.offset = 0;
     this.live = null;
     this.liveEpisode = null;
@@ -244,6 +290,7 @@ class Player {
     this.livePlaylistLoading = false;
     this.livePlaylistError = null;
     this.liveTrackIndex = -1;
+    this.prepareFadeIn();
     try {
       const src = await api.resolveAudio(item.episode.id);
       if (!this.transitions.isCurrent(generation)) return;
@@ -266,12 +313,17 @@ class Player {
       // Playlist loads lazily after playback starts (may hit network).
       api
         .getPlaylist(item.episode.id)
-        .then((t) => {
+        .then((playlist) => {
           if (
             this.transitions.isCurrent(generation) &&
             this.current?.episode.id === item.episode.id
-          )
-            this.tracks = t;
+          ) {
+            this.tracks = playlist.tracks;
+            this.broadcastDuration = playlist.broadcast_duration_sec;
+            item.episode.broadcast_duration_sec = playlist.broadcast_duration_sec;
+            this.updateEndFade();
+            this.finishAtScheduledEndIfNeeded();
+          }
         })
         .catch(() => {});
     } catch (e) {
@@ -306,7 +358,9 @@ class Player {
     this.tracks = [];
     this.offset = 0;
     this.currentTime = 0;
-    this.duration = 0;
+    this.mediaDuration = 0;
+    this.broadcastDuration = null;
+    this.completionHandled = false;
     this.pendingSeek = null;
     this.liveEpisode = null;
     this.liveSong = null;
@@ -314,6 +368,7 @@ class Player {
     this.livePlaylistError = null;
     this.livePlaylistLoading = true;
     this.live = stream;
+    this.resetFade();
     try {
       this.audio.src = stream.url;
       void this.refreshLiveStatus(stream, generation, true);
@@ -427,14 +482,14 @@ class Player {
       this.livePlaylistLoads.set(episodeId, request);
     }
     try {
-      const tracks = await request;
+      const playlist = await request;
       if (
         !this.transitions.isCurrent(generation) ||
         this.liveEpisode?.episode.id !== episodeId
       )
         return;
-      this.tracks = tracks;
-      this.liveTrackIndex = this.findSongIndex(tracks, currentSong);
+      this.tracks = playlist.tracks;
+      this.liveTrackIndex = this.findSongIndex(playlist.tracks, currentSong);
       this.livePlaylistError = null;
     } catch (error) {
       if (
@@ -461,6 +516,12 @@ class Player {
 
   private resumeAudio() {
     if (!this.audio) return;
+    if (!this.live && this.completionHandled && this.current) {
+      this.completionHandled = false;
+      this.seek(Math.max(0, this.offset - INTRO_LEAD_IN_SEC));
+      this.startSession(this.current.episode);
+      this.prepareFadeIn();
+    }
     void this.audio.play().catch((error) => {
       this.error = String(error);
       this.playing = false;
@@ -475,6 +536,102 @@ class Player {
     // waiting for the element would stutter the scrubber under the pointer and snap it
     // back the moment a drag lets go.
     this.currentTime = at;
+    this.updateEndFade();
+  }
+
+  private applyAudioVolume() {
+    if (!this.audio) return;
+    this.audio.volume = this.muted ? 0 : this.volume * this.fadeGain;
+  }
+
+  private setFadeGain(gain: number) {
+    this.fadeGain = Math.max(0, Math.min(1, gain));
+    this.applyAudioVolume();
+  }
+
+  private stopFadeAnimation() {
+    if (this.fadeFrame !== null) cancelAnimationFrame(this.fadeFrame);
+    this.fadeFrame = null;
+    this.fadeMode = null;
+  }
+
+  private resetFade() {
+    this.stopFadeAnimation();
+    this.fadeInPending = false;
+    this.setFadeGain(1);
+  }
+
+  private prepareFadeIn() {
+    this.stopFadeAnimation();
+    this.fadeInPending = true;
+    this.setFadeGain(0);
+  }
+
+  private startFadeIn() {
+    this.stopFadeAnimation();
+    this.fadeMode = "in";
+    const startedAt = performance.now();
+    const frame = (now: number) => {
+      if (this.fadeMode !== "in") return;
+      const gain = auditionFadeInGain((now - startedAt) / 1000);
+      this.setFadeGain(gain);
+      if (gain < 1 && this.audio && !this.audio.paused) {
+        this.fadeFrame = requestAnimationFrame(frame);
+      } else {
+        this.fadeFrame = null;
+        this.fadeMode = null;
+      }
+    };
+    this.fadeFrame = requestAnimationFrame(frame);
+  }
+
+  private startFadeOut() {
+    this.stopFadeAnimation();
+    this.fadeMode = "out";
+    const frame = () => {
+      if (this.fadeMode !== "out" || !this.audio || this.audio.paused || this.live) return;
+      const gain = auditionFadeOutGain(this.audio.currentTime, this.duration);
+      this.setFadeGain(Math.min(this.fadeGain, gain));
+      if (gain > 0) {
+        this.fadeFrame = requestAnimationFrame(frame);
+      } else {
+        this.fadeFrame = null;
+        this.fadeMode = null;
+      }
+    };
+    frame();
+  }
+
+  private updateEndFade() {
+    if (this.live || !this.audio) return;
+    const gain = auditionFadeOutGain(this.currentTime, this.duration);
+    if (gain < 1) {
+      if (this.fadeMode !== "out" && !this.audio.paused) this.startFadeOut();
+    } else if (
+      this.fadeMode === "out" ||
+      (this.fadeGain < 1 && this.fadeMode !== "in" && !this.fadeInPending)
+    ) {
+      this.stopFadeAnimation();
+      this.setFadeGain(1);
+    }
+  }
+
+  private finishAtScheduledEndIfNeeded() {
+    if (
+      this.live ||
+      this.completionHandled ||
+      !scheduledArchiveEndReached(
+        this.currentTime,
+        this.mediaDuration,
+        this.duration,
+      )
+    )
+      return;
+    this.completionHandled = true;
+    this.currentTime = this.duration;
+    this.finishSession(true);
+    this.audio?.pause();
+    void this.nextEpisode();
   }
 
   seekToTrack(track: Track) {
@@ -529,7 +686,7 @@ class Player {
     this.volume = normalizeVolume(v, this.volume);
     this.muted = false;
     if (this.volume > 0) this.preMuteVolume = this.volume;
-    if (this.audio) this.audio.volume = this.volume;
+    this.applyAudioVolume();
     try {
       localStorage.setItem("ab2.volume", String(this.volume));
     } catch {
@@ -541,11 +698,10 @@ class Player {
     this.muted = !this.muted;
     if (this.muted) {
       if (this.volume > 0) this.preMuteVolume = this.volume;
-      if (this.audio) this.audio.volume = 0;
     } else {
       this.volume = normalizeVolume(this.preMuteVolume);
-      if (this.audio) this.audio.volume = this.volume;
     }
+    this.applyAudioVolume();
   }
 
   setEpisodeFavourite(fav: boolean) {
@@ -602,7 +758,10 @@ class Player {
     this.tracks = [];
     this.playing = false;
     this.currentTime = 0;
-    this.duration = 0;
+    this.mediaDuration = 0;
+    this.broadcastDuration = null;
+    this.completionHandled = false;
+    this.resetFade();
   }
 }
 

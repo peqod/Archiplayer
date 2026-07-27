@@ -35,6 +35,8 @@ pub struct Episode {
     /// before the show's playlist timeline. Scraped from the AccuPlayer `data-offset`.
     /// Playlist `start_sec` values are show-relative; audio position = start_sec + offset_sec.
     pub offset_sec: Option<i64>,
+    /// Scheduled length of the broadcast, excluding archive pre-roll and post-roll.
+    pub broadcast_duration_sec: Option<i64>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -211,6 +213,16 @@ impl Db {
                 "ALTER TABLE episodes ADD COLUMN offset_sec INTEGER",
             ),
             (
+                "episodes",
+                "broadcast_duration_sec",
+                "ALTER TABLE episodes ADD COLUMN broadcast_duration_sec INTEGER",
+            ),
+            (
+                "episodes",
+                "playlist_timing_checked",
+                "ALTER TABLE episodes ADD COLUMN playlist_timing_checked INTEGER NOT NULL DEFAULT 0",
+            ),
+            (
                 "tracks",
                 "source_id",
                 "ALTER TABLE tracks ADD COLUMN source_id TEXT",
@@ -242,7 +254,7 @@ impl Db {
         if version < 4 {
             Self::purge_implausible_tracks(&tx)?;
         }
-        tx.pragma_update(None, "user_version", 4)?;
+        tx.pragma_update(None, "user_version", 5)?;
         tx.commit()
     }
 
@@ -477,7 +489,7 @@ impl Db {
                     EXISTS(SELECT 1 FROM favourites f WHERE f.kind='episode' AND f.ref_id = CAST(e.id AS TEXT)),
                     d.path, COALESCE(d.status,''),
                     (SELECT COUNT(*) FROM tracks t WHERE t.episode_id = e.id),
-                    e.resume_sec, e.duration_sec, e.completed, e.offset_sec
+                    e.resume_sec, e.duration_sec, e.completed, e.offset_sec, e.broadcast_duration_sec
              FROM episodes e LEFT JOIN downloads d ON d.episode_id = e.id
              WHERE e.show_id = ?1 ORDER BY e.seq",
         )?;
@@ -499,6 +511,7 @@ impl Db {
                 duration_sec: r.get(12)?,
                 completed: r.get::<_, i64>(13)? != 0,
                 offset_sec: r.get(14)?,
+                broadcast_duration_sec: r.get(15)?,
             })
         })?;
         rows.collect()
@@ -510,7 +523,7 @@ impl Db {
                     EXISTS(SELECT 1 FROM favourites f WHERE f.kind='episode' AND f.ref_id = CAST(e.id AS TEXT)),
                     d.path, COALESCE(d.status,''),
                     (SELECT COUNT(*) FROM tracks t WHERE t.episode_id = e.id),
-                    e.resume_sec, e.duration_sec, e.completed, e.offset_sec
+                    e.resume_sec, e.duration_sec, e.completed, e.offset_sec, e.broadcast_duration_sec
              FROM episodes e LEFT JOIN downloads d ON d.episode_id = e.id
              WHERE e.id = ?1",
             [id],
@@ -532,6 +545,7 @@ impl Db {
                     duration_sec: r.get(12)?,
                     completed: r.get::<_, i64>(13)? != 0,
                     offset_sec: r.get(14)?,
+                    broadcast_duration_sec: r.get(15)?,
                 })
             },
         )
@@ -554,6 +568,22 @@ impl Db {
         self.conn.execute(
             "UPDATE episodes SET offset_sec=?2 WHERE id=?1",
             params![episode_id, offset_sec],
+        )?;
+        Ok(())
+    }
+
+    /// Record the result of inspecting the playlist schedule. A NULL duration is still
+    /// marked checked so unsupported legacy pages do not trigger a request on every play.
+    pub fn set_episode_broadcast_duration(
+        &self,
+        episode_id: i64,
+        duration_sec: Option<i64>,
+    ) -> Result<(), rusqlite::Error> {
+        self.conn.execute(
+            "UPDATE episodes
+             SET broadcast_duration_sec=?2, playlist_timing_checked=1
+             WHERE id=?1",
+            params![episode_id, duration_sec],
         )?;
         Ok(())
     }
@@ -852,6 +882,18 @@ impl Db {
         Ok(scraped.is_some())
     }
 
+    pub fn episode_playlist_timing_checked(
+        &self,
+        episode_id: i64,
+    ) -> Result<bool, rusqlite::Error> {
+        let checked: i64 = self.conn.query_row(
+            "SELECT playlist_timing_checked FROM episodes WHERE id=?1",
+            [episode_id],
+            |r| r.get(0),
+        )?;
+        Ok(checked != 0)
+    }
+
     pub fn episode_tracks_stale(
         &self,
         episode_id: i64,
@@ -1022,7 +1064,7 @@ mod tests {
             .conn
             .pragma_query_value(None, "user_version", |row| row.get(0))
             .expect("schema version");
-        assert_eq!(version, 4);
+        assert_eq!(version, 5);
         let offset_column: i64 = db
             .conn
             .query_row(
@@ -1032,6 +1074,16 @@ mod tests {
             )
             .expect("offset column");
         assert_eq!(offset_column, 1);
+        let timing_columns: i64 = db
+            .conn
+            .query_row(
+                "SELECT COUNT(*) FROM pragma_table_info('episodes')
+                 WHERE name IN ('broadcast_duration_sec', 'playlist_timing_checked')",
+                [],
+                |row| row.get(0),
+            )
+            .expect("playlist timing columns");
+        assert_eq!(timing_columns, 2);
         let is_live_column: i64 = db
             .conn
             .query_row(
@@ -1041,6 +1093,35 @@ mod tests {
             )
             .expect("is_live column");
         assert_eq!(is_live_column, 1);
+        drop(db);
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn playlist_timing_records_success_and_unsupported_pages() {
+        let path = std::env::temp_dir().join(format!(
+            "archiplayer-playlist-timing-{}-{}.db",
+            std::process::id(),
+            Db::now()
+        ));
+        let db = Db::open(&path).expect("open playlist timing test db");
+        db.upsert_show("AU", "Anima Mundi", None, true).unwrap();
+        db.upsert_episode(166789, "AU", None, None, Some(292106), None)
+            .unwrap();
+        assert!(!db.episode_playlist_timing_checked(166789).unwrap());
+
+        db.set_episode_broadcast_duration(166789, Some(3 * 60 * 60))
+            .unwrap();
+        assert!(db.episode_playlist_timing_checked(166789).unwrap());
+        assert_eq!(
+            db.get_episode(166789).unwrap().broadcast_duration_sec,
+            Some(3 * 60 * 60)
+        );
+
+        db.set_episode_broadcast_duration(166789, None).unwrap();
+        assert!(db.episode_playlist_timing_checked(166789).unwrap());
+        assert_eq!(db.get_episode(166789).unwrap().broadcast_duration_sec, None);
+
         drop(db);
         let _ = std::fs::remove_file(path);
     }

@@ -31,6 +31,7 @@ function episode(id, showId, hasAudio = true) {
     duration_sec: null,
     completed: false,
     offset_sec: null,
+    broadcast_duration_sec: null,
   };
 }
 

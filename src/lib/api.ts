@@ -27,6 +27,7 @@ export interface Episode {
   duration_sec: number | null;
   completed: boolean;
   offset_sec: number | null;
+  broadcast_duration_sec: number | null;
 }
 
 export interface Track {
@@ -53,6 +54,11 @@ export interface AudioSource {
   url: string;
   local: boolean;
   offset_sec: number;
+}
+
+export interface PlaylistPayload {
+  tracks: Track[];
+  broadcast_duration_sec: number | null;
 }
 
 export interface TrackHit {
@@ -211,7 +217,7 @@ export const api = {
   getShow: (showId: string, refresh = false) =>
     invoke<ShowDetail>("get_show", { showId, refresh }),
   getPlaylist: (episodeId: number, refresh = false) =>
-    invoke<Track[]>("get_playlist", { episodeId, refresh }),
+    invoke<PlaylistPayload>("get_playlist", { episodeId, refresh }),
   getLiveStatus: (
     streamId: string,
     statusSource: LiveStatusSource,

@@ -123,6 +123,7 @@ pub struct ParsedPlaylistMeta {
     pub show_name: Option<String>,
     pub air_date: Option<String>,
     pub title: Option<String>,
+    pub broadcast_duration_sec: Option<i64>,
 }
 
 /// Current state returned by a WFMU channel landing page. During a hosted show
@@ -1004,12 +1005,81 @@ pub fn parse_playlist_meta(html: &str) -> ParsedPlaylistMeta {
             .ok()
             .and_then(|date| date.captures(&c[1]).map(|m| m[1].to_string()))
     });
+    let broadcast_duration_sec = parse_broadcast_duration(html);
     ParsedPlaylistMeta {
         show_id,
         show_name,
         air_date,
         title,
+        broadcast_duration_sec,
     }
+}
+
+/// Parse the scheduled programme length printed near the top of a playlist page.
+/// WFMU uses both explicit clocks ("11pm - 2am") and shorthand where the first
+/// meridiem is implied by the second ("6 - 9am"). Ambiguous endpoints are resolved
+/// to the shortest positive span of at most twelve hours.
+fn parse_broadcast_duration(html: &str) -> Option<i64> {
+    static RANGE: OnceLock<Regex> = OnceLock::new();
+    let range = RANGE.get_or_init(|| {
+        Regex::new(
+            r"(?i)\b(midnight|noon|\d{1,2}(?::\d{2})?\s*(?:am|pm)?)\s*-\s*(midnight|noon|\d{1,2}(?::\d{2})?\s*(?:am|pm)?)",
+        )
+        .unwrap()
+    });
+    let document = Html::parse_document(html);
+    let schedule_sel = Selector::parse("div.everything b").unwrap();
+    for element in document.select(&schedule_sel) {
+        let text = clean_text(&element.inner_html());
+        if !text.to_ascii_lowercase().contains("on wfmu") {
+            continue;
+        }
+        let Some(captures) = range.captures(&text) else {
+            continue;
+        };
+        let starts = clock_candidates(&captures[1])?;
+        let ends = clock_candidates(&captures[2])?;
+        let duration_minutes = starts
+            .iter()
+            .flat_map(|start| {
+                ends.iter().filter_map(move |end| {
+                    let duration = (end - start).rem_euclid(24 * 60);
+                    (duration > 0 && duration <= 12 * 60).then_some(duration)
+                })
+            })
+            .min()?;
+        return Some(duration_minutes * 60);
+    }
+    None
+}
+
+fn clock_candidates(value: &str) -> Option<Vec<i64>> {
+    let value = value.trim().to_ascii_lowercase();
+    if value == "midnight" {
+        return Some(vec![0]);
+    }
+    if value == "noon" {
+        return Some(vec![12 * 60]);
+    }
+    let (clock, meridiem) = if let Some(clock) = value.strip_suffix("am") {
+        (clock.trim(), Some(false))
+    } else if let Some(clock) = value.strip_suffix("pm") {
+        (clock.trim(), Some(true))
+    } else {
+        (value.as_str(), None)
+    };
+    let mut parts = clock.split(':');
+    let hour: i64 = parts.next()?.trim().parse().ok()?;
+    let minute: i64 = parts.next().unwrap_or("0").trim().parse().ok()?;
+    if parts.next().is_some() || !(1..=12).contains(&hour) || !(0..60).contains(&minute) {
+        return None;
+    }
+    let hour12 = hour % 12;
+    Some(match meridiem {
+        Some(false) => vec![hour12 * 60 + minute],
+        Some(true) => vec![(hour12 + 12) * 60 + minute],
+        None => vec![hour12 * 60 + minute, (hour12 + 12) * 60 + minute],
+    })
 }
 
 /// Extract the show's blurb from its show page. It lives in
@@ -1811,6 +1881,44 @@ mod tests {
         assert_eq!(meta.show_id.as_deref(), Some("WA"));
         assert_eq!(meta.show_name.as_deref(), Some("Wake with Clay Pigeon"));
         assert_eq!(meta.air_date.as_deref(), Some("July 9, 2026"));
+        assert_eq!(meta.broadcast_duration_sec, Some(3 * 60 * 60));
+    }
+
+    #[test]
+    fn playlist_schedule_duration_handles_wfmu_clock_shapes() {
+        let page = |schedule: &str| {
+            format!(
+                r#"<div class="everything"><div><b>{schedule} | On <a>WFMU</a></b></div></div>"#
+            )
+        };
+        assert_eq!(
+            parse_playlist_meta(&page("Sunday Midnight - 3am")).broadcast_duration_sec,
+            Some(3 * 60 * 60)
+        );
+        assert_eq!(
+            parse_playlist_meta(&page("Monday-Friday 6 - 9am")).broadcast_duration_sec,
+            Some(3 * 60 * 60)
+        );
+        assert_eq!(
+            parse_playlist_meta(&page("11 - 2pm")).broadcast_duration_sec,
+            Some(3 * 60 * 60)
+        );
+        assert_eq!(
+            parse_playlist_meta(&page("11:30pm - 1am")).broadcast_duration_sec,
+            Some(90 * 60)
+        );
+        assert_eq!(
+            parse_playlist_meta(&page("Noon - 1:30pm")).broadcast_duration_sec,
+            Some(90 * 60)
+        );
+    }
+
+    #[test]
+    fn playlist_schedule_duration_stays_unknown_when_unsupported() {
+        let missing = r#"<div class="everything"><b>On <a>WFMU</a></b></div>"#;
+        let too_long = r#"<div class="everything"><b>1am - 11pm | On <a>WFMU</a></b></div>"#;
+        assert_eq!(parse_playlist_meta(missing).broadcast_duration_sec, None);
+        assert_eq!(parse_playlist_meta(too_long).broadcast_duration_sec, None);
     }
 
     #[test]

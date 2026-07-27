@@ -155,7 +155,8 @@
     playlistRequests.set(ep.id, request);
     expanded = { ...expanded, [ep.id]: "loading" };
     try {
-      const tracks = await api.getPlaylist(ep.id);
+      const playlist = await api.getPlaylist(ep.id);
+      const tracks = playlist.tracks;
       if (
         playlistRequests.get(ep.id) !== request ||
         !request.isCurrent(generation) ||
@@ -164,7 +165,13 @@
         return;
       expanded = { ...expanded, [ep.id]: tracks };
       episodes = episodes.map((e) =>
-        e.id === ep.id ? { ...e, track_count: tracks.length } : e,
+        e.id === ep.id
+          ? {
+              ...e,
+              track_count: tracks.length,
+              broadcast_duration_sec: playlist.broadcast_duration_sec,
+            }
+          : e,
       );
     } catch (e) {
       if (
