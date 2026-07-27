@@ -7,6 +7,15 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Releases before 0.4.0 predate this
 file; their notes are on the [releases page](https://github.com/peqod/Archiplayer/releases).
 
+## [0.4.1] - 2026-07-27
+
+### Fixed
+
+- Archived WFMU shows now stop at their scheduled broadcast boundary instead of continuing into
+  the next show, while allowing a 30-second grace period for closing jingles.
+- Audition playback now fades in and out over 1.5 seconds at its boundaries for smoother starts
+  and finishes.
+
 ## [0.4.0] - 2026-07-27
 
 ### Added

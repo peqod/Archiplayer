@@ -5,7 +5,7 @@
 
 .DESCRIPTION
   Drives the existing .github/workflows/release.yml pipeline. The workflow triggers
-  on pushing a vX.Y.Z tag, builds Windows/macOS via tauri-action into a DRAFT
+  on pushing a vX.Y.Z tag, builds Windows via tauri-action into a DRAFT
   release, then generates SHA256SUMS.txt. This script performs the manual half
   (version bump, commit, tag push), watches the run, verifies all assets landed, and
   publishes the draft.
@@ -237,7 +237,7 @@ function Wait-ForReleaseRun {
   }
   if (-not $runId) { throw "Could not find a release run for $sha. Check: gh run list --workflow release.yml" }
 
-  Write-Host "  watching run $runId (this takes ~10-15 min for all platforms)..."
+  Write-Host "  watching run $runId (the Windows build typically takes ~10-15 min)..."
   # --exit-status makes gh return non-zero if the run concluded in failure.
   Invoke-Native gh run watch $runId --exit-status
 }
