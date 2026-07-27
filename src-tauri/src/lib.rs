@@ -33,6 +33,12 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
+            // Keyboard shortcuts that reach outside the window. Registration itself is
+            // driven from the frontend, which owns the bindings; this only makes the
+            // plugin available. Desktop only, like the plugin.
+            #[cfg(desktop)]
+            app.handle()
+                .plugin(tauri_plugin_global_shortcut::Builder::new().build())?;
             let data_dir = app.path().app_data_dir()?;
             std::fs::create_dir_all(&data_dir)?;
             let database = db::Db::open(&data_dir.join("library.db"))?;

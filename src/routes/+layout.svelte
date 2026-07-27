@@ -5,6 +5,10 @@
   import "@fontsource/inter/800.css";
   import { player, type QueueItem } from "$lib/player.svelte";
   import { VOLUME_TICKS } from "$lib/volume";
+  import { LOUPE_SIZE, LOUPE_ZOOM, gearedTime, timeAtPointer } from "$lib/seek-drag";
+  import { scrollCueVisible } from "$lib/scroll-cue";
+  import { shortcuts, type ActionHandlers } from "$lib/shortcuts.svelte";
+  import { matchesAccel, shouldIgnoreKey } from "$lib/shortcuts";
   import { api, fmtTime } from "$lib/api";
   import { selectRandomPlayback } from "$lib/random-show";
   import { theme } from "$lib/theme.svelte";
@@ -72,12 +76,25 @@
   const VOL_CLOSE_DELAY = 1000;
   let volCloseTimer: ReturnType<typeof setTimeout> | null = null;
   let miniMedia: MediaQueryList | null = null;
+  // Loupe scrubbing. `dragSec` being non-null is what raises the lens, and it is the
+  // authoritative position while it is up: the geared value accumulates from the press
+  // point, so it must not be re-derived from the element's clock.
+  let seekTrackEl = $state<HTMLElement | null>(null);
+  let seekTrackW = $state(0);
+  let dragSec = $state<number | null>(null);
+  let dragAnchorSec = 0;
+  let dragAnchorX = 0;
+  let dragTrackW = 0;
+  // Brand cue: <main> is scrolled far enough that getting back to the top is worth
+  // offering. See scroll-cue.ts for where the threshold comes from.
+  let scrollCued = $state(false);
   let applyingWindowSize = false;
   let windowSizeQueued = false;
   let collapseTransitioning = false;
 
   if (typeof window !== "undefined") {
     theme.load();
+    shortcuts.load();
     collapsed = localStorage.getItem("ap.collapsed") === "1";
     miniMedia = window.matchMedia("(max-width: 760px)");
     mini = miniMedia.matches;
@@ -216,6 +233,12 @@
     mainEl?.scrollTo({ top: 0, behavior: reducedMotion ? "auto" : "smooth" });
   }
 
+  // Past the threshold the brand drops the wordmark and says what pressing it does,
+  // on the same scroll travel that hands the "← All shows" link over to its pill.
+  function measureMainScroll() {
+    scrollCued = scrollCueVisible(mainEl?.scrollTop ?? 0);
+  }
+
   function supportWfmu(e: MouseEvent) {
     e.preventDefault();
     openUrl("https://pledge.wfmu.org/donate").catch(() => {});
@@ -223,6 +246,21 @@
 
   $effect(() => {
     if (audioEl) player.attach(audioEl);
+  });
+
+  // A drag cannot outlive the bar it started on. An episode ending mid-hold clears the
+  // duration, which disables the input, so no pointerup would ever arrive to put the
+  // loupe down, and a stuck loupe silently swallows every arrow key after it.
+  $effect(() => {
+    if (!player.duration) dragSec = null;
+  });
+
+  // <main> keeps its scroll position across a client-side navigation, so a route with
+  // shorter content lands already scrolled and gets clamped by the browser. That clamp
+  // is not reliably an event we hear, so re-read the position once the new page paints.
+  $effect(() => {
+    $page.url.pathname;
+    void tick().then(measureMainScroll);
   });
 
   // Keep compact sizing synchronized when playback adds metadata/scrubbing rows or
@@ -242,10 +280,15 @@
   const playPauseLabel = $derived(
     player.loading ? "Loading audio" : player.playing ? "Pause" : "Play",
   );
+  // A held loupe outranks the element's clock, so the bar tracks the pointer rather
+  // than the four-a-second `timeupdate`.
+  const displaySec = $derived(dragSec ?? player.currentTime);
   // Painted-slider fill/thumb offsets. Both sliders read them from --hsl-level.
   const seekLevel = $derived(
-    player.duration ? `${(player.currentTime / player.duration) * 100}%` : "0%",
+    player.duration ? `${(displaySec / player.duration) * 100}%` : "0%",
   );
+  // Unitless twin of --hsl-level, so the lens can multiply it by the track width in calc().
+  const seekFrac = $derived(player.duration ? displaySec / player.duration : 0);
   const volumeLevel = $derived(`${(player.muted ? 0 : player.volume) * 100}%`);
   // Playlist marks as track-relative percentages; empty for untimecoded playlists.
   const seekMarks = $derived(
@@ -253,8 +296,57 @@
   );
 
   function onScrub(e: Event) {
-    const v = Number((e.target as HTMLInputElement).value);
-    player.seek(v);
+    const input = e.target as HTMLInputElement;
+    // While the loupe is up the geared value is the truth, so an input event here can
+    // only be the native slider tracking the pointer after all. Put its value back
+    // rather than ignoring it: Svelte rewrites `value` only when the expression
+    // changes, so a value left diverged would still be there for the next arrow key.
+    if (dragSec !== null) {
+      input.value = String(Math.round(dragSec));
+      return;
+    }
+    player.seek(Number(input.value));
+  }
+
+  function onSeekDown(e: PointerEvent) {
+    // Mini keeps the plain native drag: the row is tight and the thumb is already
+    // clamped down there. A second contact must not re-anchor a live drag either.
+    if (mini || !e.isPrimary || e.button !== 0 || !player.duration || !seekTrackEl) return;
+    // Stop the range from tracking the pointer itself. Preventing the default on
+    // pointerdown suppresses the compatibility mouse events the native slider drags
+    // on, which also means focus has to be moved by hand.
+    e.preventDefault();
+    const rect = seekTrackEl.getBoundingClientRect();
+    dragTrackW = rect.width;
+    dragAnchorX = e.clientX;
+    dragAnchorSec = timeAtPointer(e.clientX, rect.left, rect.width, player.duration);
+    dragSec = dragAnchorSec;
+    player.seek(dragAnchorSec);
+    // Last, because setPointerCapture throws on a pointer that is already gone. Raising
+    // the loupe first means such a throw costs the capture, not the whole press.
+    const input = e.currentTarget as HTMLInputElement;
+    input.focus({ preventScroll: true });
+    input.setPointerCapture(e.pointerId);
+  }
+
+  function onSeekMove(e: PointerEvent) {
+    if (dragSec === null) return;
+    dragSec = gearedTime(dragAnchorSec, dragAnchorX, e.clientX, dragTrackW, player.duration);
+    player.seek(dragSec);
+  }
+
+  // Every exit funnels here, and it has to be safe to run twice: releasing the capture
+  // fires lostpointercapture straight after the pointerup that asked for it.
+  function endSeek() {
+    if (dragSec === null) return;
+    player.seek(dragSec);
+    dragSec = null;
+  }
+
+  function onSeekUp(e: PointerEvent) {
+    const input = e.currentTarget as HTMLInputElement;
+    if (input.hasPointerCapture(e.pointerId)) input.releasePointerCapture(e.pointerId);
+    endSeek();
   }
   function onVolume(e: Event) {
     player.setVolume(Number((e.target as HTMLInputElement).value));
@@ -346,7 +438,118 @@
       favError = String(e);
     }
   }
+
+  // The one place a bound key turns into an act. Both tiers of shortcut and the OS
+  // media controls come through here, so a rebind never means new behaviour.
+  const actionHandlers: ActionHandlers = {
+    "play-pause": () => player.toggle(),
+    "prev-track": () => player.prevTrack(),
+    "next-track": () => player.nextTrack(),
+    "prev-episode": () => void player.prevEpisode(),
+    "next-episode": () => void player.nextEpisode(),
+    mute: () => player.toggleMute(),
+    // Live has its own favourite targets, so one binding covers both modes.
+    "fav-song": () => void (player.live ? bookmarkLiveSong() : bookmarkSong()),
+    "save-show": () => void (player.live ? bookmarkLiveEpisode() : bookmarkShow()),
+    random: () => void feelingLucky(),
+  };
+
+  onMount(() => shortcuts.attach(actionHandlers));
+
+  function onKey(e: KeyboardEvent) {
+    if (!shortcuts.enabled || shortcuts.recording) return;
+    // Held keys would step a song per repeat, and a raised loupe owns the keyboard.
+    if (e.defaultPrevented || e.repeat || dragSec !== null) return;
+    for (const [id, accel] of shortcuts.localBindings()) {
+      if (!matchesAccel(e, accel)) continue;
+      // The focused control keeps the key: typing in search must stay typing.
+      if (shouldIgnoreKey(e.target, accel)) return;
+      e.preventDefault();
+      shortcuts.run(id);
+      return;
+    }
+  }
+
+  // What Windows shows in the volume flyout and on the lock screen, and where the
+  // hardware media keys land. Chromium wires this to the OS for us, which is why the
+  // transport keys need no registration of their own.
+  $effect(() => {
+    if (typeof navigator === "undefined" || !("mediaSession" in navigator)) return;
+    const ms = navigator.mediaSession;
+    const cur = player.current;
+    const live = player.live;
+    if (!cur && !live) {
+      ms.metadata = null;
+      ms.playbackState = "none";
+      return;
+    }
+    const song = player.live ? player.liveSong : null;
+    const track = currentTrack;
+    const artist = song?.artist ?? track?.artist ?? null;
+    const songTitle = song?.title ?? track?.title ?? null;
+    const showName = cur?.showName ?? player.liveEpisode?.showName ?? live?.name ?? "WFMU";
+    ms.metadata = new MediaMetadata({
+      // The song is the headline once one is known; the show is what is on otherwise.
+      title: songTitle ?? cur?.episode.title ?? showName,
+      artist: artist ?? showName,
+      album: songTitle ? showName : (cur?.episode.air_date ?? live?.tagline ?? ""),
+      artwork: [{ src: "/favicon.png", sizes: "512x512", type: "image/png" }],
+    });
+    ms.playbackState = player.playing ? "playing" : "paused";
+  });
+
+  // Position only exists for the archive: a live stream has no timeline to report.
+  $effect(() => {
+    if (typeof navigator === "undefined" || !("mediaSession" in navigator)) return;
+    const ms = navigator.mediaSession;
+    if (!ms.setPositionState) return;
+    if (!player.current || !player.duration || !Number.isFinite(player.duration)) {
+      ms.setPositionState();
+      return;
+    }
+    ms.setPositionState({
+      duration: player.duration,
+      playbackRate: 1,
+      position: Math.min(player.currentTime, player.duration),
+    });
+  });
+
+  onMount(() => {
+    if (typeof navigator === "undefined" || !("mediaSession" in navigator)) return;
+    const ms = navigator.mediaSession;
+    const bound: [MediaSessionAction, MediaSessionActionHandler][] = [
+      ["play", () => player.toggle()],
+      ["pause", () => player.toggle()],
+      ["stop", () => player.stop()],
+      ["previoustrack", () => player.prevTrack()],
+      ["nexttrack", () => player.nextTrack()],
+      ["seekbackward", () => player.skip(-15)],
+      ["seekforward", () => player.skip(15)],
+      ["seekto", (details) => {
+        if (typeof details.seekTime === "number") player.seek(details.seekTime);
+      }],
+    ];
+    for (const [action, handler] of bound) {
+      // Not every action is supported by every build; an unsupported one throws.
+      try {
+        ms.setActionHandler(action, handler);
+      } catch {
+        /* ignore */
+      }
+    }
+    return () => {
+      for (const [action] of bound) {
+        try {
+          ms.setActionHandler(action, null);
+        } catch {
+          /* ignore */
+        }
+      }
+    };
+  });
 </script>
+
+<svelte:window onkeydown={onKey} />
 
 {#snippet volumeControl()}
   <div
@@ -474,8 +677,13 @@
           {/if}
         </div>
         <div class="p-scrub">
-          <span class="p-time">{fmtTime(player.currentTime)}</span>
-          <div class="hsl seek" class:off={!player.duration} style={`--hsl-level: ${seekLevel}`}>
+          <span class="p-time">{fmtTime(displaySec)}</span>
+          <div
+            class="hsl seek"
+            class:off={!player.duration}
+            class:lensing={dragSec !== null}
+            style={`--hsl-level: ${seekLevel}; --seek-n: ${seekFrac}; --track-w: ${seekTrackW}px; --lens-zoom: ${LOUPE_ZOOM}; --lens-size: ${LOUPE_SIZE}px`}
+          >
             <!-- Input first so the paint can key its focus ring off it with `~`. It is
                  transparent and the paint ignores the pointer, so order costs nothing. -->
             <input
@@ -484,17 +692,40 @@
               min="0"
               max={player.duration || 0}
               step="1"
-              value={player.currentTime}
+              value={Math.round(displaySec)}
               oninput={onScrub}
+              onpointerdown={onSeekDown}
+              onpointermove={onSeekMove}
+              onpointerup={onSeekUp}
+              onpointercancel={onSeekUp}
+              onlostpointercapture={endSeek}
               disabled={!player.duration}
               aria-label="Episode position"
             />
-            <span class="hsl-track" aria-hidden="true">
+            <span
+              class="hsl-track"
+              aria-hidden="true"
+              bind:this={seekTrackEl}
+              bind:clientWidth={seekTrackW}
+            >
               <span class="hsl-fill"></span>
               {#each seekMarks as pct (pct)}
                 <span class="hsl-tick mark" style={`left: ${pct}%`}></span>
               {/each}
               <span class="hsl-thumb"></span>
+              {#if dragSec !== null}
+                <!-- The loupe: the same track, fill and notches re-rendered at zoom and
+                     slid so the held position lands under the crosshair. -->
+                <span class="seek-lens">
+                  <span class="lens-strip">
+                    <span class="hsl-fill"></span>
+                    {#each seekMarks as pct (pct)}
+                      <span class="hsl-tick mark" style={`left: ${pct}%`}></span>
+                    {/each}
+                  </span>
+                  <span class="lens-cross"></span>
+                </span>
+              {/if}
             </span>
           </div>
           <span class="p-time">{fmtTime(player.duration)}</span>
@@ -557,14 +788,27 @@
   <nav bind:this={navEl}>
     <button
       class="brand"
+      class:cued={scrollCued}
       type="button"
       onclick={scrollMainToTop}
       title="Scroll to top"
       aria-label="Scroll to top"
     >
-      <img class="brand-logo" src="/logo.gif" alt="Archiplayer" width="34" height="34" />
-      <span class="brand-name">Archiplayer</span>
-      <span class="brand-sub">WFMU</span>
+      <!-- Both states of each half stay mounted and share one grid cell: the slot is
+           as wide as its widest state, so the swap crossfades in place instead of
+           reflowing the tabs beside it. aria-hidden throughout — the button's own
+           label is what gets announced, and it says the same thing either way. -->
+      <span class="brand-slot brand-mark" aria-hidden="true">
+        <img class="brand-logo" src="/logo.gif" alt="" width="34" height="34" />
+        <span class="brand-arrow"><Icon name="arrow-up" size="calc(var(--brand-mark) * 0.58)" /></span>
+      </span>
+      <span class="brand-slot brand-type" aria-hidden="true">
+        <span class="brand-wordmark">
+          <span class="brand-name">Archiplayer</span>
+          <span class="brand-sub">WFMU</span>
+        </span>
+        <span class="brand-cue">Press to scroll to top</span>
+      </span>
     </button>
     <div class="nav-links">
       <a
@@ -590,7 +834,7 @@
     ><span class="d-full">♥ Support WFMU</span><span class="d-mini">♥ WFMU</span></a>
   </nav>
 
-  <main id="main-content" bind:this={mainEl} tabindex="-1">
+  <main id="main-content" bind:this={mainEl} tabindex="-1" onscroll={measureMainScroll}>
     {@render children()}
   </main>
   {#if favError}
@@ -704,13 +948,57 @@
     font: inherit;
     text-align: left;
     cursor: pointer;
+    --brand-mark: 34px; /* logo and arrow share it, so the swap can't resize the nav */
   }
   .brand:hover {
     text-decoration: none;
   }
+  /* Scrolled far enough that the top is worth offering, the brand stops being a
+     wordmark and becomes the control it always was. Both states of each half live
+     in one grid cell: the cell is as wide as the wider of the two, so the swap
+     crossfades in place and the tabs beside it never move. */
+  .brand-slot {
+    display: grid;
+    place-items: center start;
+  }
+  .brand-slot > * {
+    grid-area: 1 / 1;
+    transition: opacity 140ms ease-out;
+  }
+  .brand-arrow,
+  .brand-cue {
+    opacity: 0;
+  }
+  .brand.cued .brand-logo,
+  .brand.cued .brand-wordmark {
+    opacity: 0;
+  }
+  .brand.cued .brand-arrow,
+  .brand.cued .brand-cue {
+    opacity: 1;
+  }
   .brand-logo {
+    width: var(--brand-mark);
+    height: var(--brand-mark);
     border-radius: 6px;
     display: block;
+  }
+  /* Same footprint and corner as the logo it replaces, so only the glyph changes. */
+  .brand-arrow {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: var(--brand-mark);
+    height: var(--brand-mark);
+    background: var(--c-surface2);
+    border-radius: 6px;
+    color: var(--c-accent);
+  }
+  .brand-wordmark {
+    display: flex;
+    align-items: baseline;
+    gap: 9px;
+    white-space: nowrap;
   }
   .brand-name {
     font-weight: 800;
@@ -719,6 +1007,19 @@
   .brand-sub {
     color: var(--c-dim);
     font-size: 12px;
+  }
+  .brand-cue {
+    color: var(--c-dim);
+    font-size: 13px;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+  .brand:hover .brand-arrow {
+    background: var(--c-accent);
+    color: var(--c-on-accent);
+  }
+  .brand:hover .brand-cue {
+    color: var(--c-accent);
   }
   .nav-links {
     display: flex;
@@ -945,6 +1246,102 @@
   }
   .hsl-tick.mark {
     width: 2px;
+  }
+  /* The knob is the only part of the bar that reacts to a hover, and it grows by a few
+     per cent rather than changing colour: enough to say it is grabbable, not enough to
+     shift the position it is reporting. The input is the pointer target, so the hover
+     has to be read off it. */
+  .hsl.seek .hsl-thumb {
+    transition: transform 90ms ease;
+  }
+  .hsl.seek .sl-input:hover:not(:disabled) ~ .hsl-track .hsl-thumb {
+    transform: translate(-50%, -50%) scale(1.07);
+  }
+  /* The loupe. Pressing the bar swaps the knob for a round window that re-renders the
+     same track at --lens-zoom, so playlist marks a few pixels apart separate far enough
+     to aim at. Pointer travel is geared down by the same factor, so the magnification
+     buys real seek resolution and not just a better view of it. */
+  .hsl.seek.lensing .hsl-thumb {
+    opacity: 0;
+  }
+  /* 36px of lens on an 18px row spills over the title line above it. .hsl-track has a
+     transform and is therefore a stacking context, so this has to be raised out here on
+     the wrapper or it raises nothing. 3 stays under the mini volume popover's 20. */
+  .hsl.seek.lensing {
+    z-index: 3;
+  }
+  .seek-lens {
+    position: absolute;
+    top: 50%;
+    left: var(--hsl-level);
+    width: var(--lens-size);
+    height: var(--lens-size);
+    overflow: hidden;
+    transform: translate(-50%, -50%);
+    background: var(--c-surface);
+    border: 2px solid var(--c-accent);
+    border-radius: 50%;
+    box-shadow:
+      0 0 0 1px var(--c-border),
+      0 2px 8px rgb(0 0 0 / 0.35);
+    pointer-events: none;
+    animation: lens-in 120ms ease-out;
+  }
+  @keyframes lens-in {
+    from {
+      transform: translate(-50%, -50%) scale(0.35);
+    }
+  }
+  .lens-strip {
+    position: absolute;
+    top: 50%;
+    /* Slide the magnified track left by the magnified distance to the playhead, so that
+       position lands on the lens centre. --seek-n is unitless for exactly this. The ends
+       are deliberately not clamped: running out of bar is how the lens shows you have
+       reached the start or the finish. */
+    left: calc(50% - var(--seek-n) * var(--track-w) * var(--lens-zoom));
+    width: calc(var(--track-w) * var(--lens-zoom));
+    height: calc(var(--hsl-track) * var(--lens-zoom));
+    transform: translateY(-50%);
+    background: var(--c-border);
+    border-radius: 999px;
+  }
+  /* Notches scale with the bar they are cut into. */
+  .lens-strip .hsl-tick.mark {
+    width: calc(2px * var(--lens-zoom));
+  }
+  /* An aim mark rather than a bar: a dot on the exact second with a stroke above and
+     below it, so the mark points at the position without covering the notch it is
+     pointing at. Text colour rather than the accent, since the accent is the fill and
+     would vanish on the played side. */
+  .lens-cross {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 3px;
+    height: 3px;
+    transform: translate(-50%, -50%);
+    background: var(--c-text);
+    border-radius: 50%;
+  }
+  .lens-cross::before,
+  .lens-cross::after {
+    position: absolute;
+    left: 50%;
+    width: 2px;
+    height: 6px;
+    transform: translateX(-50%);
+    background: var(--c-text);
+    border-radius: 1px;
+    content: "";
+  }
+  /* The gap is wider than the dot so the strokes clear it, and each stroke starts
+     inside the magnified bar and runs out past its edge. */
+  .lens-cross::before {
+    bottom: calc(100% + 3px);
+  }
+  .lens-cross::after {
+    top: calc(100% + 3px);
   }
   .hsl .sl-input {
     position: absolute;
@@ -1262,15 +1659,10 @@
     }
     .brand {
       gap: 6px;
+      --brand-mark: 26px;
     }
-    .brand-logo {
-      width: 26px;
-      height: 26px;
-    }
-    .brand-name {
-      display: none;
-    }
-    .brand-sub {
+    /* No room for either state of the type down here — the mark carries the swap. */
+    .brand-type {
       display: none;
     }
     .nav-links {
@@ -1297,18 +1689,7 @@
     }
     .brand {
       gap: 4px;
-    }
-    .brand-logo {
-      width: 24px;
-      height: 24px;
-    }
-    .brand-name {
-      display: none;
-      font-size: 12px;
-    }
-    .brand-sub {
-      display: none;
-      font-size: 10px;
+      --brand-mark: 24px;
     }
     .nav-links {
       min-width: 0;

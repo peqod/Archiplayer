@@ -28,5 +28,10 @@ tokio = { version = "1", features = ["sync", "time", "fs", "io-util"] }
 futures-util = "0.3"
 thiserror = "1"
 
+# Desktop only: the plugin does not build for mobile, and this crate still carries
+# a mobile entry point.
+[target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
+tauri-plugin-global-shortcut = "2"
+
 [dev-dependencies]
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }

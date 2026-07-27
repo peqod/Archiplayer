@@ -469,7 +469,12 @@ class Player {
 
   seek(sec: number) {
     if (!this.audio) return;
-    this.audio.currentTime = Math.max(0, Math.min(sec, this.duration || sec));
+    const at = Math.max(0, Math.min(sec, this.duration || sec));
+    this.audio.currentTime = at;
+    // Paint the new position at once. `timeupdate` only fires a few times a second, so
+    // waiting for the element would stutter the scrubber under the pointer and snap it
+    // back the moment a drag lets go.
+    this.currentTime = at;
   }
 
   seekToTrack(track: Track) {

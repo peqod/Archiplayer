@@ -10,6 +10,7 @@
       | "save"
       | "share"
       | "download"
+      | "arrow-up"
       | "play"
       | "pause"
       | "playing"
@@ -57,6 +58,13 @@
   <svg class="icon icon-{name}" style="width:{box};height:{box}" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
     <path fill-rule="evenodd" clip-rule="evenodd" d="M12 15.9853L15.182 12.8033L14.1213 11.7427L12.75 13.114L12.75 5.25L11.25 5.25L11.25 13.114L9.8787 11.7427L8.81804 12.8033L12 15.9853ZM12 13.864L12 13.864L12.0001 13.864L12 13.864Z" fill="currentColor" />
     <path d="M18 17.25L18 18.75L6 18.75L6 17.25L18 17.25Z" fill="currentColor" />
+  </svg>
+{:else if name === "arrow-up"}
+  <!-- The download arrow mirrored about the middle: same stem and head, and the bar
+       moved to the top so it reads "to the top" and not merely "up". -->
+  <svg class="icon icon-{name}" style="width:{box};height:{box}" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+    <path fill-rule="evenodd" clip-rule="evenodd" d="M12 8.0147L8.81804 11.1967L9.8787 12.2573L11.25 10.886L11.25 18.75L12.75 18.75L12.75 10.886L14.1213 12.2573L15.182 11.1967L12 8.0147Z" fill="currentColor" />
+    <path d="M6 6.75L6 5.25L18 5.25L18 6.75L6 6.75Z" fill="currentColor" />
   </svg>
 {:else if name === "play"}
   <svg class="icon icon-{name}" style="width:{box};height:{box}" viewBox="0 0 500 501" fill="currentColor" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">

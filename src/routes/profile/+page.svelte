@@ -13,6 +13,8 @@
   import { listen } from "@tauri-apps/api/event";
   import { onMount } from "svelte";
   import ThemePicker from "$lib/ThemePicker.svelte";
+  import ShortcutPicker from "$lib/ShortcutPicker.svelte";
+  import { shortcuts } from "$lib/shortcuts.svelte";
   import Icon from "$lib/Icon.svelte";
   import { LatestRequest } from "$lib/request-gate";
   import { shareShow, shareEpisode, shareTrack, wfmuShowUrl } from "$lib/share";
@@ -444,6 +446,16 @@
   </summary>
   <p class="muted">Pick a colour scheme, or tweak any colour to make it yours. Saved locally.</p>
   <ThemePicker />
+</details>
+
+<details class="fold customize">
+  <summary>
+    <span class="cz-title">Keyboard shortcuts</span>
+    <!-- The state rides on the summary so the switch is one click away with the
+         fold shut, which is the point of having a switch at all. -->
+    <span class="cz-hint">{shortcuts.enabled ? "play, skip, star, from anywhere" : "off"}</span>
+  </summary>
+  <ShortcutPicker />
 </details>
 
 <style>
