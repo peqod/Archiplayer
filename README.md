@@ -16,14 +16,14 @@
 Archiplayer turns WFMU’s enormous public archive into a personal desktop library. Browse current and defunct shows, search DJs and cached playlists, play directly from track timestamps, keep favourites, download episodes, and inspect your listening history. All personal data stays in a local SQLite database.
 
 > [!IMPORTANT]
-> Release builds are currently unsigned. Windows SmartScreen and macOS Gatekeeper will therefore show a warning. Verify that the file came from this repository and compare its SHA-256 hash with `SHA256SUMS.txt`, or [build from source](#build-from-source).
+> Release builds are currently unsigned, so Windows SmartScreen shows a warning. Verify that the file came from this repository and compare its SHA-256 hash with `SHA256SUMS.txt`, or [build from source](#build-from-source).
 
 ## Download
 
 | Platform | Artifact | Support |
 |---|---|---|
 | Windows | NSIS `.exe` | Windows 10+, x64 |
-| macOS | Universal `.dmg` | Intel and Apple Silicon |
+| macOS | Coming soon | Distribution paused; universal build still works [from source](#macos-universal) |
 | Linux | Coming soon | Packaging and compatibility validation in progress |
 
 Download the matching file from the [latest release](../../releases/latest).
@@ -31,7 +31,7 @@ Download the matching file from the [latest release](../../releases/latest).
 ### Opening an unsigned build
 
 - **Windows:** open the installer, choose **More info**, verify the source, then choose **Run anyway**.
-- **macOS:** move Archiplayer to Applications, try to open it once, then go to **System Settings → Privacy & Security → Open Anyway** and confirm.
+- **macOS** (source builds): move Archiplayer to Applications, try to open it once, then go to **System Settings, Privacy & Security, Open Anyway** and confirm.
 
 ## What it does
 
@@ -39,16 +39,31 @@ Download the matching file from the [latest release](../../releases/latest).
 - Search shows and DJs immediately; search tracks from every playlist already cached locally.
 - Play a show, episode, or individual song from its playlist timestamp.
 - Resume episodes and maintain a queue from a persistent player.
+- Scrub with a magnifying playhead: press to jump, drag for quarter-pixel precision.
+- Drive playback from the keyboard, in the app or system-wide, with your own bindings.
 - Favourite shows, episodes, and tracks.
 - Download broadcasts for offline listening to a directory you choose.
 - Track listening time and export favourites, listens, and stats as CSV.
 
+### Keyboard shortcuts
+
+Profile, **Keyboard shortcuts** sets both tiers, and one switch turns the system-wide tier off.
+
+| Tier | Default bindings |
+|---|---|
+| In the app | `Space` play/pause, `J`/`K` seek, `,`/`.` previous/next, `M` mute, `F` favourite, `S` share, `R` random show |
+| System-wide | `Ctrl+Alt+` `[` `]` seek, `M` mute, `F` favourite, `S` share, `R` random show |
+
+Bindings record the physical key, so one binding is the same key on every layout. A system-wide
+binding must carry a modifier or be a media key. Transport stays on the OS media keys through
+`mediaSession`, which a global grab would otherwise starve.
+
 ## Build from source
 
 > [!NOTE]
-> Local desktop bundles must be built on their target operating system. The commands below match
-> the Windows and macOS jobs used for published releases. Linux builds are coming soon while
-> packaging and compatibility are revalidated.
+> Local desktop bundles must be built on their target operating system. The Windows commands below
+> match the job used for published releases. macOS builds from source but is not currently
+> distributed; Linux builds are coming soon while packaging and compatibility are revalidated.
 
 You need [Node.js 22.6 or newer](https://nodejs.org/), npm, [Rust via rustup](https://rustup.rs/), and Git.
 
@@ -72,7 +87,9 @@ npm ci
 
 ### macOS (universal)
 
-The universal DMG runs natively on both Apple Silicon and Intel Macs.
+The universal DMG runs natively on both Apple Silicon and Intel Macs. Releases do not currently
+carry a macOS binary, so this is the way to get one. The source build itself stays supported and
+CI keeps building it on every pull request.
 
 1. Install Apple's desktop build tools with `xcode-select --install`. If you install full Xcode
    instead, launch it once so it can finish setup.
@@ -174,13 +191,15 @@ Tauri chooses the operating system’s application-data directory for `org.archi
 
 Pull requests and main-branch pushes run frontend checks, all standalone JavaScript suites,
 denied-warnings Rust formatting and Clippy gates, Rust tests, and native no-bundle builds on
-Windows and macOS. A semantic version tag such as `v0.3.1` creates a **draft** GitHub Release with:
+Windows and macOS. A semantic version tag such as `v0.4.0` creates a **draft** GitHub Release with:
 
 - Windows x64 NSIS installer
-- macOS universal DMG
 - `SHA256SUMS.txt`
 
-Review and smoke-test all artifacts before publishing the draft. Keep the version in `package.json`, `src-tauri/Cargo.toml`, and `src-tauri/tauri.conf.json` aligned with the tag.
+The release notes come from the matching section of [CHANGELOG.md](CHANGELOG.md); a tag with no
+section fails the gate before it is pushed. Review and smoke-test the artifacts before publishing
+the draft. Keep the version in `package.json`, `src-tauri/Cargo.toml`, and
+`src-tauri/tauri.conf.json` aligned with the tag. Full procedure in [RELEASE.md](RELEASE.md).
 
 ## Contributing
 

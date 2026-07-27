@@ -4,9 +4,9 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="theme-color" content="#f4f1e9">
-    <meta name="description" content="Archiplayer is a local-first desktop browser and player for the WFMU archives.">
+    <meta name="description" content="Archiplayer is a local-first desktop browser and player for the WFMU archives, with keyboard control and precision scrubbing.">
     <meta property="og:title" content="Archiplayer: radio archives on your desktop, without the cloud">
-    <meta property="og:description" content="Browse, search, play and favourite WFMU shows, and take episodes offline. On your computer.">
+    <meta property="og:description" content="Browse, search, play and favourite WFMU shows, and take episodes offline. Keyboard shortcuts that keep working while another window has focus. On your computer.">
     <meta property="og:type" content="website">
     <title>Archiplayer — WFMU archive player</title>
     <link rel="icon" href="img/logo.gif">
@@ -41,7 +41,7 @@
           <li><a class="button primary" data-download-link href="#install"><svg class="ico" aria-hidden="true"><use href="#i-dl"></use></svg> Download for your computer</a></li>
           <li><a class="button quiet" data-repo-link href="https://github.com/peqod/Archiplayer">View the source &#8599;</a></li>
         </ul>
-        <p class="release-note" data-release-note>Early builds for Windows and macOS. Linux coming soon.</p>
+        <p class="release-note" data-release-note>Early builds for Windows. macOS and Linux coming soon.</p>
 
         <figure>
           <img src="img/app-show.png" width="1919" height="1079"
@@ -60,9 +60,11 @@
       <section class="features wrap" id="features">
         <p class="label">01 / What it does</p>
         <h2>Your own listening place</h2>
-        <div class="cols cols-4">
+        <div class="cols cols-3">
           <div class="cell"><span class="glyph">&#8981;</span><h3>Find your favourite show</h3><p>Browse every current and past show. Search DJs instantly and search tracks as playlists enter your local cache (Because we are mindful of web traffic).</p></div>
           <div class="cell"><span class="glyph">&#9654;</span><h3>Play the archive</h3><p>Queue whole shows, single episodes or jump straight to a track&rsquo;s timestamp. Resume where you stopped.</p></div>
+          <div class="cell"><span class="glyph">&#9678;</span><h3>Land on the beat</h3><p>Press the bar to jump. Drag and a loupe opens, gearing the scrub down to a quarter of a pixel so you land on the downbeat, not near it.</p></div>
+          <div class="cell"><span class="glyph">&#9000;</span><h3>Keys, not clicks</h3><p>Play, skip, mute and favourite from the keyboard. Bind what you like, and keep the keys working while another window has focus.</p></div>
           <div class="cell"><span class="glyph">&#8595;</span><h3>Keep it offline</h3><p>Download episodes for travel and slow connections. Choose where the files live; delete them whenever you like.</p></div>
           <div class="cell"><span class="glyph">&#9733;</span><h3>Make it yours</h3><p>Favourite shows, episodes and songs. Listening history and stats stay in one SQLite file on your machine.</p></div>
         </div>
@@ -97,17 +99,17 @@
       <section class="install wrap" id="install">
         <p class="label">02 / Get Archiplayer</p>
         <h2>Pick your machine.</h2>
-        <p class="lede">These early builds are unsigned. The source is public, but Windows and macOS will ask you to confirm that you trust the app.</p>
+        <p class="lede">These early builds are unsigned. The source is public, but Windows will ask you to confirm that you trust the app.</p>
         <div class="cols cols-3">
           <div class="cell platform" data-platform="windows"><img class="os" src="img/os-windows.svg" alt="" width="30" height="30"><h3>Windows</h3><p>Windows 10 or later &middot; x64</p><a data-asset="windows" href="https://github.com/peqod/Archiplayer/releases"><svg class="ico" aria-hidden="true"><use href="#i-dl"></use></svg> Download .exe</a><details><summary>SmartScreen instructions</summary><p>Choose <b>More info</b>, verify that the download came from this repository, then choose <b>Run anyway</b>.</p></details></div>
-          <div class="cell platform" data-platform="mac"><img class="os" src="img/os-mac.svg" alt="" width="30" height="30"><h3>macOS</h3><p>Intel + Apple Silicon &middot; universal</p><a data-asset="mac" href="https://github.com/peqod/Archiplayer/releases"><svg class="ico" aria-hidden="true"><use href="#i-dl"></use></svg> Download .dmg</a><details><summary>Gatekeeper instructions</summary><p>Move Archiplayer to Applications. Open it once; when macOS blocks it, go to <b>System Settings &rarr; Privacy &amp; Security</b> and choose <b>Open Anyway</b>.</p></details></div>
+          <div class="cell platform" data-platform="mac"><img class="os" src="img/os-mac.svg" alt="" width="30" height="30"><h3>macOS</h3><p>Distribution paused &middot; source build supported</p><span class="availability">Coming soon</span><details><summary>Build it from source</summary><p>The universal build still works from source on Intel and Apple Silicon. Follow the macOS section of the build guide.</p></details></div>
           <div class="cell platform" data-platform="linux"><img class="os" src="img/os-linux.svg" alt="" width="30" height="30"><h3>Linux</h3><p>Packaging and compatibility validation in progress</p><span class="availability">Coming soon</span></div>
         </div>
         <div class="source-build">
           <div>
             <p class="label">BUILD IT YOURSELF</p>
-            <h3>One source. Two supported desktops.</h3>
-            <p>Prefer not to run an unsigned binary? Follow the build walkthrough in the repository.</p>
+            <h3>One source. Windows or macOS.</h3>
+            <p>Prefer not to run an unsigned binary, or want the Mac build today? Follow the build walkthrough in the repository.</p>
           </div>
           <a class="button quiet" data-source-link href="https://github.com/peqod/Archiplayer#build-from-source">Open build guide &#8599;</a>
         </div>
