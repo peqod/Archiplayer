@@ -657,8 +657,19 @@ fn synthetic_live_episode_id(stream_id: &str, timestamp: i64) -> i64 {
     -(timestamp.div_euclid(86400) * 1_000_000 + channel as i64 + 1)
 }
 
+/// Resolve a playable URL for an episode, preferring the local download, then the cached
+/// archive URL, then a fresh scrape.
+///
+/// `force` skips and clears the cached URL. WFMU rolls its 128k mp3s off
+/// mp3archives.wfmu.org after a few weeks and its player falls back to the permanent
+/// s3.amazonaws.com/arch.wfmu.org mp4, which leaves a cached mp3 URL answering 404 forever.
+/// Callers use `force` after a playback or download failure to pick up the new backend.
 #[tauri::command]
-pub async fn resolve_audio(episode_id: i64, state: State<'_, AppState>) -> CmdResult<AudioSource> {
+pub async fn resolve_audio(
+    episode_id: i64,
+    force: bool,
+    state: State<'_, AppState>,
+) -> CmdResult<AudioSource> {
     let ep = {
         let db = state.db()?;
         db.get_episode(episode_id).map_err(db_err)?
@@ -676,7 +687,10 @@ pub async fn resolve_audio(episode_id: i64, state: State<'_, AppState>) -> CmdRe
             }
         }
     }
-    if let Some(url) = ep
+    if force {
+        // Drop the stale value up front so a failed re-scrape can't leave it in place.
+        state.db()?.clear_audio_url(episode_id).map_err(db_err)?;
+    } else if let Some(url) = ep
         .audio_url
         .as_deref()
         .and_then(|url| wfmu::validate_audio_url(url).ok())

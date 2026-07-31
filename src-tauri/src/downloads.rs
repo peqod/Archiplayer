@@ -173,7 +173,7 @@ async fn download_episode_inner(
     state: State<'_, AppState>,
 ) -> Result<String, String> {
     // Resolve source URL (cached or via m3u) and destination path.
-    let source = crate::commands::resolve_audio(episode_id, state.clone()).await?;
+    let mut source = crate::commands::resolve_audio(episode_id, false, state.clone()).await?;
     if source.local {
         return Ok(source.url); // already downloaded
     }
@@ -207,31 +207,47 @@ async fn download_episode_inner(
     };
     // Cached and freshly scraped URLs both pass through the same strict validation immediately
     // before the backend fetch. The audio-only client applies it again to every redirect.
-    let audio_url = crate::wfmu::validate_audio_url(&source.url)?;
-    let extension = std::path::Path::new(audio_url.path())
-        .extension()
-        .and_then(|ext| ext.to_str())
-        .map(str::to_ascii_lowercase)
-        .filter(|ext| matches!(ext.as_str(), "mp3" | "mp4" | "m4a" | "aac"))
-        .unwrap_or_else(|| "mp3".to_string());
-    let dest = dir.join(format!("{filename}.{extension}"));
-    let dest_str = dest.to_string_lossy().to_string();
-    match tokio::fs::try_exists(&dest).await {
-        Ok(true) => return Err(format!("download destination already exists: {dest_str}")),
-        Ok(false) => {}
-        Err(error) => return Err(format!("could not inspect download destination: {error}")),
-    }
+    //
+    // A cached URL can go dead: WFMU rolls its 128k mp3s off mp3archives.wfmu.org and falls back
+    // to the permanent S3 mp4, so the old URL answers 404. One forced re-resolve picks up the new
+    // backend, which also changes the extension, hence the destination is recomputed per attempt.
+    let mut retried = false;
+    let (resp, dest, dest_str) = loop {
+        let audio_url = crate::wfmu::validate_audio_url(&source.url)?;
+        let extension = std::path::Path::new(audio_url.path())
+            .extension()
+            .and_then(|ext| ext.to_str())
+            .map(str::to_ascii_lowercase)
+            .filter(|ext| matches!(ext.as_str(), "mp3" | "mp4" | "m4a" | "aac"))
+            .unwrap_or_else(|| "mp3".to_string());
+        let dest = dir.join(format!("{filename}.{extension}"));
+        let dest_str = dest.to_string_lossy().to_string();
+        match tokio::fs::try_exists(&dest).await {
+            Ok(true) => return Err(format!("download destination already exists: {dest_str}")),
+            Ok(false) => {}
+            Err(error) => return Err(format!("could not inspect download destination: {error}")),
+        }
 
-    let resp = state
-        .fetcher
-        .audio_client()
-        .get(audio_url)
-        .send()
-        .await
-        .map_err(|e| format!("download request failed: {e}"))?;
-    if !resp.status().is_success() {
-        return Err(format!("HTTP {} downloading audio", resp.status()));
-    }
+        let resp = state
+            .fetcher
+            .audio_client()
+            .get(audio_url)
+            .send()
+            .await
+            .map_err(|e| format!("download request failed: {e}"))?;
+        if resp.status().is_success() {
+            break (resp, dest, dest_str);
+        }
+        let status = resp.status();
+        if retried || !matches!(status.as_u16(), 403 | 404) {
+            return Err(format!("HTTP {status} downloading audio"));
+        }
+        retried = true;
+        source = crate::commands::resolve_audio(episode_id, true, state.clone()).await?;
+        if source.local {
+            return Ok(source.url); // already downloaded
+        }
+    };
     let total = resp.content_length().unwrap_or(0) as i64;
     let tmp = dir.join(format!("{episode_id}.part"));
     // `create_new` refuses to clobber a stale/concurrent partial file. Construct the guard only

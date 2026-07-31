@@ -559,6 +559,16 @@ impl Db {
         Ok(())
     }
 
+    /// Forget a cached archive URL that no longer resolves, so the next play re-scrapes it.
+    /// The pre-roll offset is left alone: the re-scrape overwrites it from the same page.
+    pub fn clear_audio_url(&self, episode_id: i64) -> Result<(), rusqlite::Error> {
+        self.conn.execute(
+            "UPDATE episodes SET audio_url=NULL WHERE id=?1",
+            params![episode_id],
+        )?;
+        Ok(())
+    }
+
     /// Store the archive pre-roll offset (seconds) scraped from the AccuPlayer page.
     pub fn set_episode_offset(
         &self,

@@ -5,6 +5,11 @@
  */
 export const LOUPE_ZOOM = 4;
 export const LOUPE_SIZE = 36;
+export const MIN_PRECISION_SEEK_WIDTH = 160;
+
+export function precisionSeekAvailable(trackWidth: number): boolean {
+  return Number.isFinite(trackWidth) && trackWidth >= MIN_PRECISION_SEEK_WIDTH;
+}
 
 function clampToEpisode(sec: number, duration: number): number {
   if (!Number.isFinite(sec)) return 0;

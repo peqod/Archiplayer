@@ -3,13 +3,30 @@ import { LatestRequest } from "../src/lib/request-gate.ts";
 import { normalizeVolume, VOLUME_TICKS } from "../src/lib/volume.ts";
 import { restingAnchor } from "../src/lib/back-anchor.ts";
 import { playGlyph } from "../src/lib/play-icon.ts";
-import { LOUPE_SIZE, LOUPE_ZOOM, gearedTime, timeAtPointer } from "../src/lib/seek-drag.ts";
+import {
+  MARQUEE_GAP,
+  MARQUEE_SPEED,
+  marqueeMetrics,
+  sameMarqueeMetrics,
+} from "../src/lib/marquee.ts";
+import {
+  LOUPE_SIZE,
+  LOUPE_ZOOM,
+  MIN_PRECISION_SEEK_WIDTH,
+  gearedTime,
+  precisionSeekAvailable,
+  timeAtPointer,
+} from "../src/lib/seek-drag.ts";
 import {
   BACK_LINE_H,
   MAIN_PAD_TOP,
   SCROLL_CUE_AT,
   scrollCueVisible,
 } from "../src/lib/scroll-cue.ts";
+import {
+  shouldRetryStaleSource,
+  staleResumeAt,
+} from "../src/lib/stale-source.ts";
 
 function test(name, body) {
   body();
@@ -98,6 +115,12 @@ test("the gearing divisor is the magnification, so the loupe cannot lie", () => 
   assert.equal(LOUPE_SIZE, 36);
 });
 
+test("precision seeking follows actual track capacity, not a viewport breakpoint", () => {
+  assert.equal(precisionSeekAvailable(MIN_PRECISION_SEEK_WIDTH - 1), false);
+  assert.equal(precisionSeekAvailable(MIN_PRECISION_SEEK_WIDTH), true);
+  assert.equal(precisionSeekAvailable(Number.NaN), false);
+});
+
 // <main> spans y 120..800; the back link rests 20px into it.
 const MAIN = { top: 120, left: 0, bottom: 800 };
 const PAD = { left: 12, top: 6 };
@@ -148,4 +171,95 @@ test("play controls show player state, not the click action", () => {
   // something else is playing — otherwise every idle row would show pause bars.
   assert.equal(playGlyph(false, true), "play");
   assert.equal(playGlyph(false, false), "play");
+});
+
+test("marquee motion starts only for genuinely clipped text", () => {
+  assert.deepEqual(marqueeMetrics(200, 200), {
+    overflowing: false,
+    distance: 0,
+    duration: 0,
+  });
+  // Fractional layout rounding must not make a fitting title twitch.
+  assert.equal(marqueeMetrics(200, 200.75).overflowing, false);
+  assert.equal(marqueeMetrics(200, 202).overflowing, true);
+});
+
+test("marquee copies stay separated and travel at a constant reading speed", () => {
+  const metrics = marqueeMetrics(200, 240);
+  assert.equal(metrics.distance, 240 + MARQUEE_GAP);
+  assert.equal(metrics.duration, metrics.distance / MARQUEE_SPEED);
+
+  const long = marqueeMetrics(200, 480);
+  assert.equal(long.distance / long.duration, MARQUEE_SPEED);
+});
+
+test("identical marquee measurements do not require another layout write", () => {
+  const first = marqueeMetrics(200, 240);
+  assert.equal(sameMarqueeMetrics(first, { ...first }), true);
+  assert.equal(sameMarqueeMetrics(first, { ...first, distance: first.distance + 1 }), false);
+});
+
+test("invalid marquee measurements fail closed without animation", () => {
+  for (const pair of [
+    [0, 240],
+    [200, Number.NaN],
+    [Number.POSITIVE_INFINITY, 240],
+  ]) {
+    assert.equal(marqueeMetrics(pair[0], pair[1]).overflowing, false);
+  }
+});
+
+const deadArchiveSource = {
+  live: false,
+  local: false,
+  sourceEpisodeId: 165804,
+  retriedEpisodeId: null,
+  currentEpisodeId: 165804,
+  sourceIsCurrent: true,
+};
+
+test("a failed archive source is re-resolved once", () => {
+  assert.equal(shouldRetryStaleSource(deadArchiveSource), true);
+});
+
+test("the same episode is never re-resolved twice", () => {
+  assert.equal(
+    shouldRetryStaleSource({ ...deadArchiveSource, retriedEpisodeId: 165804 }),
+    false,
+  );
+  // A different episode's earlier retry does not spend this one's attempt.
+  assert.equal(
+    shouldRetryStaleSource({ ...deadArchiveSource, retriedEpisodeId: 166054 }),
+    true,
+  );
+});
+
+test("live streams and local downloads are not re-resolved", () => {
+  assert.equal(shouldRetryStaleSource({ ...deadArchiveSource, live: true }), false);
+  assert.equal(shouldRetryStaleSource({ ...deadArchiveSource, local: true }), false);
+});
+
+test("a source the player has moved on from is not re-resolved", () => {
+  assert.equal(
+    shouldRetryStaleSource({ ...deadArchiveSource, sourceEpisodeId: null }),
+    false,
+  );
+  assert.equal(
+    shouldRetryStaleSource({ ...deadArchiveSource, currentEpisodeId: 166054 }),
+    false,
+  );
+  assert.equal(
+    shouldRetryStaleSource({ ...deadArchiveSource, sourceIsCurrent: false }),
+    false,
+  );
+});
+
+test("the replacement source resumes where the dead one stopped", () => {
+  // Mid-playback failure keeps the listener's position.
+  assert.equal(staleResumeAt(1743, 60, 432, 15), 1743);
+  // Failure before playback starts keeps the seek that never happened.
+  assert.equal(staleResumeAt(0, 60, 432, 15), 60);
+  // Fresh play falls back to the jingle lead-in, just before playlist zero.
+  assert.equal(staleResumeAt(0, null, 432, 15), 417);
+  assert.equal(staleResumeAt(0, null, 0, 15), 0);
 });

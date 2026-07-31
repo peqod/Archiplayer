@@ -3,7 +3,7 @@
 // window's keydown while Archiplayer has focus, `global` is handed to the OS via
 // tauri-plugin-global-shortcut and fires from anywhere.
 //
-// Accelerators are written in Tauri's own syntax ("Ctrl+Alt+M", "Space",
+// Accelerators are written in Tauri's own syntax ("Ctrl+Shift+F8", "Space",
 // "BracketRight") so a stored string can go straight to `register()` without a
 // second dialect in between.
 
@@ -59,12 +59,12 @@ export const DEFAULT_GLOBAL: Bindings = {
   "play-pause": null,
   "prev-track": null,
   "next-track": null,
-  "prev-episode": "Ctrl+Alt+BracketLeft",
-  "next-episode": "Ctrl+Alt+BracketRight",
-  mute: "Ctrl+Alt+M",
-  "fav-song": "Ctrl+Alt+F",
-  "save-show": "Ctrl+Alt+S",
-  random: "Ctrl+Alt+R",
+  "prev-episode": "Ctrl+Shift+F6",
+  "next-episode": "Ctrl+Shift+F7",
+  mute: "Ctrl+Shift+F8",
+  "fav-song": "Ctrl+Shift+F9",
+  "save-show": "Ctrl+Shift+F10",
+  random: "Ctrl+Shift+F11",
 };
 
 export function defaultsFor(scope: Scope): Bindings {
@@ -250,15 +250,30 @@ export function matchesAccel(
 }
 
 /**
- * An OS-wide binding takes the key away from every other application, so it has to
- * carry a modifier no one types by accident. Media keys pass on their own: they
- * exist for exactly this.
+ * Why an accelerator cannot be registered system-wide. AltGr is reported as
+ * Ctrl+Alt on Windows, and Option produces text on macOS, so neither Ctrl+Alt nor
+ * Alt on its own may grab a key from every application. Media keys pass on their
+ * own because they exist for exactly this job.
  */
-export function isGlobalSafe(accel: string | null | undefined): boolean {
+export type GlobalBindingIssue = "invalid" | "text-entry" | "needs-system-modifier";
+
+export function globalBindingIssue(
+  accel: string | null | undefined,
+): GlobalBindingIssue | null {
   const parsed = parseAccel(accel);
-  if (!parsed) return false;
-  if (parsed.key in MEDIA) return true;
-  return parsed.mods.some((m) => m === "Ctrl" || m === "Alt" || m === "Super");
+  if (!parsed) return "invalid";
+  const hasCtrl = parsed.mods.includes("Ctrl");
+  const hasAlt = parsed.mods.includes("Alt");
+  const hasSuper = parsed.mods.includes("Super");
+  if ((hasCtrl && hasAlt) || (hasAlt && !hasSuper)) return "text-entry";
+  if (parsed.key in MEDIA && !parsed.mods.length) return null;
+  if (!hasCtrl && !hasSuper) return "needs-system-modifier";
+  return null;
+}
+
+/** Whether an accelerator can be registered without taking text-entry chords. */
+export function isGlobalSafe(accel: string | null | undefined): boolean {
+  return globalBindingIssue(accel) === null;
 }
 
 /**
@@ -339,6 +354,11 @@ export interface StoredShortcuts {
   global: Bindings;
 }
 
+export interface ParsedShortcuts extends StoredShortcuts {
+  /** The loaded record used an older schema and should be written back once. */
+  needsSave: boolean;
+}
+
 function readTier(raw: unknown, scope: Scope): Bindings {
   const out = defaultsFor(scope);
   if (!raw || typeof raw !== "object") return out;
@@ -351,11 +371,47 @@ function readTier(raw: unknown, scope: Scope): Bindings {
   return out;
 }
 
+function hasCtrlAlt(accel: string | null): boolean {
+  const parsed = parseAccel(accel);
+  return !!parsed && parsed.mods.includes("Ctrl") && parsed.mods.includes("Alt");
+}
+
+/**
+ * v1 allowed Ctrl+Alt globally. Move its six shipped actions onto the replacement
+ * preset, while a safe custom binding always keeps the key it already owns.
+ */
+function readGlobalTier(raw: unknown, legacy: boolean): Bindings {
+  const out = readTier(raw, "global");
+  const unsafe = ACTIONS.filter((action) => {
+    const accel = out[action.id];
+    return accel !== null && !isGlobalSafe(accel);
+  });
+
+  for (const action of unsafe) out[action.id] = null;
+  const used = new Set(Object.values(out).filter((accel): accel is string => accel !== null));
+
+  if (legacy) {
+    for (const action of unsafe) {
+      const old = normalizeAccel(
+        raw && typeof raw === "object"
+          ? (raw as Record<string, unknown>)[action.id] as string | null | undefined
+          : null,
+      );
+      const replacement = DEFAULT_GLOBAL[action.id];
+      if (!hasCtrlAlt(old) || !replacement || used.has(replacement)) continue;
+      out[action.id] = replacement;
+      used.add(replacement);
+    }
+  }
+
+  return out;
+}
+
 /**
  * Read the persisted blob. Anything unreadable falls back to the defaults rather
  * than throwing, and a blob from before the master switch existed reads as on.
  */
-export function parseStored(raw: string | null | undefined): StoredShortcuts {
+export function parseStored(raw: string | null | undefined): ParsedShortcuts {
   let data: unknown = null;
   if (typeof raw === "string" && raw.length) {
     try {
@@ -365,13 +421,16 @@ export function parseStored(raw: string | null | undefined): StoredShortcuts {
     }
   }
   const obj = (data && typeof data === "object" ? data : {}) as Record<string, unknown>;
+  const sourceVersion = typeof obj.v === "number" ? obj.v : 0;
+  const legacy = sourceVersion < 2;
   return {
     enabled: obj.enabled !== false,
     local: readTier(obj.local, "local"),
-    global: readTier(obj.global, "global"),
+    global: readGlobalTier(obj.global, legacy),
+    needsSave: !!data && typeof data === "object" && !Array.isArray(data) && legacy,
   };
 }
 
 export function serializeShortcuts(state: StoredShortcuts): string {
-  return JSON.stringify({ v: 1, enabled: state.enabled, local: state.local, global: state.global });
+  return JSON.stringify({ v: 2, enabled: state.enabled, local: state.local, global: state.global });
 }

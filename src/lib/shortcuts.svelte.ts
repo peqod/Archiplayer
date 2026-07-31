@@ -47,6 +47,13 @@ class ShortcutStore {
     this.enabled = stored.enabled;
     this.local = stored.local;
     this.global = stored.global;
+    if (stored.needsSave) {
+      try {
+        localStorage.setItem(LS_KEY, serializeShortcuts(stored));
+      } catch {
+        // The in-memory migration is enough to release unsafe grabs this session.
+      }
+    }
   }
 
   attach(handlers: ActionHandlers) {

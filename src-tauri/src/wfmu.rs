@@ -1685,6 +1685,20 @@ mod tests {
     }
 
     #[test]
+    fn archiveplayer_reads_the_current_video_element_markup() {
+        // Live AccuPlayer page for show 165804 / archive 290514. WFMU serves the media in a
+        // <video id="audio-player"> element, so the <audio ...> pass misses and the generic
+        // src pass carries it. This episode's 128k mp3 has rolled off mp3archives.wfmu.org,
+        // leaving only the permanent S3 mp4 — the case a stale cached URL has to recover to.
+        let html = fixture("archiveplayer_165804.html");
+        assert_eq!(
+            parse_archiveplayer(&html).as_deref(),
+            Some("https://s3.amazonaws.com/arch.wfmu.org/AU/au260627.mp4")
+        );
+        assert_eq!(parse_archiveplayer_offset(&html), Some(432));
+    }
+
+    #[test]
     fn audio_urls_are_limited_to_https_wfmu_archive_backends() {
         for url in [
             "https://mp3archives.wfmu.org/archive/WA/wa260709.mp3",

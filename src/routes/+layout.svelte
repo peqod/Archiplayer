@@ -5,7 +5,13 @@
   import "@fontsource/inter/800.css";
   import { player, type QueueItem } from "$lib/player.svelte";
   import { VOLUME_TICKS } from "$lib/volume";
-  import { LOUPE_SIZE, LOUPE_ZOOM, gearedTime, timeAtPointer } from "$lib/seek-drag";
+  import {
+    LOUPE_SIZE,
+    LOUPE_ZOOM,
+    gearedTime,
+    precisionSeekAvailable,
+    timeAtPointer,
+  } from "$lib/seek-drag";
   import { scrollCueVisible } from "$lib/scroll-cue";
   import { shortcuts, type ActionHandlers } from "$lib/shortcuts.svelte";
   import { matchesAccel, shouldIgnoreKey } from "$lib/shortcuts";
@@ -13,6 +19,7 @@
   import { selectRandomPlayback } from "$lib/random-show";
   import { theme } from "$lib/theme.svelte";
   import Icon from "$lib/Icon.svelte";
+  import MarqueeText from "$lib/MarqueeText.svelte";
   import { playGlyph } from "$lib/play-icon";
   import Toast from "$lib/Toast.svelte";
   import { page } from "$app/stores";
@@ -69,13 +76,11 @@
   // Last measured collapsed height while a track was loaded. Lets feelingLucky pre-grow
   // the window to the playing size before the header expands, so it never clips.
   let playingCompactHeight = 0;
-  // Mirrors the CSS mini-mode breakpoint so volume can fold to a popover.
-  let mini = $state(false);
   let volOpen = $state(false);
   // Grace period before an un-hovered mini volume popover folds away.
   const VOL_CLOSE_DELAY = 1000;
   let volCloseTimer: ReturnType<typeof setTimeout> | null = null;
-  let miniMedia: MediaQueryList | null = null;
+  let compactVolumeMedia: MediaQueryList | null = null;
   // Loupe scrubbing. `dragSec` being non-null is what raises the lens, and it is the
   // authoritative position while it is up: the geared value accumulates from the press
   // point, so it must not be re-derived from the element's clock.
@@ -96,20 +101,18 @@
     theme.load();
     shortcuts.load();
     collapsed = localStorage.getItem("ap.collapsed") === "1";
-    miniMedia = window.matchMedia("(max-width: 760px)");
-    mini = miniMedia.matches;
+    compactVolumeMedia = window.matchMedia("(max-width: 760px)");
   }
 
   onMount(() => {
-    if (!miniMedia) return;
-    const onMiniChange = (e: MediaQueryListEvent) => {
-      mini = e.matches;
+    if (!compactVolumeMedia) return;
+    const onCompactVolumeChange = () => {
       cancelVolClose();
-      volOpen = false; // leaving/entering mini closes any open volume popover
+      volOpen = false;
     };
-    miniMedia.addEventListener("change", onMiniChange);
+    compactVolumeMedia.addEventListener("change", onCompactVolumeChange);
     return () => {
-      miniMedia?.removeEventListener("change", onMiniChange);
+      compactVolumeMedia?.removeEventListener("change", onCompactVolumeChange);
       cancelVolClose();
     };
   });
@@ -309,9 +312,15 @@
   }
 
   function onSeekDown(e: PointerEvent) {
-    // Mini keeps the plain native drag: the row is tight and the thumb is already
-    // clamped down there. A second contact must not re-anchor a live drag either.
-    if (mini || !e.isPrimary || e.button !== 0 || !player.duration || !seekTrackEl) return;
+    // A narrow track keeps the plain native drag. Capacity is what matters here,
+    // not which viewport breakpoint happened to produce that width.
+    if (
+      !precisionSeekAvailable(seekTrackW) ||
+      !e.isPrimary ||
+      e.button !== 0 ||
+      !player.duration ||
+      !seekTrackEl
+    ) return;
     // Stop the range from tracking the pointer itself. Preventing the default on
     // pointerdown suppresses the compatibility mouse events the native slider drags
     // on, which also means focus has to be moved by hand.
@@ -351,11 +360,15 @@
   function onVolume(e: Event) {
     player.setVolume(Number((e.target as HTMLInputElement).value));
   }
-  // Desktop: icon toggles mute. Mini: icon opens the folded vertical slider.
-  function onVolClick() {
+  function onCompactVolClick() {
     cancelVolClose();
-    if (mini) volOpen = !volOpen;
-    else player.toggleMute();
+    volOpen = !volOpen;
+  }
+
+  function onWideVolClick() {
+    cancelVolClose();
+    volOpen = false;
+    player.toggleMute();
   }
 
   function cancelVolClose() {
@@ -552,9 +565,41 @@
 <svelte:window onkeydown={onKey} />
 
 {#snippet volumeControl()}
+  <!-- Both presentations stay mounted. CSS switches them atomically at 760px, so
+       crossing the breakpoint never waits for a Svelte DOM replacement. -->
+  <div class="p-volume p-volume-wide">
+    <button
+      class="pvol-btn"
+      type="button"
+      aria-label={player.muted ? "Unmute" : "Mute"}
+      onclick={onWideVolClick}
+      title={player.muted ? "Unmute" : "Mute"}
+    >
+      <Icon name={volumeIcon} size="24px" />
+    </button>
+    <div class="hsl vol-h" style={`--hsl-level: ${volumeLevel}`}>
+      <input
+        class="sl-input"
+        aria-label="Volume"
+        type="range"
+        min="0"
+        max="1"
+        step="0.02"
+        value={player.volume}
+        oninput={onVolume}
+      />
+      <span class="hsl-track" aria-hidden="true">
+        <span class="hsl-fill"></span>
+        {#each VOLUME_TICKS as tick (tick.pct)}
+          <span class="hsl-tick" style={`left: ${tick.pct}%; width: ${tick.size / 2}px`}></span>
+        {/each}
+        <span class="hsl-thumb"></span>
+      </span>
+    </div>
+  </div>
   <div
-    class="p-volume"
-    class:open={mini && volOpen}
+    class="p-volume p-volume-compact"
+    class:open={volOpen}
     onmouseenter={cancelVolClose}
     onmouseleave={onVolLeave}
     role="presentation"
@@ -562,18 +607,21 @@
     <button
       class="pvol-btn"
       type="button"
-      aria-label={mini ? "Volume" : player.muted ? "Unmute" : "Mute"}
-      aria-expanded={mini ? volOpen : undefined}
-      onclick={onVolClick}
-      title={mini ? "Volume" : player.muted ? "Unmute" : "Mute"}
+      aria-label="Volume"
+      aria-expanded={volOpen}
+      onclick={onCompactVolClick}
+      title="Volume"
     >
       <Icon name={volumeIcon} size="24px" />
     </button>
-    {#if !mini}
-      <div class="hsl vol-h" style={`--hsl-level: ${volumeLevel}`}>
+    <!-- Stays mounted so opacity can transition; visibility keeps it out of the
+         tab order and away from the pointer while folded. -->
+    <div class="vol-pop" style={`--volume-level: ${volumeLevel}`}>
+      <div class="vol-slider">
         <input
-          class="sl-input"
+          class="vol-v sl-input"
           aria-label="Volume"
+          aria-orientation="vertical"
           type="range"
           min="0"
           max="1"
@@ -581,43 +629,15 @@
           value={player.volume}
           oninput={onVolume}
         />
-        <span class="hsl-track" aria-hidden="true">
-          <span class="hsl-fill"></span>
+        <span class="vol-track" aria-hidden="true">
+          <span class="vol-fill"></span>
           {#each VOLUME_TICKS as tick (tick.pct)}
-            <span class="hsl-tick" style={`left: ${tick.pct}%; width: ${tick.size / 2}px`}></span>
+            <span class="vol-tick" style={`bottom: ${tick.pct}%; height: ${tick.size / 2}px`}></span>
           {/each}
-          <span class="hsl-thumb"></span>
+          <span class="vol-thumb"></span>
         </span>
       </div>
-    {:else}
-      <!-- Stays mounted so opacity can transition; visibility keeps it out of the
-           tab order and away from the pointer while folded. -->
-      <div
-        class="vol-pop"
-        style={`--volume-level: ${volumeLevel}`}
-      >
-        <div class="vol-slider">
-          <input
-            class="vol-v sl-input"
-            aria-label="Volume"
-            aria-orientation="vertical"
-            type="range"
-            min="0"
-            max="1"
-            step="0.02"
-            value={player.volume}
-            oninput={onVolume}
-          />
-          <span class="vol-track" aria-hidden="true">
-            <span class="vol-fill"></span>
-            {#each VOLUME_TICKS as tick (tick.pct)}
-              <span class="vol-tick" style={`bottom: ${tick.pct}%; height: ${tick.size / 2}px`}></span>
-            {/each}
-            <span class="vol-thumb"></span>
-          </span>
-        </div>
-      </div>
-    {/if}
+    </div>
   </div>
 {/snippet}
 
@@ -643,7 +663,7 @@
     </div>
     <div class="p-info">
       {#if player.current}
-        <div class="p-title ellipsis">
+        <div class="p-title">
           <button
             class="pfav"
             class:on={player.current.episode.favourite}
@@ -652,13 +672,16 @@
             aria-pressed={player.current.episode.favourite}
             title="Save this episode"
           ><Icon name="save" filled={player.current.episode.favourite} /></button>
-          <a href={"/show/" + player.current.episode.show_id}>{player.current.showName}</a>
+          <MarqueeText
+            text={player.current.showName}
+            href={"/show/" + player.current.episode.show_id}
+          />
           <span class="p-date">{player.current.episode.air_date ?? ""}</span>
           {#if player.queue.length > 1}
             <span class="p-queue">{player.queueIndex + 1}/{player.queue.length}</span>
           {/if}
         </div>
-        <div class="p-track ellipsis">
+        <div class="p-track">
           <button
             class="pfav"
             class:on={currentTrack?.favourite}
@@ -668,13 +691,12 @@
             aria-pressed={currentTrack?.favourite ?? false}
             title={currentTrack ? "Star this song" : "No song info yet"}
           ><Icon name="star" filled={currentTrack?.favourite ?? false} /></button>
-          {#if currentTrack}
-            ♪ {currentTrack.artist ?? "?"} — {currentTrack.title ?? "?"}
-          {:else if player.error}
-            <span class="err">{player.error}</span>
-          {:else if player.current.episode.title}
-            {player.current.episode.title}
-          {/if}
+          <MarqueeText
+            text={currentTrack
+              ? `♪ ${currentTrack.artist ?? "?"} — ${currentTrack.title ?? "?"}`
+              : player.error ?? player.current.episode.title ?? ""}
+            tone={!currentTrack && player.error ? "danger" : "default"}
+          />
         </div>
         <div class="p-scrub">
           <span class="p-time">{fmtTime(displaySec)}</span>
@@ -728,11 +750,11 @@
               {/if}
             </span>
           </div>
-          <span class="p-time">{fmtTime(player.duration)}</span>
+          <span class="p-time p-time-end">{fmtTime(player.duration)}</span>
           {@render volumeControl()}
         </div>
       {:else if player.live}
-        <div class="p-title ellipsis">
+        <div class="p-title">
           <button
             class="pfav"
             class:on={player.liveEpisode?.episode.favourite}
@@ -743,12 +765,12 @@
             title="Save this live episode"
           ><Icon name="save" filled={player.liveEpisode?.episode.favourite ?? false} /></button>
           <span class="live-badge">● LIVE</span>
-          {player.liveEpisode?.showName ?? player.live.name}
+          <MarqueeText text={player.liveEpisode?.showName ?? player.live.name} />
           {#if player.liveEpisode?.episode.air_date}
             <span class="p-date">{player.liveEpisode.episode.air_date}</span>
           {/if}
         </div>
-        <div class="p-track ellipsis">
+        <div class="p-track">
           <button
             class="pfav"
             class:on={currentTrack?.favourite}
@@ -758,17 +780,16 @@
             aria-pressed={currentTrack?.favourite ?? false}
             title={currentTrack ? "Star this song" : "Song has not been persisted yet"}
           ><Icon name="star" filled={currentTrack?.favourite ?? false} /></button>
-          {#if currentTrack}
-            ♪ {currentTrack.artist ?? "?"} — {currentTrack.title ?? "?"}
-          {:else if player.liveSong}
-            ♪ {player.liveSong.artist ?? "?"} — {player.liveSong.title ?? "?"}
-          {:else if player.error}
-            <span class="err">{player.error}</span>
-          {:else if player.livePlaylistError}
-            <span class="err">{player.livePlaylistError}</span>
-          {:else}
-            {player.live.tagline}
-          {/if}
+          <MarqueeText
+            text={currentTrack
+              ? `♪ ${currentTrack.artist ?? "?"} — ${currentTrack.title ?? "?"}`
+              : player.liveSong
+                ? `♪ ${player.liveSong.artist ?? "?"} — ${player.liveSong.title ?? "?"}`
+                : player.error ?? player.livePlaylistError ?? player.live.tagline}
+            tone={!currentTrack && !player.liveSong && (player.error || player.livePlaylistError)
+              ? "danger"
+              : "default"}
+          />
         </div>
         <div class="p-scrub">
           <span class="p-time live-clock">{player.loading ? "Connecting…" : "Streaming live"}</span>
@@ -1081,6 +1102,7 @@
     display: flex;
     gap: var(--pctl-gap);
     align-items: center;
+    flex: 0 0 auto;
   }
   .pbtn {
     background: var(--c-surface2);
@@ -1119,23 +1141,32 @@
   .p-info {
     flex: 1 1 auto;
     min-width: 0;
+    container: player-info / inline-size;
   }
   .p-title {
+    display: flex;
+    align-items: center;
+    min-width: 0;
     font-weight: 700;
     font-size: 14px;
   }
   .p-date {
+    flex: 0 0 auto;
     color: var(--c-dim);
     font-weight: 400;
     margin-left: 8px;
     font-size: 12px;
   }
   .p-queue {
+    flex: 0 0 auto;
     color: var(--c-accent);
     font-size: 12px;
     margin-left: 8px;
   }
   .p-track {
+    display: flex;
+    align-items: center;
+    min-width: 0;
     font-size: 13px;
     color: var(--c-dim);
   }
@@ -1158,10 +1189,8 @@
     cursor: default;
     opacity: 0.7;
   }
-  .err {
-    color: var(--c-danger);
-  }
   .live-badge {
+    flex: 0 0 auto;
     color: var(--c-line);
     font-weight: 800;
     font-size: 11px;
@@ -1425,6 +1454,9 @@
     color: var(--c-dim);
     position: relative;
   }
+  .p-volume-compact {
+    display: none;
+  }
   .p-volume .vol-h {
     flex: 0 0 auto;
     width: 119px; /* 90px + 32% */
@@ -1443,109 +1475,34 @@
     color: var(--c-accent);
   }
 
-  /* Compact mode keeps one stacked composition and scales it continuously from the
-     roomy 760px endpoint down to the native 324px minimum window width. */
+  /* The 760px state folds secondary chrome (volume + nav) but deliberately keeps the
+     player in one row. The metadata marquee absorbs the narrowing until 520px. */
   @media (max-width: 760px) {
     .player {
-      flex-direction: column;
-      align-items: stretch;
-      gap: var(--player-gap);
-      padding: var(--mini-pad-top) var(--mini-pad-inline) var(--mini-pad-bottom);
+      padding: 10px 16px;
 
-      /* Each clamp is linear between 324px and 760px. Keeping the endpoints here
-         makes the intended minimum and intermediate compositions explicit. */
-      --pbtn-size: clamp(32px, calc(29.028px + 0.917vw), 36px);
-      --pctl-gap: clamp(6px, calc(4.514px + 0.459vw), 8px);
-      --player-gap: clamp(14px, calc(11.028px + 0.917vw), 18px);
-      --icon-size: clamp(11.4px, calc(8.428px + 0.917vw), 15.4px);
-      --transport-width: clamp(274px, calc(232.385px + 12.844vw), 330px);
-      --mini-pad-top: clamp(18px, calc(16.514px + 0.459vw), 20px);
-      --mini-pad-inline: clamp(12px, calc(7.541px + 1.376vw), 18px);
-      --mini-pad-bottom: clamp(8px, calc(5.028px + 0.917vw), 12px);
-      --mini-control-font: clamp(12px, calc(10.514px + 0.459vw), 14px);
-      --mini-title-font: clamp(12px, calc(10.514px + 0.459vw), 14px);
-      --mini-track-font: clamp(11px, calc(9.514px + 0.459vw), 13px);
-      --mini-meta-margin: clamp(3px, calc(2.257px + 0.229vw), 4px);
-      --mini-skip-font: clamp(9px, calc(7.514px + 0.459vw), 11px);
-      --mini-scrub-gap: clamp(8px, calc(6.514px + 0.459vw), 10px);
-      --mini-scrub-height: clamp(28px, calc(25.028px + 0.917vw), 32px);
-      --mini-seek-h: clamp(16px, calc(14.514px + 0.459vw), 18px);
-      --mini-seek-thumb: clamp(11px, calc(10.257px + 0.229vw), 12px);
-      --mini-volume-column: clamp(28px, calc(25.028px + 0.917vw), 32px);
-      --mini-time-font: clamp(11px, calc(10.257px + 0.229vw), 12px);
-      --mini-time-width: clamp(40px, calc(34.055px + 1.835vw), 48px);
-      --mini-volume-width: clamp(36px, calc(33.028px + 0.917vw), 40px);
-      --mini-volume-height: clamp(130px, calc(110.679px + 5.963vw), 156px);
-      --mini-volume-pad-top: clamp(7px, calc(6.257px + 0.229vw), 8px);
-      --mini-volume-pad-inline: clamp(5px, calc(4.257px + 0.229vw), 6px);
-      --mini-volume-pad-bottom: clamp(34px, calc(31.028px + 0.917vw), 38px);
-      --mini-volume-slider: clamp(88px, calc(73.138px + 4.587vw), 108px);
-      --mini-volume-track-inset: clamp(6px, calc(4.514px + 0.459vw), 8px);
-      --mini-volume-track: clamp(5px, calc(4.257px + 0.229vw), 6px);
-      --mini-volume-thumb: clamp(13px, calc(11.514px + 0.459vw), 15px);
-      --mini-volume-input: clamp(84px, calc(69.138px + 4.587vw), 104px);
+      /* Compact-volume geometry is fixed across the responsive range. Changing the
+         viewport no longer resizes an invisible popover on every drag frame. */
+      --mini-volume-column: 30px;
+      --mini-volume-width: 38px;
+      --mini-volume-height: 142px;
+      --mini-volume-pad-top: 8px;
+      --mini-volume-pad-inline: 5px;
+      --mini-volume-pad-bottom: 36px;
+      --mini-volume-slider: 97px;
+      --mini-volume-track-inset: 7px;
+      --mini-volume-track: 5px;
+      --mini-volume-thumb: 14px;
+      --mini-volume-input: 93px;
     }
-    .p-controls {
-      justify-content: center;
-      flex-wrap: nowrap;
-      width: min(100%, var(--transport-width));
-      margin-inline: auto;
+    .p-volume-wide {
+      display: none;
     }
-    /* Secondary control labels track the compact token above. */
-    .pbtn {
-      font-size: var(--mini-control-font);
-    }
-    .p-title {
-      margin-bottom: var(--mini-meta-margin);
-      font-size: var(--mini-title-font);
-    }
-    .p-track {
-      margin-bottom: var(--mini-meta-margin);
-      font-size: var(--mini-track-font);
-    }
-    /* Treat the compact player as one centred composition: transport, metadata,
-       and scrubber share the same axis. */
-    .p-info {
-      text-align: center;
-      position: relative;
-      width: min(100%, var(--transport-width));
-      margin-inline: auto;
-    }
-    .p-title,
-    .p-track {
-      width: 100%;
-      text-align: center;
-    }
-    /* Shrink the «15 / 15» skip buttons so they stop overflowing. */
-    .pbtn.skip {
-      font-size: var(--mini-skip-font);
-      letter-spacing: -0.04em;
-    }
-    .p-scrub {
-      display: grid;
-      grid-template-columns: auto minmax(0, 1fr) auto var(--mini-volume-column);
-      align-items: center;
-      gap: var(--mini-scrub-gap);
-      position: relative;
-      min-height: var(--mini-scrub-height);
-      width: 100%;
-    }
-    .p-scrub > .hsl.seek {
-      grid-column: 2;
-      width: 100%;
-      height: var(--mini-seek-h);
-      --hsl-thumb: var(--mini-seek-thumb);
+    .p-volume-compact {
+      display: flex;
     }
     .p-scrub .p-volume {
-      margin-left: 0;
-      grid-column: 4;
-      justify-self: end;
-      min-width: var(--mini-volume-column);
       z-index: 20; /* unconditional: the popover must clear the scrub row mid-fade */
-    }
-    .p-time {
-      font-size: var(--mini-time-font);
-      min-width: var(--mini-time-width);
     }
     /* Mini volume is custom-painted; the transparent native range on top keeps
        pointer and keyboard behavior without relying on WebView range styling. */
@@ -1680,6 +1637,102 @@
     }
     .nav-donate .d-mini {
       display: inline;
+    }
+  }
+  /* This decision belongs to the metadata region, not to another viewport breakpoint.
+     The stacked composition is wider than this even at the native 324px minimum. */
+  @container player-info (max-width: 272px) {
+    .p-time-end {
+      display: none;
+    }
+  }
+  /* Only stack once the remaining inline metadata would fall below roughly 60% of
+     the transport width. From here to the 324px native minimum, reuse the existing
+     continuously scaled compact composition. */
+  @media (max-width: 520px) {
+    .player {
+      /* Compact values interpolate only across the range that actually uses them.
+         Their 520px endpoints match the inline control geometry. */
+      --pbtn-size: 32px;
+      --pctl-gap: clamp(6px, calc(2.694px + 1.02vw), 8px);
+      --player-gap: clamp(14px, calc(7.388px + 2.041vw), 18px);
+      --icon-size: clamp(11.4px, calc(2.473px + 2.755vw), 16.8px);
+      --transport-width: clamp(274px, calc(181.429px + 28.571vw), 330px);
+      --mini-pad-top: clamp(18px, calc(14.694px + 1.02vw), 20px);
+      --mini-pad-inline: clamp(12px, calc(2.082px + 3.061vw), 18px);
+      --mini-pad-bottom: clamp(8px, calc(1.388px + 2.041vw), 12px);
+      --mini-control-font: clamp(12px, calc(8.694px + 1.02vw), 14px);
+      --mini-title-font: clamp(12px, calc(8.694px + 1.02vw), 14px);
+      --mini-track-font: clamp(11px, calc(7.694px + 1.02vw), 13px);
+      --mini-meta-margin: clamp(3px, calc(1.347px + 0.51vw), 4px);
+      --mini-skip-font: clamp(9px, calc(4.041px + 1.531vw), 12px);
+      --mini-scrub-gap: clamp(8px, calc(4.694px + 1.02vw), 10px);
+      --mini-scrub-height: clamp(28px, calc(21.388px + 2.041vw), 32px);
+      --mini-seek-h: clamp(16px, calc(12.694px + 1.02vw), 18px);
+      --mini-seek-thumb: clamp(11px, calc(9.347px + 0.51vw), 12px);
+      --mini-time-font: clamp(11px, calc(9.347px + 0.51vw), 12px);
+      --mini-time-width: clamp(40px, calc(26.776px + 4.082vw), 48px);
+
+      flex-direction: column;
+      align-items: stretch;
+      padding: var(--mini-pad-top) var(--mini-pad-inline) var(--mini-pad-bottom);
+    }
+    .p-controls {
+      justify-content: center;
+      flex-wrap: nowrap;
+      width: min(100%, var(--transport-width));
+      margin-inline: auto;
+    }
+    .pbtn {
+      font-size: var(--mini-control-font);
+    }
+    .p-title {
+      margin-bottom: var(--mini-meta-margin);
+      font-size: var(--mini-title-font);
+    }
+    .p-track {
+      margin-bottom: var(--mini-meta-margin);
+      font-size: var(--mini-track-font);
+    }
+    .p-info {
+      text-align: center;
+      position: relative;
+      width: min(100%, var(--transport-width));
+      margin-inline: auto;
+    }
+    .p-title,
+    .p-track {
+      width: 100%;
+      text-align: center;
+    }
+    .pbtn.skip {
+      font-size: var(--mini-skip-font);
+      letter-spacing: -0.04em;
+    }
+    .p-scrub {
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr) auto var(--mini-volume-column);
+      align-items: center;
+      gap: var(--mini-scrub-gap);
+      position: relative;
+      min-height: var(--mini-scrub-height);
+      width: 100%;
+    }
+    .p-scrub > .hsl.seek {
+      grid-column: 2;
+      width: 100%;
+      height: var(--mini-seek-h);
+      --hsl-thumb: var(--mini-seek-thumb);
+    }
+    .p-scrub .p-volume {
+      margin-left: 0;
+      grid-column: 4;
+      justify-self: end;
+      min-width: var(--mini-volume-column);
+    }
+    .p-time {
+      font-size: var(--mini-time-font);
+      min-width: var(--mini-time-width);
     }
   }
   @media (max-width: 420px) {

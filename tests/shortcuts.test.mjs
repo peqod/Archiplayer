@@ -6,6 +6,7 @@ import {
   accelFromEvent,
   accelLabel,
   duplicates,
+  globalBindingIssue,
   isGlobalSafe,
   keyTokenFromCode,
   matchesAccel,
@@ -88,15 +89,30 @@ test("a binding fires on its own keypress and nothing else", () => {
   assert.equal(matchesAccel(press("Period", { shiftKey: true }), "Period"), false);
 });
 
-test("an OS-wide binding has to carry a modifier, or be a media key", () => {
-  assert.equal(isGlobalSafe("Ctrl+Alt+M"), true);
+test("an OS-wide binding preserves text-entry modifiers", () => {
+  assert.equal(isGlobalSafe("Ctrl+Shift+F6"), true);
   assert.equal(isGlobalSafe("Super+M"), true);
+  assert.equal(isGlobalSafe("Super+Alt+M"), true);
   assert.equal(isGlobalSafe("MediaPlayPause"), true);
+  // Windows reports AltGr as Ctrl+Alt, including when Shift produces capitals.
+  assert.equal(isGlobalSafe("Ctrl+Alt+M"), false);
+  assert.equal(isGlobalSafe("Ctrl+Alt+Shift+M"), false);
+  assert.equal(isGlobalSafe("Ctrl+Alt+MediaPlayPause"), false);
+  // Option is text entry on macOS, so Alt cannot qualify a chord on its own.
+  assert.equal(isGlobalSafe("Alt+M"), false);
+  assert.equal(isGlobalSafe("Alt+Shift+F6"), false);
+  assert.equal(isGlobalSafe("Alt+MediaPlayPause"), false);
   // Registering these OS-wide would swallow the key in every other application.
   assert.equal(isGlobalSafe("Space"), false);
   assert.equal(isGlobalSafe("M"), false);
   assert.equal(isGlobalSafe("Shift+M"), false);
   assert.equal(isGlobalSafe(null), false);
+
+  assert.equal(globalBindingIssue("Ctrl+Alt+S"), "text-entry");
+  assert.equal(globalBindingIssue("Alt+S"), "text-entry");
+  assert.equal(globalBindingIssue("Shift+S"), "needs-system-modifier");
+  assert.equal(globalBindingIssue("Hyper+S"), "invalid");
+  assert.equal(globalBindingIssue("Ctrl+S"), null);
 });
 
 test("two actions on one key is reported per tier, not across them", () => {
@@ -110,12 +126,23 @@ test("two actions on one key is reported per tier, not across them", () => {
   assert.deepEqual(duplicates(DEFAULT_GLOBAL), []);
 });
 
-test("every action ships with a local binding, and no global bare key", () => {
+test("every action ships with a local binding and safe global defaults", () => {
   for (const action of ACTIONS) {
     assert.equal(typeof DEFAULT_LOCAL[action.id], "string", `${action.id} has no default key`);
     const global = DEFAULT_GLOBAL[action.id];
     if (global !== null) assert.equal(isGlobalSafe(global), true, `${action.id} is unsafe globally`);
   }
+  assert.deepEqual(DEFAULT_GLOBAL, {
+    "play-pause": null,
+    "prev-track": null,
+    "next-track": null,
+    "prev-episode": "Ctrl+Shift+F6",
+    "next-episode": "Ctrl+Shift+F7",
+    mute: "Ctrl+Shift+F8",
+    "fav-song": "Ctrl+Shift+F9",
+    "save-show": "Ctrl+Shift+F10",
+    random: "Ctrl+Shift+F11",
+  });
 });
 
 test("focused text fields keep every key; buttons keep only what activates them", () => {
@@ -147,6 +174,71 @@ test("saved settings survive a round trip", () => {
   assert.equal(read.local.mute, "N");
   assert.equal(read.global.mute, null);
   assert.equal(read.local["play-pause"], "Space");
+  assert.equal(read.needsSave, false);
+  assert.equal(JSON.parse(saved).v, 2);
+});
+
+test("v1 Ctrl+Alt globals migrate to the replacement preset", () => {
+  const read = parseStored(JSON.stringify({
+    v: 1,
+    enabled: true,
+    local: DEFAULT_LOCAL,
+    global: {
+      "play-pause": null,
+      "prev-track": null,
+      "next-track": null,
+      "prev-episode": "Ctrl+Alt+BracketLeft",
+      "next-episode": "Ctrl+Alt+BracketRight",
+      mute: "Ctrl+Alt+M",
+      "fav-song": "Ctrl+Alt+F",
+      "save-show": "Ctrl+Alt+S",
+      random: "Ctrl+Alt+R",
+    },
+  }));
+
+  assert.deepEqual(read.global, DEFAULT_GLOBAL);
+  assert.equal(read.needsSave, true);
+  assert.equal(JSON.parse(serializeShortcuts(read)).v, 2);
+});
+
+test("v1 migration preserves safe custom bindings and never creates a clash", () => {
+  const read = parseStored(JSON.stringify({
+    v: 1,
+    global: {
+      "prev-episode": "Ctrl+Alt+BracketLeft",
+      "next-episode": "Ctrl+Alt+BracketRight",
+      mute: "Ctrl+Shift+F6",
+      "fav-song": "Super+F",
+      "save-show": "Alt+S",
+      random: "Ctrl+Alt+R",
+    },
+  }));
+
+  // The custom mute binding owns F6, so the migrated previous-episode action clears.
+  assert.equal(read.global["prev-episode"], null);
+  assert.equal(read.global["next-episode"], "Ctrl+Shift+F7");
+  assert.equal(read.global.mute, "Ctrl+Shift+F6");
+  assert.equal(read.global["fav-song"], "Super+F");
+  // Alt-only was unsafe but was never one of the Ctrl+Alt bindings eligible to migrate.
+  assert.equal(read.global["save-show"], null);
+  assert.equal(read.global.random, "Ctrl+Shift+F11");
+  assert.deepEqual(duplicates(read.global), []);
+});
+
+test("v2 records never revive a text-entry global binding", () => {
+  const read = parseStored(JSON.stringify({
+    v: 2,
+    global: {
+      mute: "Alt+M",
+      "save-show": "Ctrl+Alt+S",
+      random: "Ctrl+Shift+F12",
+    },
+  }));
+
+  assert.equal(read.global.mute, null);
+  assert.equal(read.global["save-show"], null);
+  assert.equal(read.global.random, "Ctrl+Shift+F12");
+  assert.equal(read.needsSave, false);
 });
 
 test("settings written before the master switch existed read as on", () => {

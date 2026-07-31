@@ -13,10 +13,13 @@ import {
   scheduledArchiveEndReached,
 } from "./archive-timing";
 import {
+  AUDITION_FADE_SEC,
   auditionFadeInGain,
   auditionFadeOutGain,
+  transitionFadeOutGain,
 } from "./audition-fade";
 import { isAbortError, PlaybackTransitions } from "./playback-transition";
+import { shouldRetryStaleSource, staleResumeAt } from "./stale-source";
 import { trackMarkSeconds } from "./track-playback";
 import { normalizeVolume } from "./volume";
 
@@ -87,10 +90,20 @@ class Player {
   private lastTickTime = 0;
   private pendingSeek: number | null = null;
   private completionHandled = false;
+
+  // Bookkeeping for the stale-source self-heal (see `beginStaleSourceRetry`).
+  private sourceEpisodeId: number | null = null;
+  private sourceLocal = false;
+  private sourceGeneration = 0;
+  private staleRetryEpisodeId: number | null = null;
+  private staleRetryActive = false;
   private fadeGain = 1;
   private fadeFrame: number | null = null;
-  private fadeMode: "in" | "out" | null = null;
+  private fadeMode: "in" | "out" | "live-out" | null = null;
   private fadeInPending = false;
+  private liveFadePromise: Promise<boolean> | null = null;
+  private liveFadeResolve: ((completed: boolean) => void) | null = null;
+  private liveFadeTimer: ReturnType<typeof setTimeout> | null = null;
 
   current = $derived(this.queueIndex >= 0 ? this.queue[this.queueIndex] : null);
 
@@ -140,7 +153,7 @@ class Player {
     el.addEventListener("play", () => {
       this.playing = true;
       this.lastTickTime = performance.now();
-      if (!this.live && this.fadeInPending) {
+      if (this.fadeInPending) {
         this.fadeInPending = false;
         this.startFadeIn();
       } else {
@@ -171,6 +184,7 @@ class Player {
     });
     el.addEventListener("error", () => {
       if (el.src) {
+        if (this.beginStaleSourceRetry(el)) return;
         this.error = this.live
           ? "Live stream unavailable. Try again shortly."
           : "Audio failed to load. Archive may be unavailable.";
@@ -178,6 +192,92 @@ class Player {
       this.loading = false;
       this.playing = false;
     });
+  }
+
+  /**
+   * One forced re-resolve per episode when the media element rejects an archive source.
+   * WFMU rolls its 128k mp3s off mp3archives.wfmu.org after a few weeks and its own player
+   * falls back to the permanent S3 mp4, which leaves our cached URL answering 404. Re-scraping
+   * the AccuPlayer page picks up the new backend and playback resumes where it stopped.
+   *
+   * Returns true when a retry took over the failure. Live streams, local downloads and a
+   * second failure on the same episode fall through to the error message instead.
+   */
+  private beginStaleSourceRetry(el: HTMLAudioElement): boolean {
+    const episodeId = this.sourceEpisodeId;
+    const retry = shouldRetryStaleSource({
+      live: this.live !== null,
+      local: this.sourceLocal,
+      sourceEpisodeId: episodeId,
+      retriedEpisodeId: this.staleRetryEpisodeId,
+      currentEpisodeId: this.current?.episode.id ?? null,
+      sourceIsCurrent: this.transitions.isCurrent(this.sourceGeneration),
+    });
+    if (!retry || episodeId === null) return false;
+    this.staleRetryEpisodeId = episodeId;
+    this.staleRetryActive = true;
+    void this.retryStaleSource(el, episodeId, this.sourceGeneration);
+    return true;
+  }
+
+  private async retryStaleSource(
+    el: HTMLAudioElement,
+    episodeId: number,
+    generation: number,
+  ) {
+    const item = this.current;
+    const resumeAt = staleResumeAt(
+      el.currentTime,
+      this.pendingSeek,
+      this.offset,
+      INTRO_LEAD_IN_SEC,
+    );
+    this.loading = true;
+    this.playing = false;
+    let reloaded = false;
+    try {
+      const src = await api.resolveAudio(episodeId, true);
+      if (!this.transitions.isCurrent(generation)) return;
+      this.error = null;
+      this.offset = src.offset_sec ?? 0;
+      this.sourceLocal = src.local;
+      this.pendingSeek = resumeAt;
+      el.src = src.local ? convertFileSrc(src.url) : src.url;
+      reloaded = true;
+      await el.play();
+      if (!this.transitions.isCurrent(generation) || !item) return;
+      this.afterPlaybackStarted(item, generation);
+    } catch (e) {
+      if (!this.transitions.isCurrent(generation)) return;
+      // The replacement source failing is already reported by the error listener, which by
+      // then has spent this episode's retry. Anything else is ours to surface.
+      if (!reloaded || !el.error) this.error = String(e);
+      this.playing = false;
+    } finally {
+      this.staleRetryActive = false;
+      if (this.transitions.isCurrent(generation)) this.loading = false;
+    }
+  }
+
+  /** Session bookkeeping and lazy playlist load, once audio is actually rolling. */
+  private afterPlaybackStarted(item: QueueItem, generation: number) {
+    this.startSession(item.episode);
+    // Playlist loads lazily after playback starts (may hit network).
+    api
+      .getPlaylist(item.episode.id)
+      .then((playlist) => {
+        if (
+          this.transitions.isCurrent(generation) &&
+          this.current?.episode.id === item.episode.id
+        ) {
+          this.tracks = playlist.tracks;
+          this.broadcastDuration = playlist.broadcast_duration_sec;
+          item.episode.broadcast_duration_sec = playlist.broadcast_duration_sec;
+          this.updateEndFade();
+          this.finishAtScheduledEndIfNeeded();
+        }
+      })
+      .catch(() => {});
   }
 
   private accumulateListen() {
@@ -274,10 +374,12 @@ class Player {
     const generation = this.transitions.start(`archive:${item.episode.id}`);
     this.error = null;
     this.loading = true;
+    this.clearLiveStatusPolling();
+    await this.fadeOutLive();
+    if (!this.transitions.isCurrent(generation)) return;
     this.finishSession(false);
     this.audio.pause();
     this.playing = false;
-    this.clearLiveStatusPolling();
     this.tracks = [];
     this.currentTime = 0;
     this.mediaDuration = 0;
@@ -290,7 +392,11 @@ class Player {
     this.livePlaylistLoading = false;
     this.livePlaylistError = null;
     this.liveTrackIndex = -1;
+    this.sourceEpisodeId = null;
+    this.staleRetryEpisodeId = null;
+    this.staleRetryActive = false;
     this.prepareFadeIn();
+    let installed = false;
     try {
       const src = await api.resolveAudio(item.episode.id);
       if (!this.transitions.isCurrent(generation)) return;
@@ -306,33 +412,25 @@ class Player {
           : startSec !== null
             ? startSec
             : Math.max(0, this.offset - INTRO_LEAD_IN_SEC);
+      this.sourceEpisodeId = item.episode.id;
+      this.sourceLocal = src.local;
+      this.sourceGeneration = generation;
       this.audio.src = url;
+      installed = true;
       await this.audio.play();
       if (!this.transitions.isCurrent(generation)) return;
-      this.startSession(item.episode);
-      // Playlist loads lazily after playback starts (may hit network).
-      api
-        .getPlaylist(item.episode.id)
-        .then((playlist) => {
-          if (
-            this.transitions.isCurrent(generation) &&
-            this.current?.episode.id === item.episode.id
-          ) {
-            this.tracks = playlist.tracks;
-            this.broadcastDuration = playlist.broadcast_duration_sec;
-            item.episode.broadcast_duration_sec = playlist.broadcast_duration_sec;
-            this.updateEndFade();
-            this.finishAtScheduledEndIfNeeded();
-          }
-        })
-        .catch(() => {});
+      this.afterPlaybackStarted(item, generation);
     } catch (e) {
       if (!this.transitions.isCurrent(generation)) return;
+      // A failure of the source we just installed belongs to the `error` listener, which may be
+      // re-resolving a stale URL right now. Don't clobber its message or its retry with the
+      // play() rejection. Failures before that (a dead resolve) are still ours to report.
+      if (installed && this.audio?.error) return;
       this.error = String(e);
       this.playing = false;
     } finally {
       if (this.transitions.isCurrent(generation)) {
-        this.loading = false;
+        if (!this.staleRetryActive) this.loading = false;
         this.transitions.settle(generation);
       }
     }
@@ -349,10 +447,13 @@ class Player {
     }
     if (request.action === "coalesce") return;
     const generation = request.generation;
-    this.finishSession(false);
-    this.clearLiveStatusPolling();
     this.error = null;
     this.loading = true;
+    await this.fadeOutLive();
+    if (!this.transitions.isCurrent(generation)) return;
+    this.finishSession(false);
+    this.clearLiveStatusPolling();
+    this.audio.pause();
     this.queue = [];
     this.queueIndex = -1;
     this.tracks = [];
@@ -368,7 +469,9 @@ class Player {
     this.livePlaylistError = null;
     this.livePlaylistLoading = true;
     this.live = stream;
-    this.resetFade();
+    this.sourceEpisodeId = null;
+    this.staleRetryActive = false;
+    this.prepareFadeIn();
     try {
       this.audio.src = stream.url;
       void this.refreshLiveStatus(stream, generation, true);
@@ -383,6 +486,7 @@ class Player {
       this.error = String(e);
       this.playing = false;
       this.livePlaylistLoading = false;
+      this.resetFade();
     } finally {
       if (this.transitions.isCurrent(generation)) {
         this.loading = false;
@@ -510,8 +614,14 @@ class Player {
 
   toggle() {
     if (!this.audio || !this.audio.src) return;
-    if (this.audio.paused) this.resumeAudio();
-    else this.audio.pause();
+    if (this.audio.paused) {
+      if (this.live) this.prepareFadeIn();
+      this.resumeAudio();
+    } else {
+      // Clicks, keyboard shortcuts and media controls pause immediately. Live fade-out
+      // is reserved for a source change, where there is new audio to hand off to.
+      this.audio.pause();
+    }
   }
 
   private resumeAudio() {
@@ -525,6 +635,7 @@ class Player {
     void this.audio.play().catch((error) => {
       this.error = String(error);
       this.playing = false;
+      if (this.live) this.resetFade();
     });
   }
 
@@ -551,8 +662,26 @@ class Player {
 
   private stopFadeAnimation() {
     if (this.fadeFrame !== null) cancelAnimationFrame(this.fadeFrame);
+    if (this.liveFadeTimer !== null) clearTimeout(this.liveFadeTimer);
     this.fadeFrame = null;
     this.fadeMode = null;
+    this.liveFadeTimer = null;
+    this.liveFadePromise = null;
+    const resolve = this.liveFadeResolve;
+    this.liveFadeResolve = null;
+    resolve?.(false);
+  }
+
+  private finishLiveFade(completed: boolean) {
+    if (this.fadeFrame !== null) cancelAnimationFrame(this.fadeFrame);
+    if (this.liveFadeTimer !== null) clearTimeout(this.liveFadeTimer);
+    this.fadeFrame = null;
+    this.fadeMode = null;
+    this.liveFadeTimer = null;
+    this.liveFadePromise = null;
+    const resolve = this.liveFadeResolve;
+    this.liveFadeResolve = null;
+    resolve?.(completed);
   }
 
   private resetFade() {
@@ -600,6 +729,49 @@ class Player {
       }
     };
     frame();
+  }
+
+  private fadeOutLive(): Promise<boolean> {
+    if (!this.live || !this.audio || this.audio.paused) {
+      return Promise.resolve(true);
+    }
+    if (this.fadeMode === "live-out" && this.liveFadePromise) {
+      return this.liveFadePromise;
+    }
+
+    this.stopFadeAnimation();
+    const startedAt = performance.now();
+    const startingGain = this.fadeGain;
+    this.fadeMode = "live-out";
+    this.liveFadePromise = new Promise<boolean>((resolve) => {
+      this.liveFadeResolve = resolve;
+      const frame = (now: number) => {
+        if (this.fadeMode !== "live-out") return;
+        if (!this.audio || this.audio.paused || !this.live) {
+          this.finishLiveFade(true);
+          return;
+        }
+        const gain = transitionFadeOutGain(
+          (now - startedAt) / 1000,
+          startingGain,
+        );
+        this.setFadeGain(gain);
+        if (gain > 0) {
+          this.fadeFrame = requestAnimationFrame(frame);
+        } else {
+          this.finishLiveFade(true);
+        }
+      };
+      this.fadeFrame = requestAnimationFrame(frame);
+      // requestAnimationFrame can pause in a minimized webview. The timeout keeps
+      // media-key pauses and source switches bounded when the window is hidden.
+      this.liveFadeTimer = setTimeout(() => {
+        if (this.fadeMode !== "live-out") return;
+        this.setFadeGain(0);
+        this.finishLiveFade(true);
+      }, AUDITION_FADE_SEC * 1000);
+    });
+    return this.liveFadePromise;
   }
 
   private updateEndFade() {

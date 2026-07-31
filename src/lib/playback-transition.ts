@@ -3,7 +3,11 @@ export type LiveRequest =
   | { action: "toggle"; generation: number }
   | { action: "coalesce"; generation: number };
 
-/** Small synchronous gate around the player's async media/API transitions. */
+/**
+ * Small synchronous gate around the player's async media/API transitions.
+ * Same-source requests stay synchronous toggles, so pausing never becomes a
+ * delayed source transition.
+ */
 export class PlaybackTransitions {
   private generation = 0;
   private source: string | null = null;
@@ -51,4 +55,3 @@ export function isAbortError(error: unknown): boolean {
       (error as { name?: unknown }).name === "AbortError")
   );
 }
-

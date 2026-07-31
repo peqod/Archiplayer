@@ -3,6 +3,7 @@ import {
   AUDITION_FADE_SEC,
   auditionFadeInGain,
   auditionFadeOutGain,
+  transitionFadeOutGain,
 } from "../src/lib/audition-fade.ts";
 
 function test(name, body) {
@@ -29,4 +30,13 @@ test("audition ending ramps down over the final 1.5 seconds", () => {
 test("unknown end timing leaves playback at full gain", () => {
   assert.equal(auditionFadeOutGain(10, 0), 1);
   assert.equal(auditionFadeOutGain(10, Infinity), 1);
+});
+
+test("live source transitions ramp their current gain to silence over 1.5 seconds", () => {
+  assert.equal(transitionFadeOutGain(0), 1);
+  assert.equal(transitionFadeOutGain(0.75), 0.5);
+  assert.equal(transitionFadeOutGain(1.5), 0);
+  assert.equal(transitionFadeOutGain(3), 0);
+  assert.equal(transitionFadeOutGain(0, 0.4), 0.4);
+  assert.equal(transitionFadeOutGain(0.75, 0.4), 0.2);
 });

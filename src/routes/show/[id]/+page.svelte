@@ -62,8 +62,8 @@
     }
   }
 
-  // Crossing a responsive breakpoint restacks the player header and reflows the
-  // episode rows (grid at <=760px), changing every row height. The scroll offset
+  // Crossing 760px reflows the episode rows into their compact grid, changing every
+  // row height. The scroll offset
   // that had the playhead centred now points elsewhere, so recompute it. Same
   // episode, so this skips the centerRequestedEpisode guard on purpose.
   function recenterPlayhead() {
@@ -71,8 +71,9 @@
     if (!episodeId) return;
     // Recompute after the reflow flushes so scrollIntoView reads the new heights.
     requestAnimationFrame(() => {
-      const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-      centerEpisodeRow(episodeListEl, episodeId, reducedMotion);
+      // Responsive compensation is corrective layout, not navigation. It should
+      // settle in this frame instead of visibly scrolling after the resize ends.
+      centerEpisodeRow(episodeListEl, episodeId, true);
     });
   }
 
@@ -129,9 +130,7 @@
       }
     });
     // Recentre the playhead whenever a layout breakpoint flips under a resize.
-    const breakpoints = ["(max-width: 760px)", "(max-width: 420px)"].map((q) =>
-      window.matchMedia(q),
-    );
+    const breakpoints = [window.matchMedia("(max-width: 760px)")];
     const onBreakpoint = () => recenterPlayhead();
     for (const mq of breakpoints) mq.addEventListener("change", onBreakpoint);
 

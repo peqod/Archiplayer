@@ -5,6 +5,7 @@
     accelFromEvent,
     accelLabel,
     duplicates,
+    globalBindingIssue,
     type ActionId,
     type Scope,
   } from "$lib/shortcuts";
@@ -46,11 +47,17 @@
     const accel = accelFromEvent(e);
     // A modifier on its own is on the way to a binding: keep waiting for the key.
     if (!accel) return;
+    const issue = armed.scope === "global" ? globalBindingIssue(accel) : null;
+    if (issue === "text-entry") {
+      hint = "Alt and Ctrl + Alt are reserved for typing characters. Use Ctrl without Alt, Win/Command, or a media key.";
+      return;
+    }
+    if (issue === "needs-system-modifier") {
+      hint = `${accelLabel(accel) || "That key"} needs Ctrl (without Alt) or Win/Command to work outside the app.`;
+      return;
+    }
     if (!shortcuts.bind(armed.scope, armed.id, accel)) {
-      hint =
-        armed.scope === "global"
-          ? `${accelLabel(accel) || "That key"} needs Ctrl, Alt or Win to work outside the app.`
-          : "That key cannot be used as a shortcut.";
+      hint = "That key cannot be used as a shortcut.";
       return;
     }
     disarm();
@@ -138,7 +145,7 @@
       Every key is handed back while this is off, including the ones that work outside the app.
     {:else}
       “In app” keys only fire while Archiplayer has focus. “Anywhere” keys are taken from
-      the whole system, so they need Ctrl, Alt or Win. Media keys work on their own.
+      the whole system, so they need Ctrl without Alt, or Win/Command. Media keys work on their own.
     {/if}
   </p>
 

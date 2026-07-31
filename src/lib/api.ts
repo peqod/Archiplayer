@@ -230,8 +230,10 @@ export const api = {
     }),
   getLivePage: (streamId: string, refresh = false) =>
     invoke<LivePage>("get_live_page", { streamId, refresh }),
-  resolveAudio: (episodeId: number) =>
-    invoke<AudioSource>("resolve_audio", { episodeId }),
+  // `force` discards the cached archive URL and re-scrapes it, for when the cached one
+  // has gone dead (see the self-heal path in player.svelte.ts).
+  resolveAudio: (episodeId: number, force = false) =>
+    invoke<AudioSource>("resolve_audio", { episodeId, force }),
   toggleFavourite: (kind: "show" | "episode" | "track", refId: string) =>
     invoke<boolean>("toggle_favourite", { kind, refId }),
   listFavourites: () => invoke<Favourites>("list_favourites"),

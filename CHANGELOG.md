@@ -7,6 +7,31 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Releases before 0.4.0 predate this
 file; their notes are on the [releases page](https://github.com/peqod/Archiplayer/releases).
 
+## [Unreleased]
+
+## [0.4.5] - 2026-07-31
+
+### Added
+
+- Long show and song titles that do not fit the player scroll past at a steady reading speed
+  instead of being cut off.
+
+### Fixed
+
+- Episodes that once played and later stopped loading now recover on their own. WFMU retires
+  its 128k mp3s after a few weeks and falls back to a permanent archive file, so a remembered
+  address goes dead; playback and downloads now look the address up again and resume where
+  they left off.
+- System-wide shortcuts no longer capture Ctrl+Alt/AltGr character input on international
+  keyboard layouts. Legacy Ctrl+Alt defaults migrate to Ctrl+Shift+F6 through F11, and the
+  shortcut picker says which chords cannot be taken system-wide and why.
+- Precision seeking now follows how wide the seek bar actually is, so it stays available in
+  window shapes where the old viewport breakpoint switched it off.
+- Switching away from a live stream fades it out instead of cutting, and pressing play on the
+  source already loaded stays an immediate pause/resume rather than a delayed reload.
+- The episode list no longer drifts after a window resize: the corrective scroll settles in
+  the same frame rather than animating.
+
 ## [0.4.1] - 2026-07-27
 
 ### Fixed

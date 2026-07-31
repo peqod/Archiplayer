@@ -51,12 +51,13 @@ Profile, **Keyboard shortcuts** sets both tiers, and one switch turns the system
 
 | Tier | Default bindings |
 |---|---|
-| In the app | `Space` play/pause, `J`/`K` seek, `,`/`.` previous/next, `M` mute, `F` favourite, `S` share, `R` random show |
-| System-wide | `Ctrl+Alt+` `[` `]` seek, `M` mute, `F` favourite, `S` share, `R` random show |
+| In the app | `Space` play/pause, `J`/`K` previous/next song, `,`/`.` previous/next episode, `M` mute, `F` favourite, `S` save episode, `R` random show |
+| System-wide | `Ctrl+Shift+F6` through `Ctrl+Shift+F11`: previous/next episode, mute, favourite, save episode, and random show |
 
 Bindings record the physical key, so one binding is the same key on every layout. A system-wide
-binding must carry a modifier or be a media key. Transport stays on the OS media keys through
-`mediaSession`, which a global grab would otherwise starve.
+binding must use Ctrl without Alt, Win/Command, or a media key. Ctrl+Alt and Alt-only bindings
+are reserved for text entry on international keyboard layouts. Transport stays on the OS media
+keys through `mediaSession`, which a global grab would otherwise starve.
 
 ## Build from source
 
