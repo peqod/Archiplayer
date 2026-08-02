@@ -575,9 +575,13 @@
     border-color: var(--c-accent);
     color: var(--c-accent);
   }
+  /* minmax(0, …), not 1fr: a bare 1fr floors at the column's min-content, so opening
+     or closing a fold changed what each column demanded and both halves snapped to a
+     new width. With the floor at zero the widths are a pure function of the container. */
   .cols {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: start;
     gap: 32px;
     margin-top: 10px;
   }
@@ -588,6 +592,7 @@
   }
   .stat-tiles {
     display: flex;
+    flex-wrap: wrap;
     gap: 12px;
     margin: 10px 0;
   }
@@ -595,7 +600,8 @@
     background: var(--c-surface);
     border-radius: 10px;
     padding: 14px 18px;
-    min-width: 110px;
+    flex: 1 1 110px;
+    min-width: 0;
   }
   .stat-num {
     font-size: 22px;
@@ -616,6 +622,13 @@
     display: flex;
     justify-content: space-between;
     gap: 12px;
+    min-width: 0;
+  }
+  /* The column can no longer widen to fit, so a long unbroken title has to break. */
+  .rank li > a,
+  .rank li > span:not(.rank-meta) {
+    min-width: 0;
+    overflow-wrap: anywhere;
   }
   .rank-meta {
     color: var(--c-dim);
@@ -626,6 +639,7 @@
     display: flex;
     align-items: center;
     gap: 10px;
+    min-width: 0;
     background: var(--c-surface);
     border-radius: 8px;
     padding: 7px 10px;

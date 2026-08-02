@@ -1700,10 +1700,12 @@
       width: min(100%, var(--transport-width));
       margin-inline: auto;
     }
+    /* The transport column itself stays centred (.p-info above); its metadata rows
+       read from the left, same as the wide player. */
     .p-title,
     .p-track {
       width: 100%;
-      text-align: center;
+      text-align: left;
     }
     .pbtn.skip {
       font-size: var(--mini-skip-font);

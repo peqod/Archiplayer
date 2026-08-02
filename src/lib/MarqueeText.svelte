@@ -82,7 +82,10 @@
     display: block;
     min-width: 0;
     overflow: hidden;
-    flex: 1 1 auto;
+    /* Shrink-wrap, never stretch: the row packs left, so whatever follows the text
+       (air date, queue counter) sits right next to it instead of at the far edge.
+       A long title still shrinks, so the clip-and-scroll measurement is unchanged. */
+    flex: 0 1 auto;
     white-space: nowrap;
   }
   .track,
