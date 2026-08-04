@@ -724,23 +724,33 @@ pub async fn resolve_audio(
         }
     };
 
-    // Resolve the direct audio URL via the AccuPlayer page (works for both the
-    // mp3archives.wfmu.org and s3.amazonaws.com/arch.wfmu.org backends, old and new).
-    // The same page carries the archive pre-roll offset, so capture it here too.
-    let player_html = state
+    // Resolve the direct audio URL via the AccuPlayer page (works for every archive backend,
+    // old and new). The same page carries the archive pre-roll offset, so capture it here too.
+    // A page that fails to load is not the end of the road either: some episodes still resolve
+    // through listen.m3u, so keep the reason and fall through to it rather than giving up.
+    let player = state
         .fetcher
         .get_text(&wfmu::archiveplayer_url(episode_id, archive_id))
-        .await?;
-    let offset_sec = wfmu::parse_archiveplayer_offset(&player_html).unwrap_or(0);
-    let url = match wfmu::parse_archiveplayer(&player_html) {
-        Some(u) => u,
-        None => {
-            // Legacy fallback: some episodes still resolve via listen.m3u.
+        .await;
+    let (offset_sec, resolved) = match &player {
+        Ok(html) => (
+            wfmu::parse_archiveplayer_offset(html).unwrap_or(0),
+            wfmu::parse_archiveplayer(html),
+        ),
+        Err(e) => (0, Err(e.clone())),
+    };
+    let url = match resolved {
+        Ok(u) => u,
+        Err(player_error) => {
+            // Legacy fallback: some episodes still resolve via listen.m3u. When it comes up
+            // empty too, report the AccuPlayer failure: it is the more specific of the two,
+            // naming the dead page or the host the allowlist refused.
             let body = state
                 .fetcher
                 .get_text(&wfmu::m3u_url(episode_id, archive_id))
-                .await?;
-            wfmu::parse_m3u(&body).ok_or("could not resolve an audio URL for this episode")?
+                .await;
+            body.and_then(|b| wfmu::parse_m3u(&b))
+                .map_err(|_| player_error)?
         }
     };
     let url = wfmu::validate_audio_url(&url)?.to_string();

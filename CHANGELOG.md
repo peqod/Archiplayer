@@ -9,6 +9,16 @@ file; their notes are on the [releases page](https://github.com/peqod/Archiplaye
 
 ## [Unreleased]
 
+### Fixed
+
+- Dave Emory episodes from 2019 onward, and every episode of Interpretations, now play and
+  download. WFMU keeps those archives on other servers, and Archiplayer used to refuse any
+  address outside WFMU's own archive, so those episodes failed with "could not resolve an
+  audio URL for this episode".
+- An episode whose archive player page is missing now falls back to the older listen link
+  before giving up, and an episode that still cannot be resolved says why: which page was
+  dead, or which server the audio moved to.
+
 ## [0.4.5] - 2026-07-31
 
 ### Added

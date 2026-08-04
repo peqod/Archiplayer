@@ -11,9 +11,36 @@ const USER_AGENT: &str = concat!(
     env!("CARGO_PKG_VERSION"),
     " (+https://github.com/peqod/Archiplayer)"
 );
-const WFMU_ARCHIVE_HOST: &str = "mp3archives.wfmu.org";
-const AMAZON_S3_HOST: &str = "s3.amazonaws.com";
-const WFMU_S3_BUCKET_PATH: &str = "/arch.wfmu.org/";
+/// A backend WFMU's own AccuPlayer hands out archive audio from. The host must match
+/// exactly; `path_prefix` pins a host WFMU shares with the world to the station's own
+/// storage.
+struct ArchiveBackend {
+    host: &'static str,
+    path_prefix: Option<&'static str>,
+}
+
+const ARCHIVE_BACKENDS: &[ArchiveBackend] = &[
+    ArchiveBackend {
+        host: "mp3archives.wfmu.org",
+        path_prefix: None,
+    },
+    ArchiveBackend {
+        host: "s3.amazonaws.com",
+        path_prefix: Some("/arch.wfmu.org/"),
+    },
+    // Dave Emory (DX) is archived at KFJC from roughly 2019 on, and the AccuPlayer page
+    // links straight out to them. The older half of that show is still on the two hosts above.
+    ArchiveBackend {
+        host: "emory.kfjc.org",
+        path_prefix: None,
+    },
+    // Interpretations (IP) comes off the station's blog file host, which AccuPlayer still
+    // links over plain http; validate_audio_url upgrades that to https.
+    ArchiveBackend {
+        host: "blogfiles.wfmu.org",
+        path_prefix: None,
+    },
+];
 const MIN_REQUEST_GAP: Duration = Duration::from_millis(1000);
 const MIN_STATUS_REQUEST_GAP: Duration = Duration::from_millis(250);
 const MIN_LIVE_PAGE_REQUEST_GAP: Duration = Duration::from_millis(250);
@@ -216,6 +243,12 @@ impl Fetcher {
                     if attempt.previous().len() >= 10 {
                         return attempt.error("too many audio redirects");
                     }
+                    // A hop can only be followed or refused, never rewritten, so the http
+                    // upgrade validate_audio_url performs cannot apply here. Only the URL
+                    // WFMU published gets upgraded; a redirect may not drop to cleartext.
+                    if attempt.url().scheme() != "https" {
+                        return attempt.error("audio redirect must use HTTPS");
+                    }
                     match validate_audio_url(attempt.url().as_str()) {
                         Ok(_) => attempt.follow(),
                         Err(error) => attempt.error(error),
@@ -292,26 +325,37 @@ impl Fetcher {
 }
 
 /// Parse and constrain an upstream-provided audio URL before it reaches the backend client.
-/// WFMU currently serves archives either from its own archive host or from the `arch.wfmu.org`
-/// bucket on Amazon S3. Exact hosts, HTTPS/default port, and the S3 bucket path are required.
+/// The host must be one of `ARCHIVE_BACKENDS`, on the default HTTPS port and with no
+/// credentials. A backend WFMU still links over plain http is upgraded to https rather than
+/// refused: the files are served over both, and the webview CSP would reject the http form.
 pub fn validate_audio_url(raw: &str) -> Result<reqwest::Url, String> {
-    let url = reqwest::Url::parse(raw).map_err(|_| "invalid audio URL".to_string())?;
-    if url.scheme() != "https" {
-        return Err("audio URL must use HTTPS".into());
+    let mut url = reqwest::Url::parse(raw).map_err(|_| "invalid audio URL".to_string())?;
+    if !matches!(url.scheme(), "http" | "https") {
+        return Err("audio URL must use HTTP or HTTPS".into());
+    }
+    let host = url.host_str().unwrap_or_default().to_string();
+    let Some(backend) = ARCHIVE_BACKENDS.iter().find(|b| b.host == host) else {
+        return Err(format!(
+            "audio for this episode is hosted at {host}, which is not an approved WFMU archive backend"
+        ));
+    };
+    if let Some(prefix) = backend
+        .path_prefix
+        .filter(|prefix| !url.path().starts_with(*prefix))
+    {
+        return Err(format!("audio URL on {host} is outside {prefix}"));
+    }
+    if url.scheme() == "http" {
+        url.set_scheme("https")
+            .map_err(|_| "audio URL could not be upgraded to HTTPS".to_string())?;
     }
     if !url.username().is_empty() || url.password().is_some() {
         return Err("audio URL must not contain credentials".into());
     }
+    // Runs after the upgrade: on an http URL with no explicit port this would otherwise
+    // read 80. An explicit port survives the upgrade and is still refused here.
     if url.port_or_known_default() != Some(443) {
         return Err("audio URL must use the default HTTPS port".into());
-    }
-    let allowed = match url.host_str() {
-        Some(WFMU_ARCHIVE_HOST) => true,
-        Some(AMAZON_S3_HOST) => url.path().starts_with(WFMU_S3_BUCKET_PATH),
-        _ => false,
-    };
-    if !allowed {
-        return Err("audio URL host is not an approved WFMU archive backend".into());
     }
     Ok(url)
 }
@@ -1210,18 +1254,23 @@ pub fn parse_playlist_archive(html: &str) -> Option<i64> {
 
 /// Extract the direct audio URL from an AccuPlayer page
 /// (https://wfmu.org/archiveplayer/?show={ep}&archive={arch}).
-/// Works for both storage backends (mp3archives.wfmu.org and s3.amazonaws.com/arch.wfmu.org).
-pub fn parse_archiveplayer(html: &str) -> Option<String> {
+/// Works for every backend in `ARCHIVE_BACKENDS`, old and new.
+///
+/// The error says which of the two ways it failed (no media element on the page, or a URL
+/// the allowlist refused, naming the host), because that message is what the user is shown
+/// when the listen.m3u fallback also comes up empty.
+pub fn parse_archiveplayer(html: &str) -> Result<String, String> {
     static AUDIO: OnceLock<Regex> = OnceLock::new();
     static ANY: OnceLock<Regex> = OnceLock::new();
     let audio = AUDIO.get_or_init(|| Regex::new(r#"<audio[^>]*\bsrc="([^"]+)""#).unwrap());
     let any =
-        ANY.get_or_init(|| Regex::new(r#"src="(https://[^"]+\.(?:mp3|mp4|m4a|aac))""#).unwrap());
+        ANY.get_or_init(|| Regex::new(r#"src="(https?://[^"]+\.(?:mp3|mp4|m4a|aac))""#).unwrap());
     audio
         .captures(html)
         .map(|c| decode_entities(&c[1]))
         .or_else(|| any.captures(html).map(|c| decode_entities(&c[1])))
-        .and_then(|raw| validate_audio_url(&raw).ok())
+        .ok_or_else(|| "the archive player page carries no audio source".to_string())
+        .and_then(|raw| validate_audio_url(&raw))
         .map(Into::into)
 }
 
@@ -1468,11 +1517,12 @@ fn parse_playlist_star_first(html: &str) -> Vec<ParsedTrack> {
 }
 
 /// Resolve the direct MP3 URL from the listen.m3u endpoint.
-pub fn parse_m3u(body: &str) -> Option<String> {
+pub fn parse_m3u(body: &str) -> Result<String, String> {
     body.lines()
         .map(str::trim)
         .find(|l| !l.is_empty() && !l.starts_with('#'))
-        .and_then(|raw| validate_audio_url(raw).ok())
+        .ok_or_else(|| "the listen.m3u response carries no audio source".to_string())
+        .and_then(validate_audio_url)
         .map(Into::into)
 }
 
@@ -1670,17 +1720,34 @@ mod tests {
         let html = r#"<audio autoplay preload="metadata" src="https://s3.amazonaws.com/arch.wfmu.org/BT/bt010116r.mp4"></audio>"#;
         assert_eq!(
             parse_archiveplayer(html).as_deref(),
-            Some("https://s3.amazonaws.com/arch.wfmu.org/BT/bt010116r.mp4")
+            Ok("https://s3.amazonaws.com/arch.wfmu.org/BT/bt010116r.mp4")
         );
         let html2 = r#"<audio src="https://mp3archives.wfmu.org/archive/WA/wa260709.mp3" controls></audio>"#;
         assert_eq!(
             parse_archiveplayer(html2).as_deref(),
-            Some("https://mp3archives.wfmu.org/archive/WA/wa260709.mp3")
+            Ok("https://mp3archives.wfmu.org/archive/WA/wa260709.mp3")
         );
-        assert_eq!(parse_archiveplayer("<p>no audio</p>"), None);
+        assert!(parse_archiveplayer("<p>no audio</p>").is_err());
+        assert!(
+            parse_archiveplayer(r#"<audio src="http://127.0.0.1/private.mp3"></audio>"#).is_err()
+        );
+    }
+
+    #[test]
+    fn archiveplayer_reads_the_off_wfmu_backends() {
+        // Dave Emory (DX) since roughly 2019: WFMU links straight out to KFJC. Served over
+        // https already, and inside a <video>, so the generic src pass carries it.
+        let dx = r#"<video id="audio-player" controls muted autoplay preload="metadata" src="https://emory.kfjc.org/archive/ftr/1400_1499/f-1429.mp3">"#;
         assert_eq!(
-            parse_archiveplayer(r#"<audio src="http://127.0.0.1/private.mp3"></audio>"#),
-            None
+            parse_archiveplayer(dx).as_deref(),
+            Ok("https://emory.kfjc.org/archive/ftr/1400_1499/f-1429.mp3")
+        );
+        // Interpretations (IP): the station's own blog file host, still linked over plain
+        // http. The webview CSP would refuse that form, so it comes back upgraded.
+        let ip = r#"<video id="audio-player" controls muted autoplay preload="metadata" src="http://blogfiles.wfmu.org/ip/David-Shea-MASTER.m4a">"#;
+        assert_eq!(
+            parse_archiveplayer(ip).as_deref(),
+            Ok("https://blogfiles.wfmu.org/ip/David-Shea-MASTER.m4a")
         );
     }
 
@@ -1693,7 +1760,7 @@ mod tests {
         let html = fixture("archiveplayer_165804.html");
         assert_eq!(
             parse_archiveplayer(&html).as_deref(),
-            Some("https://s3.amazonaws.com/arch.wfmu.org/AU/au260627.mp4")
+            Ok("https://s3.amazonaws.com/arch.wfmu.org/AU/au260627.mp4")
         );
         assert_eq!(parse_archiveplayer_offset(&html), Some(432));
     }
@@ -1703,6 +1770,7 @@ mod tests {
         for url in [
             "https://mp3archives.wfmu.org/archive/WA/wa260709.mp3",
             "https://s3.amazonaws.com/arch.wfmu.org/BT/bt010116r.mp4",
+            "https://emory.kfjc.org/archive/ftr/1400_1499/f-1429.mp3",
         ] {
             assert_eq!(
                 validate_audio_url(url).expect("approved backend").as_str(),
@@ -1710,13 +1778,27 @@ mod tests {
             );
         }
 
+        // An approved host reached over plain http is upgraded, not refused: WFMU links
+        // Interpretations that way and the files are served over both schemes.
+        assert_eq!(
+            validate_audio_url("http://blogfiles.wfmu.org/ip/David-Shea-MASTER.m4a")
+                .expect("approved backend")
+                .as_str(),
+            "https://blogfiles.wfmu.org/ip/David-Shea-MASTER.m4a"
+        );
+
         for url in [
-            "http://mp3archives.wfmu.org/archive/show.mp3",
+            "http://127.0.0.1/private.mp3",
             "https://mp3archives.wfmu.org.evil.example/show.mp3",
+            "https://emory.kfjc.org.evil.example/show.mp3",
+            "https://blogfiles.wfmu.org.evil.example/show.m4a",
             "https://s3.amazonaws.com/other-bucket/show.mp3",
             "https://127.0.0.1/private.mp3",
             "https://mp3archives.wfmu.org:444/show.mp3",
+            // The http upgrade must not rescue an explicit non-443 port.
+            "http://mp3archives.wfmu.org:8080/show.mp3",
             "https://user@mp3archives.wfmu.org/show.mp3",
+            "file:///etc/passwd",
         ] {
             assert!(validate_audio_url(url).is_err(), "{url} must be rejected");
         }
@@ -2194,11 +2276,16 @@ function kdb_login_iframeResize(id){ var size_el = document.getElementById(id); 
     #[test]
     fn m3u_body_resolves() {
         assert_eq!(
-            parse_m3u("https://mp3archives.wfmu.org/x/y.mp3\n"),
-            Some("https://mp3archives.wfmu.org/x/y.mp3".to_string())
+            parse_m3u("https://mp3archives.wfmu.org/x/y.mp3\n").as_deref(),
+            Ok("https://mp3archives.wfmu.org/x/y.mp3")
         );
-        assert_eq!(parse_m3u("#EXTM3U\nhttps://a/b.mp3"), None);
-        assert_eq!(parse_m3u("#EXTM3U\nhttp://127.0.0.1/private.mp3"), None);
-        assert_eq!(parse_m3u(""), None);
+        // What /listen.m3u?show=100165 answers for Dave Emory today.
+        assert_eq!(
+            parse_m3u("https://emory.kfjc.org/archive/ftr/1100_1199/f-1169.mp3\n").as_deref(),
+            Ok("https://emory.kfjc.org/archive/ftr/1100_1199/f-1169.mp3")
+        );
+        assert!(parse_m3u("#EXTM3U\nhttps://a/b.mp3").is_err());
+        assert!(parse_m3u("#EXTM3U\nhttp://127.0.0.1/private.mp3").is_err());
+        assert!(parse_m3u("").is_err());
     }
 }
