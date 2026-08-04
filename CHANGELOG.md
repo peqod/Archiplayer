@@ -9,6 +9,22 @@ file; their notes are on the [releases page](https://github.com/peqod/Archiplaye
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-08-04
+
+### Added
+
+- The profile page is rebuilt around what you have actually listened to. A band of listening
+  totals sits on top, with a calendar of listening intensity (one cell per day, a row per
+  year) and a second view that buckets the same time by when the show originally aired, so
+  it answers which era of the station you spend your time in.
+- Shows, episodes, songs and downloads are now four tabs of one list, each searchable,
+  sortable and countable. A show you both favourited and listened to is one row carrying
+  both facts rather than the same show in two places.
+- Favourite songs are playable. The queue holds either a whole episode or a single song
+  inside one, so a list of favourite songs plays end to end, jumping to each song's position
+  in its own archive file.
+- Any row can be shared or favourited in place, without opening it first.
+
 ### Fixed
 
 - Dave Emory episodes from 2019 onward, and every episode of Interpretations, now play and
@@ -18,6 +34,14 @@ file; their notes are on the [releases page](https://github.com/peqod/Archiplaye
 - An episode whose archive player page is missing now falls back to the older listen link
   before giving up, and an episode that still cannot be resolved says why: which page was
   dead, or which server the audio moved to.
+- Both back controls now step backwards on the first press while a queue of songs is
+  playing, instead of restarting the current song. They only rewind at the head of the
+  queue, where there is nothing behind to step to. Whole-episode playback keeps its restart
+  behaviour, since a mis-press there costs an hour.
+- The four transport buttons now grey out exactly when there is nowhere to go, rather than
+  guessing from whether a playlist happens to be loaded.
+- The now-playing line names a queued song from the first frame instead of waiting for its
+  playlist to arrive.
 
 ## [0.4.5] - 2026-07-31
 
