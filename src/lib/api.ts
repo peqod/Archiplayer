@@ -103,9 +103,25 @@ export interface ShowStat {
 }
 export interface EpisodeStat {
   episode_id: number;
+  show_id: string;
   show_name: string;
   air_date: string | null;
   title: string | null;
+  seconds: number;
+  plays: number;
+}
+/** One local calendar day of listening. Silent days are absent, not zero rows. */
+export interface DayStat {
+  day: string; // YYYY-MM-DD, local time
+  seconds: number;
+}
+/**
+ * One month of the *archive*: bucketed on when the show aired, not on when it was played.
+ * The counterpart to DayStat, and the axis that answers "which era of the station do I
+ * listen to". Months with no listening are absent, not zero rows.
+ */
+export interface EraStat {
+  period: string; // YYYY-MM of the original broadcast
   seconds: number;
   plays: number;
 }
@@ -114,6 +130,8 @@ export interface Stats {
   total_sessions: number;
   shows: ShowStat[];
   episodes: EpisodeStat[];
+  days: DayStat[];
+  first_listen: number | null;
 }
 
 export interface Download {
@@ -255,6 +273,7 @@ export const api = {
       duration,
     }),
   getStats: () => invoke<Stats>("get_stats"),
+  getEraStats: () => invoke<EraStat[]>("get_era_stats"),
   listDownloads: () => invoke<DownloadRow[]>("list_downloads"),
   deleteDownload: (episodeId: number) =>
     invoke<void>("delete_download", { episodeId }),

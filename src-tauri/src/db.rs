@@ -75,6 +75,54 @@ pub enum TrackSyncMode {
     AppendObservations,
 }
 
+fn is_iso_date(s: &str) -> bool {
+    let b = s.as_bytes();
+    b.len() == 10
+        && b[..4].iter().all(|c| c.is_ascii_digit())
+        && b[4] == b'-'
+        && b[5..7].iter().all(|c| c.is_ascii_digit())
+        && b[7] == b'-'
+        && b[8..].iter().all(|c| c.is_ascii_digit())
+}
+
+/// "July 9, 2026" — the canonical scraped form, see `wfmu::mdy_from_dotted` — to
+/// "2026-07-09". Already-ISO input passes through, which is what the synthetic live
+/// episodes carry. Anything else returns None rather than guessing: a date we cannot read
+/// is better left out of the archive timeline than filed under the wrong year.
+pub fn air_date_to_iso(raw: &str) -> Option<String> {
+    const MONTHS: [&str; 12] = [
+        "January",
+        "February",
+        "March",
+        "April",
+        "May",
+        "June",
+        "July",
+        "August",
+        "September",
+        "October",
+        "November",
+        "December",
+    ];
+    let raw = raw.trim();
+    if is_iso_date(raw) {
+        return Some(raw.to_string());
+    }
+    let (month, rest) = raw.split_once(' ')?;
+    let (day, year) = rest.split_once(',')?;
+    let m = MONTHS
+        .iter()
+        .position(|name| name.eq_ignore_ascii_case(month))?
+        + 1;
+    let d: u32 = day.trim().parse().ok()?;
+    let y: i32 = year.trim().parse().ok()?;
+    // WFMU's archive starts in the 1990s; anything outside this is a parse accident.
+    if !(1..=31).contains(&d) || !(1900..=2100).contains(&y) {
+        return None;
+    }
+    Some(format!("{y:04}-{m:02}-{d:02}"))
+}
+
 const SCHEMA: &str = r#"
 CREATE TABLE IF NOT EXISTS shows (
     id TEXT PRIMARY KEY,
@@ -232,6 +280,13 @@ impl Db {
                 "played_at",
                 "ALTER TABLE tracks ADD COLUMN played_at INTEGER",
             ),
+            // Sortable twin of the scraped `air_date` text, so the archive era a listen
+            // belongs to can be grouped in SQL instead of parsed month names.
+            (
+                "episodes",
+                "air_date_iso",
+                "ALTER TABLE episodes ADD COLUMN air_date_iso TEXT",
+            ),
         ];
         for (table, column, sql) in migrations {
             let exists = {
@@ -245,7 +300,8 @@ impl Db {
         }
         tx.execute_batch(
             "CREATE UNIQUE INDEX IF NOT EXISTS idx_tracks_episode_source
-             ON tracks(episode_id, source_id) WHERE source_id IS NOT NULL;",
+             ON tracks(episode_id, source_id) WHERE source_id IS NOT NULL;
+             CREATE INDEX IF NOT EXISTS idx_episodes_air_iso ON episodes(air_date_iso);",
         )?;
         // Retroactively flag synthetic live rows created before the is_live column existed,
         // so they stop appearing in the catalog. Real show ids never start with "live-".
@@ -254,8 +310,34 @@ impl Db {
         if version < 4 {
             Self::purge_implausible_tracks(&tx)?;
         }
-        tx.pragma_update(None, "user_version", 5)?;
+        if version < 6 {
+            Self::backfill_air_date_iso(&tx)?;
+        }
+        tx.pragma_update(None, "user_version", 6)?;
         tx.commit()
+    }
+
+    /// Fill `air_date_iso` for episodes scraped before the column existed. Runs inside
+    /// `migrate`'s transaction, so a failure rolls the whole migration back instead of
+    /// leaving half the archive dated.
+    fn backfill_air_date_iso(tx: &rusqlite::Transaction) -> Result<(), rusqlite::Error> {
+        let rows: Vec<(i64, String)> = {
+            let mut stmt = tx.prepare(
+                "SELECT id, air_date FROM episodes
+                 WHERE air_date IS NOT NULL AND air_date_iso IS NULL",
+            )?;
+            let rows = stmt
+                .query_map([], |r| Ok((r.get(0)?, r.get(1)?)))?
+                .collect::<Result<_, _>>()?;
+            rows
+        };
+        let mut update = tx.prepare("UPDATE episodes SET air_date_iso=?2 WHERE id=?1")?;
+        for (id, raw) in rows {
+            if let Some(iso) = air_date_to_iso(&raw) {
+                update.execute(params![id, iso])?;
+            }
+        }
+        Ok(())
     }
 
     /// One-off repair for playlists cached before the parsers learned to reject page chrome.
@@ -406,13 +488,15 @@ impl Db {
         seq: Option<i64>,
     ) -> Result<(), rusqlite::Error> {
         self.conn.execute(
-            "INSERT INTO episodes (id, show_id, air_date, title, archive_id, has_audio, seq)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, COALESCE(?7, 0))
+            "INSERT INTO episodes
+                 (id, show_id, air_date, title, archive_id, has_audio, seq, air_date_iso)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, COALESCE(?7, 0), ?8)
              ON CONFLICT(id) DO UPDATE SET
                show_id=?2, air_date=COALESCE(?3, air_date), title=COALESCE(?4, title),
                archive_id=COALESCE(?5, archive_id),
                has_audio=CASE WHEN ?5 IS NULL THEN has_audio ELSE ?6 END,
-               seq=COALESCE(?7, seq)",
+               seq=COALESCE(?7, seq),
+               air_date_iso=COALESCE(?8, air_date_iso)",
             params![
                 id,
                 show_id,
@@ -420,7 +504,8 @@ impl Db {
                 title,
                 archive_id,
                 archive_id.is_some() as i64,
-                seq
+                seq,
+                air_date.and_then(air_date_to_iso)
             ],
         )?;
         Ok(())
@@ -453,12 +538,14 @@ impl Db {
                 order.push(episode.id);
             }
             tx.execute(
-                "INSERT INTO episodes (id, show_id, air_date, title, archive_id, has_audio, seq)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, 0)
+                "INSERT INTO episodes
+                     (id, show_id, air_date, title, archive_id, has_audio, seq, air_date_iso)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, 0, ?7)
                  ON CONFLICT(id) DO UPDATE SET
                    show_id=?2, air_date=COALESCE(?3, air_date), title=COALESCE(?4, title),
                    archive_id=COALESCE(?5, archive_id),
-                   has_audio=CASE WHEN ?5 IS NULL THEN has_audio ELSE ?6 END",
+                   has_audio=CASE WHEN ?5 IS NULL THEN has_audio ELSE ?6 END,
+                   air_date_iso=COALESCE(?7, air_date_iso)",
                 params![
                     episode.id,
                     show_id,
@@ -466,6 +553,7 @@ impl Db {
                     episode.title,
                     episode.archive_id,
                     episode.archive_id.is_some() as i64,
+                    episode.air_date.as_deref().and_then(air_date_to_iso),
                 ],
             )?;
         }

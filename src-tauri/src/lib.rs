@@ -70,6 +70,7 @@ pub fn run() {
             commands::search,
             commands::record_listen,
             commands::get_stats,
+            commands::get_era_stats,
             commands::list_downloads,
             commands::delete_download,
             commands::export_csv,

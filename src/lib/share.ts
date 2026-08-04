@@ -45,20 +45,52 @@ export async function shareContent(data: ShareData): Promise<void> {
   }
 }
 
-export function shareShow(show: Show): Promise<void> {
+// The *Ref forms take only the fields a share needs, for callers holding a merged row
+// rather than a whole record (the profile lists). The record forms delegate to them.
+export function shareShowRef(
+  id: string,
+  name: string,
+  dj: string | null,
+): Promise<void> {
   return shareContent({
-    title: show.name,
-    text: `${show.name}${show.dj ? " with " + show.dj : ""} on WFMU`,
-    url: wfmuShowUrl(show.id),
+    title: name,
+    text: `${name}${dj ? " with " + dj : ""} on WFMU`,
+    url: wfmuShowUrl(id),
+  });
+}
+
+export function shareShow(show: Show): Promise<void> {
+  return shareShowRef(show.id, show.name, show.dj);
+}
+
+export function shareEpisodeRef(
+  showName: string,
+  episodeId: number,
+  airDate: string | null,
+  title: string | null,
+): Promise<void> {
+  return shareContent({
+    title: showName,
+    text: `${showName} — ${airDate ?? ""}${title ? " · " + title : ""}`,
+    url: wfmuEpisodeUrl(episodeId),
   });
 }
 
 export function shareEpisode(showName: string, ep: Episode): Promise<void> {
-  const url = wfmuEpisodeUrl(ep.id);
+  return shareEpisodeRef(showName, ep.id, ep.air_date, ep.title);
+}
+
+export function shareTrackRef(
+  artist: string | null,
+  title: string | null,
+  showName: string,
+  airDate: string | null,
+  epUrl: string,
+): Promise<void> {
   return shareContent({
-    title: showName,
-    text: `${showName} — ${ep.air_date ?? ""}${ep.title ? " · " + ep.title : ""}`,
-    url,
+    title: `${artist ?? "?"} – ${title ?? "?"}`,
+    text: `${artist ?? "?"} – ${title ?? "?"}\nfrom ${showName}${airDate ? ", " + airDate : ""}`,
+    url: epUrl,
   });
 }
 
@@ -68,9 +100,5 @@ export function shareTrack(
   airDate: string | null,
   epUrl: string,
 ): Promise<void> {
-  return shareContent({
-    title: `${track.artist ?? "?"} – ${track.title ?? "?"}`,
-    text: `${track.artist ?? "?"} – ${track.title ?? "?"}\nfrom ${showName}${airDate ? ", " + airDate : ""}`,
-    url: epUrl,
-  });
+  return shareTrackRef(track.artist, track.title, showName, airDate, epUrl);
 }

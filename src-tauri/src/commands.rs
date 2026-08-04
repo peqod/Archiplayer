@@ -1085,11 +1085,20 @@ pub struct ShowStat {
 #[derive(Serialize)]
 pub struct EpisodeStat {
     pub episode_id: i64,
+    pub show_id: String,
     pub show_name: String,
     pub air_date: Option<String>,
     pub title: Option<String>,
     pub seconds: i64,
     pub plays: i64,
+}
+
+/// One local calendar day of listening, for the activity heatmap and the streak
+/// counters. Days with no listening are absent, not zero rows.
+#[derive(Serialize)]
+pub struct DayStat {
+    pub day: String,
+    pub seconds: i64,
 }
 
 #[derive(Serialize)]
@@ -1098,7 +1107,25 @@ pub struct Stats {
     pub total_sessions: i64,
     pub shows: Vec<ShowStat>,
     pub episodes: Vec<EpisodeStat>,
+    pub days: Vec<DayStat>,
+    pub first_listen: Option<i64>,
 }
+
+/// One month of the *archive*: bucketed on when the show aired, not on when it was played.
+/// The counterpart to `DayStat`, and the only stat that answers "which era of the station
+/// do I listen to". Months with no listening are absent, not zero rows.
+#[derive(Serialize)]
+pub struct EraStat {
+    /// YYYY-MM of the episode's original broadcast.
+    pub period: String,
+    pub seconds: i64,
+    pub plays: i64,
+}
+
+/// Heatmap window plus streak headroom. The calendar stacks up to seven year rows, so the
+/// window has to reach that far back. Still one row per *active* day, so even a heavy
+/// history is a few thousand rows.
+const STATS_DAY_WINDOW_SECS: i64 = 7 * 366 * 24 * 60 * 60;
 
 #[tauri::command]
 pub fn get_stats(state: State<'_, AppState>) -> CmdResult<Stats> {
@@ -1138,7 +1165,7 @@ pub fn get_stats(state: State<'_, AppState>) -> CmdResult<Stats> {
     let mut stmt = db
         .conn
         .prepare(
-            "SELECT e.id, s.name, e.air_date, e.title, SUM(l.seconds), COUNT(l.id)
+            "SELECT e.id, s.id, s.name, e.air_date, e.title, SUM(l.seconds), COUNT(l.id)
              FROM listens l
              JOIN episodes e ON e.id = l.episode_id
              JOIN shows s ON s.id = e.show_id
@@ -1149,23 +1176,85 @@ pub fn get_stats(state: State<'_, AppState>) -> CmdResult<Stats> {
         .query_map([], |r| {
             Ok(EpisodeStat {
                 episode_id: r.get(0)?,
-                show_name: r.get(1)?,
-                air_date: r.get(2)?,
-                title: r.get(3)?,
-                seconds: r.get(4)?,
-                plays: r.get(5)?,
+                show_id: r.get(1)?,
+                show_name: r.get(2)?,
+                air_date: r.get(3)?,
+                title: r.get(4)?,
+                seconds: r.get(5)?,
+                plays: r.get(6)?,
             })
         })
         .map_err(db_err)?
         .filter_map(|r| r.ok())
         .collect();
 
+    // Bucketed in SQLite's local time so a day boundary matches the user's clock, not UTC.
+    let cutoff = crate::db::Db::now().saturating_sub(STATS_DAY_WINDOW_SECS);
+    let mut stmt = db
+        .conn
+        .prepare(
+            "SELECT date(started_at, 'unixepoch', 'localtime') AS d, SUM(seconds)
+             FROM listens WHERE started_at >= ?1 GROUP BY d ORDER BY d",
+        )
+        .map_err(db_err)?;
+    let days: Vec<DayStat> = stmt
+        .query_map([cutoff], |r| {
+            Ok(DayStat {
+                day: r.get(0)?,
+                seconds: r.get(1)?,
+            })
+        })
+        .map_err(db_err)?
+        .filter_map(|r| r.ok())
+        .collect();
+
+    let first_listen: Option<i64> = db
+        .conn
+        .query_row("SELECT MIN(started_at) FROM listens", [], |r| r.get(0))
+        .map_err(db_err)?;
+
     Ok(Stats {
         total_seconds,
         total_sessions,
         shows,
         episodes,
+        days,
+        first_listen,
     })
+}
+
+/// Listening rolled up by the month the show originally aired. Unlike the episode rollup in
+/// `get_stats` there is no LIMIT here: the row count is bounded by how many months of
+/// archive exist, not by how much history the user has.
+#[tauri::command]
+pub fn get_era_stats(state: State<'_, AppState>) -> CmdResult<Vec<EraStat>> {
+    let db = state.db()?;
+    // `s.is_live = 0` is load-bearing. Synthetic live episodes are stamped with today's
+    // date, so without it every live listen piles a false spike onto the current year,
+    // which is the opposite of what this view is for.
+    let mut stmt = db
+        .conn
+        .prepare(
+            "SELECT substr(e.air_date_iso, 1, 7) AS period, SUM(l.seconds), COUNT(l.id)
+             FROM listens l
+             JOIN episodes e ON e.id = l.episode_id
+             JOIN shows s ON s.id = e.show_id
+             WHERE e.air_date_iso IS NOT NULL AND s.is_live = 0
+             GROUP BY period ORDER BY period",
+        )
+        .map_err(db_err)?;
+    let eras: Vec<EraStat> = stmt
+        .query_map([], |r| {
+            Ok(EraStat {
+                period: r.get(0)?,
+                seconds: r.get(1)?,
+                plays: r.get(2)?,
+            })
+        })
+        .map_err(db_err)?
+        .filter_map(|r| r.ok())
+        .collect();
+    Ok(eras)
 }
 
 #[derive(Serialize)]

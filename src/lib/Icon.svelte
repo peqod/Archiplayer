@@ -18,6 +18,8 @@
       | "prev"
       | "next-ep"
       | "prev-ep"
+      | "folder"
+      | "trash"
       | "volume-loud"
       | "volume-quiet"
       | "volume-mute";
@@ -107,6 +109,17 @@
     <g transform="matrix(1,0,0,1,-1916.557289,-340.237111)"><g transform="matrix(0,1,-1,0,2992.441462,-1576.320178)">
       <path d="M2084.576,763.926L2240.555,1075.884L1916.557,1075.884L2072.536,763.926L1916.557,763.926L1916.557,686.554L2240.555,686.554L2240.555,763.926L2084.576,763.926Z" />
     </g></g>
+  </svg>
+{:else if name === "folder"}
+  <svg class="icon icon-{name}" style="width:{box};height:{box}" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M3.75 7.25C3.75 6.42 4.42 5.75 5.25 5.75H8.9C9.38 5.75 9.83 5.98 10.11 6.37L11.1 7.75H18.75C19.58 7.75 20.25 8.42 20.25 9.25V17.25C20.25 18.08 19.58 18.75 18.75 18.75H5.25C4.42 18.75 3.75 18.08 3.75 17.25V7.25Z" />
+  </svg>
+{:else if name === "trash"}
+  <svg class="icon icon-{name}" style="width:{box};height:{box}" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M4.75 6.75H19.25" />
+    <path d="M9.75 6.75V5.5C9.75 4.95 10.2 4.5 10.75 4.5H13.25C13.8 4.5 14.25 4.95 14.25 5.5V6.75" />
+    <path d="M6.9 6.75L7.72 18.1C7.78 18.88 8.43 19.5 9.22 19.5H14.78C15.57 19.5 16.22 18.88 16.28 18.1L17.1 6.75" />
+    <path d="M10.5 10.25V16M13.5 10.25V16" />
   </svg>
 {:else}
   <svg class="icon icon-{name}" style="width:{box};height:{box}" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
