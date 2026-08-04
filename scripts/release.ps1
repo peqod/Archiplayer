@@ -321,4 +321,4 @@ Publish-Draft -Repo $repo -Release $release
 
 Write-Host ""
 Write-Host "=== $tag released ===" -ForegroundColor Green
-Write-Host "Post-release: submit the installer to VirusTotal and drop the permalink into the site (data-vt-todo) and release notes."
+Write-Host "Post-release: submit the installer to VirusTotal, then append the permalink to the release body (gh release edit $tag --notes-file). The site reads it from there; no site edit needed. See RELEASE.md."

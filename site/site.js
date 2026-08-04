@@ -40,6 +40,12 @@
       const sha = assets.find((item) => /SHA256SUMS/i.test(item.name));
       const shaLink = document.querySelector("[data-sha256-link]");
       if (sha && shaLink) shaLink.href = sha.browser_download_url;
+      // The VirusTotal permalink rides in the release body. It cannot be derived here from
+      // the checksum file: api.github.com sends Access-Control-Allow-Origin, the asset
+      // download host does not, so the browser can read this response but not that file.
+      const vt = (release.body || "").match(/https:\/\/www\.virustotal\.com\/gui\/file\/[a-f0-9]{64}/i);
+      const vtLink = document.querySelector("[data-vt-scan]");
+      if (vt && vtLink) vtLink.href = vt[0];
     })
     .catch(() => {
       document.querySelectorAll("[data-asset]").forEach((link) => { link.href = releases; });

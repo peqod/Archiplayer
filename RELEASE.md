@@ -132,7 +132,21 @@ This loads the MSVC/SDK environment and copies an unsigned `Archiplayer_<version
 
 ## Post-release manual actions
 
-- Submit the Windows installer to **VirusTotal**; put the permalink into the release notes and the site's `data-vt-todo` link (`site/index.html`).
+- Submit the Windows installer to **VirusTotal**, then append the permalink to the release body:
+
+  ```powershell
+  $body = (gh release view v0.5.0 --json body --jq .body) -join "`n"
+  $vt = "https://www.virustotal.com/gui/file/<sha256>"
+  $body.TrimEnd() + "`n`nVirusTotal scan: $vt - <n> of <total> engines flag it, ..." |
+    Set-Content -Path notes.txt -Encoding utf8NoBOM -NoNewline
+  gh release edit v0.5.0 --notes-file notes.txt
+  ```
+
+  The site reads that link out of the release body at page load (`site/site.js`, `[data-vt-scan]`), so there is no site edit and no Pages deploy per release. The hardcoded href in `site/index.html` is only the offline fallback; leave it alone unless the API hydration itself breaks.
+
+  The body is generated from `CHANGELOG.md` at build time, so **re-tagging a version regenerates it and drops this line.** Re-append after any re-tag.
+
+- Expect a small number of heuristic hits on an unsigned NSIS bundle (v0.5.0 scored 2/69, Microsoft `Wacatac.B!ml` and SecureAge, both machine-learning verdicts). Dispute them with the text in [`docs/false-positive-submission.md`](docs/false-positive-submission.md). Signing is the only durable fix; see the note at the end of that file.
 - Announce per the launch plan.
 
 ## Reproducibility — honest

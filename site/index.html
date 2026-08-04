@@ -117,7 +117,9 @@
           <div>
             <p class="label">VERIFY YOUR DOWNLOAD</p>
             <h3>Verify what you downloaded.</h3>
-            <p>Compare your file&rsquo;s hash against <a data-sha256-link href="#">SHA256SUMS.txt</a>, or review the <a href="#" data-vt-todo>VirusTotal scan</a>.<!-- TODO: fill the data-vt-todo href with the VirusTotal permalink before launch (user supplies it) --></p>
+            <!-- The data-vt-scan href is the current release's scan; site.js replaces it with
+                 whatever permalink the latest release notes name. -->
+            <p>Compare your file&rsquo;s hash against <a data-sha256-link href="#">SHA256SUMS.txt</a>, or review the <a data-vt-scan href="https://www.virustotal.com/gui/file/440212641a7fcaa02797c776da951ea3a0ed9ce9af6f0824c3fcbc82ad8aaf74">VirusTotal scan</a>. Unsigned installers draw heuristic flags: two of 69 engines flag this build, both machine-learning verdicts with no named malware family.</p>
           </div>
         </div>
       </section>
