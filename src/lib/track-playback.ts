@@ -10,6 +10,27 @@ export function canPlayExactTrack(
 }
 
 /**
+ * Show-relative second at which a queued song ends: the next timecoded playlist entry
+ * strictly after it. Null means "run to the end of the episode", which covers both the
+ * last timecoded song and a playlist that has not loaded yet.
+ *
+ * Matched on `start_sec` rather than on position in the list, so a playlist whose `seq`
+ * and timecodes disagree still yields a boundary ahead of the song rather than behind it.
+ */
+export function segmentEndSec(
+  tracks: { start_sec: number | null }[],
+  startSec: number,
+): number | null {
+  let end: number | null = null;
+  for (const track of tracks) {
+    const at = track.start_sec;
+    if (at === null || at <= startSec) continue;
+    if (end === null || at < end) end = at;
+  }
+  return end;
+}
+
+/**
  * Audio-time seconds of the playlist entries that carry a timecode, deduped, sorted,
  * and clamped to the episode. Playlist `start_sec` is show-relative, so the audio
  * position is `start_sec + offset` — the same translation playback seeking uses.

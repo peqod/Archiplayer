@@ -2,6 +2,7 @@
   // Filter row shared by every tab of the profile list card: scope chips, a search
   // box, a sort select, an optional grouping select, and the live result count.
   import type { GroupBy, Scope, Sort } from "$lib/profile-lists";
+  import { player } from "$lib/player.svelte";
 
   let {
     query = $bindable(""),
@@ -11,6 +12,7 @@
     sortOptions,
     showScope = false,
     showGroup = false,
+    showQueueModes = false,
     count,
     noun,
     placeholder,
@@ -22,6 +24,8 @@
     sortOptions: { value: Sort; label: string }[];
     showScope?: boolean;
     showGroup?: boolean;
+    /** Shuffle and repeat, on the tabs whose lists can be played as a queue. */
+    showQueueModes?: boolean;
     count: number;
     noun: string;
     placeholder: string;
@@ -62,6 +66,25 @@
       {/each}
     </select>
   </label>
+
+  {#if showQueueModes}
+    <!-- Playback modes, not list filters: they sit here because this is where the order
+         of the list is chosen, and shuffle is what overrides that order. -->
+    <div class="chips" role="group" aria-label="Playback">
+      <button
+        class="chip"
+        class:on={player.shuffle}
+        aria-pressed={player.shuffle}
+        title="Play the list in a random order"
+        onclick={() => player.setShuffle(!player.shuffle)}>Shuffle</button>
+      <button
+        class="chip"
+        class:on={player.repeat}
+        aria-pressed={player.repeat}
+        title="Start the list again when it ends"
+        onclick={() => player.setRepeat(!player.repeat)}>Repeat</button>
+    </div>
+  {/if}
 
   {#if showGroup}
     <label class="pick">

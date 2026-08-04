@@ -199,6 +199,7 @@ test("songs group by show or artist, biggest block first", () => {
       played_at: null,
       favourite: true,
     },
+    episode: episode(id, showName, "2026-01-01"),
     show_id: showName,
     show_name: showName,
     air_date: "2026-01-01",
@@ -244,6 +245,7 @@ test("a song with no artist still groups, under a named bucket", () => {
         played_at: null,
         favourite: true,
       },
+      episode: episode(1, "S", null),
       show_id: "S",
       show_name: "Show",
       air_date: null,
@@ -251,6 +253,35 @@ test("a song with no artist still groups, under a named bucket", () => {
     },
   ]);
   assert.deepEqual(groupTracks(rows, "artist").map((g) => g.label), ["Unknown artist"]);
+});
+
+test("a favourite song carries its episode through, so it can be queued", () => {
+  const rows = toTrackRows([
+    {
+      track: {
+        id: 4,
+        episode_id: 42,
+        seq: 0,
+        artist: "Can",
+        title: "Vitamin C",
+        album: null,
+        label: null,
+        comments: null,
+        start_sec: 190,
+        source_id: null,
+        played_at: null,
+        favourite: true,
+      },
+      episode: episode(42, "S", "2026-01-01"),
+      show_id: "S",
+      show_name: "Show",
+      air_date: "2026-01-01",
+      added_at: 1,
+    },
+  ]);
+  assert.equal(rows[0].episode.id, 42);
+  assert.equal(rows[0].episode.has_audio, true);
+  assert.equal(rows[0].startSec, 190);
 });
 
 // -- Calendar ---------------------------------------------------------------

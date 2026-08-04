@@ -12,7 +12,8 @@
   import { confirm, open, save } from "@tauri-apps/plugin-dialog";
   import { revealItemInDir } from "@tauri-apps/plugin-opener";
   import { listen } from "@tauri-apps/api/event";
-  import { onMount } from "svelte";
+  import { onMount, tick, untrack } from "svelte";
+  import { centerRow } from "$lib/episode-scroll";
   import ThemePicker from "$lib/ThemePicker.svelte";
   import ShortcutPicker from "$lib/ShortcutPicker.svelte";
   import { shortcuts } from "$lib/shortcuts.svelte";
@@ -21,7 +22,9 @@
   import ListToolbar from "$lib/ListToolbar.svelte";
   import { LatestRequest } from "$lib/request-gate";
   import { shareShowRef, shareEpisodeRef, shareTrackRef, wfmuShowUrl } from "$lib/share";
-  import { hasExactTrackTimestamp } from "$lib/track-playback";
+  import { canPlayExactTrack, hasExactTrackTimestamp } from "$lib/track-playback";
+  import { playGlyph } from "$lib/play-icon";
+  import { episodeQueueFrom, songQueueFrom } from "$lib/queue-build";
   import {
     applyList,
     groupTracks,
@@ -33,6 +36,7 @@
     type Scope,
     type Sort,
     type TrackGroup,
+    type TrackRowData,
   } from "$lib/profile-lists";
 
   let favs = $state<Favourites | null>(null);
@@ -138,6 +142,9 @@
     tab = next;
     query = "";
     visible = PAGE_SIZE;
+    // Arriving at a tab should bring the playhead into view even if this row was already
+    // followed on the tab that was open before.
+    followedRowId = null;
   }
 
   function onTabKey(e: KeyboardEvent) {
@@ -166,16 +173,69 @@
   const showMax = $derived(Math.max(0, ...shownShows.map((r) => r.seconds)));
   const episodeMax = $derived(Math.max(0, ...shownEpisodes.map((r) => r.seconds)));
 
+  const songBlocks = $derived(groupTracks(shownTracks, songGroup));
+
   // Grouping still obeys the cap: the groups are filled in order until it runs out.
   const trackGroups = $derived.by(() => {
     let left = visible;
     const out: TrackGroup[] = [];
-    for (const g of groupTracks(shownTracks, songGroup)) {
+    for (const g of songBlocks) {
       if (left <= 0) break;
       out.push({ ...g, items: g.items.slice(0, left) });
       left -= Math.min(left, g.items.length);
     }
     return out;
+  });
+
+  const visibleEpisodes = $derived(shownEpisodes.slice(0, visible));
+
+  // What a queue is built from: the whole filtered list, in the order the page renders it,
+  // grouping included. Deliberately *not* the `visible` slice. That cap is pagination, and
+  // queueing only the rendered rows would end the run two songs in whenever the listener
+  // pressed play near the bottom of the page.
+  const orderedTracks = $derived(songBlocks.flatMap((g) => g.items));
+
+  // Which row is sounding. The queue entry is authoritative and is known before the lazily
+  // fetched playlist lands; without one, the playhead's position inside the episode
+  // decides. Live counts too: its tracks are real playlist rows and can be favourites.
+  const playingEpisodeId = $derived(
+    player.current?.episode.id ?? player.liveEpisode?.episode.id ?? null,
+  );
+  const playingTrackId = $derived(
+    player.current?.song?.id ??
+      (player.currentTrackIndex >= 0 ? player.tracks[player.currentTrackIndex].id : null),
+  );
+
+  const isPlayingTrack = (row: TrackRowData) =>
+    row.episodeId === playingEpisodeId && row.id === playingTrackId;
+  const isPlayingEpisode = (row: EpisodeRow) => row.id === playingEpisodeId;
+
+  let episodeListEl = $state<HTMLElement | null>(null);
+  let songListEl = $state<HTMLElement | null>(null);
+  // Deliberately not $state: the effect below writes it, and a reactive read of its own
+  // write would re-run the effect forever.
+  let followedRowId: number | null = null;
+
+  // Follow the queue. `block: "nearest"` means a row already on screen is left exactly
+  // where it is, so this only ever acts when the queue has advanced out of view.
+  $effect(() => {
+    const songs = tab === "songs";
+    const id = songs ? playingTrackId : tab === "episodes" ? playingEpisodeId : null;
+    if (id === null || id === followedRowId) return;
+    const rows: { id: number }[] = songs ? orderedTracks : shownEpisodes;
+    const at = rows.findIndex((r) => r.id === id);
+    if (at < 0) return; // filtered out of this list; nothing to follow
+    // The queue runs past the cap, so the list has to unfold to keep up. Untracked: this
+    // effect writes `visible`, and reading it reactively would make that write re-run it.
+    if (at >= untrack(() => visible)) {
+      visible = Math.ceil((at + 1) / PAGE_SIZE) * PAGE_SIZE;
+    }
+    const list = songs ? songListEl : episodeListEl;
+    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    // After the rows for this change have been rendered, or the row may not exist yet.
+    void tick().then(() => {
+      if (centerRow(list, "data-row-id", id, reducedMotion, "nearest")) followedRowId = id;
+    });
   });
 
   const counts = $derived({
@@ -349,52 +409,41 @@
     }
   }
 
-  // A row from the listening stats has no stored `Episode`, so it is resolved through
-  // its show the same way an offline copy is.
+  // Playing a row queues that row and everything below it, so a list of favourites plays
+  // through like a record rather than stopping after one item.
   async function playEpisodeRow(row: EpisodeRow) {
+    if (isPlayingEpisode(row)) {
+      player.toggle();
+      return;
+    }
     try {
-      if (row.episode) {
-        await player.playEpisode(row.episode, row.showName);
+      const items = episodeQueueFrom(shownEpisodes, row.id);
+      if (items[0]?.episode.id === row.id) {
+        await player.playQueue(items);
         return;
       }
+      // A row from the listening stats has no stored `Episode`, so it is resolved through
+      // its show the same way an offline copy is, then leads the rest of the list.
       const detail = await api.getShow(row.showId);
       const ep = detail.episodes.find((e) => e.id === row.id);
-      if (ep) await player.playEpisode(ep, row.showName);
+      if (ep) await player.playQueue([{ episode: ep, showName: row.showName }, ...items]);
     } catch (e) {
       error = String(e);
     }
   }
 
-  async function playFavEpisode(
-    episodeId: number,
-    showName: string,
-    startTrackSec: number | null = null,
-  ) {
+  async function playFavTrack(row: TrackRowData) {
+    if (!canPlayExactTrack(row.episode.has_audio, row.startSec)) return;
+    if (isPlayingTrack(row)) {
+      player.toggle();
+      return;
+    }
     try {
-      const eps = favs?.episodes.find((f) => f.episode.id === episodeId)?.episode;
-      if (eps) {
-        await player.playEpisode(eps, showName, null, startTrackSec);
-        return;
-      }
-      // favourite track: episode not in favourites list, so fetch it via its show
-      const t = favs?.tracks.find((f) => f.track.episode_id === episodeId);
-      if (t) {
-        const detail = await api.getShow(t.show_id);
-        const ep = detail.episodes.find((e) => e.id === episodeId);
-        if (ep) await player.playEpisode(ep, t.show_name, null, startTrackSec);
-      }
+      const items = songQueueFrom(orderedTracks, row.id);
+      if (items.length) await player.playQueue(items);
     } catch (e) {
       error = String(e);
     }
-  }
-
-  async function playFavTrack(
-    episodeId: number,
-    showName: string,
-    startTrackSec: number | null,
-  ) {
-    if (!hasExactTrackTimestamp(startTrackSec)) return;
-    await playFavEpisode(episodeId, showName, startTrackSec);
   }
 
   async function exportCsv(kind: "favourites" | "listens" | "stats") {
@@ -520,6 +569,7 @@
           bind:scope
           sortOptions={EPISODE_SORTS}
           showScope
+          showQueueModes
           count={shownEpisodes.length}
           noun="episode"
           placeholder="Search episodes" />
@@ -530,17 +580,27 @@
               : "No episode matches that filter."}
           </p>
         {:else}
-          <div class="list">
-            {#each shownEpisodes.slice(0, visible) as row, i (row.id)}
-              <div class="row">
+          <div class="list" bind:this={episodeListEl}>
+            {#each visibleEpisodes as row, i (row.id)}
+              {@const now = isPlayingEpisode(row)}
+              <div
+                class="row"
+                class:now
+                data-row-id={row.id}
+                aria-current={now ? "true" : undefined}
+              >
                 <span class="rank">{i + 1}</span>
                 <button
                   class="play"
                   onclick={() => playEpisodeRow(row)}
                   disabled={row.episode !== null && !row.episode.has_audio}
-                  aria-label={`Play ${row.showName} episode`}
-                  title="Play"
-                ><Icon name="play" /></button>
+                  aria-label={now
+                    ? player.playing ? "Pause episode" : "Resume episode"
+                    : `Play ${row.showName} episode`}
+                  title={now
+                    ? player.playing ? "Pause episode" : "Resume episode"
+                    : "Play"}
+                ><Icon name={playGlyph(now, player.playing)} /></button>
                 <a class="row-main" href={"/show/" + row.showId}>
                   <span class="row-text">
                     <span class="row-name">{row.showName}</span>
@@ -581,6 +641,7 @@
           bind:group={songGroup}
           sortOptions={SONG_SORTS}
           showGroup
+          showQueueModes
           count={shownTracks.length}
           noun="song"
           placeholder="Search artists, songs, shows" />
@@ -591,7 +652,7 @@
               : "No song matches that filter."}
           </p>
         {:else}
-          <div class="list">
+          <div class="list" bind:this={songListEl}>
             {#each trackGroups as group (group.key)}
               {#if group.label}
                 <div class="group-head">
@@ -600,24 +661,37 @@
                 </div>
               {/if}
               {#each group.items as row (row.id)}
-                <div class="row">
+                {@const now = isPlayingTrack(row)}
+                <div
+                  class="row"
+                  class:now
+                  data-row-id={row.id}
+                  aria-current={now ? "true" : undefined}
+                >
                   <button
                     class="play"
-                    onclick={() => playFavTrack(row.episodeId, row.showName, row.startSec)}
-                    disabled={!hasExactTrackTimestamp(row.startSec)}
-                    aria-label={hasExactTrackTimestamp(row.startSec)
-                      ? `Play ${row.artist ?? "unknown artist"}, ${row.title ?? "unknown song"}`
-                      : `Exact-song playback unavailable for ${row.artist ?? "unknown artist"}, ${row.title ?? "unknown song"}: no timestamp`}
-                    title={hasExactTrackTimestamp(row.startSec)
-                      ? `Play at ${fmtTime(row.startSec)}`
-                      : "No timestamp available"}
-                  ><Icon name="play" /></button>
+                    onclick={() => playFavTrack(row)}
+                    disabled={!canPlayExactTrack(row.episode.has_audio, row.startSec)}
+                    aria-label={now
+                      ? player.playing ? "Pause song" : "Resume song"
+                      : canPlayExactTrack(row.episode.has_audio, row.startSec)
+                        ? `Play ${row.artist ?? "unknown artist"}, ${row.title ?? "unknown song"}`
+                        : `Exact-song playback unavailable for ${row.artist ?? "unknown artist"}, ${row.title ?? "unknown song"}: ${hasExactTrackTimestamp(row.startSec) ? "no archived audio" : "no timestamp"}`}
+                    title={now
+                      ? player.playing ? "Pause song" : "Resume song"
+                      : !hasExactTrackTimestamp(row.startSec)
+                        ? "No timestamp available"
+                        : row.episode.has_audio
+                          ? `Play at ${fmtTime(row.startSec)}`
+                          : "No archived audio"}
+                  ><Icon name={playGlyph(now, player.playing)} /></button>
                   <div class="row-main">
                     <span class="row-text">
                       <span class="row-name"><b>{row.artist ?? "?"}</b> / {row.title ?? "?"}</span>
                       <span class="row-sub">
                         {row.showName}, {row.airDate ?? ""}
-                        {#if !hasExactTrackTimestamp(row.startSec)}, no timestamp{/if}
+                        {#if !hasExactTrackTimestamp(row.startSec)}, no timestamp
+                        {:else if !row.episode.has_audio}, no archived audio{/if}
                       </span>
                     </span>
                   </div>
@@ -855,6 +929,12 @@
   }
   .row:hover {
     background: var(--c-surface2);
+  }
+  /* An outline, not a background: `--c-surface2` is already this row's hover state, so a
+     background swap would read as "hovered" rather than "playing". Matches `.ep.current`
+     on the show page. */
+  .row.now {
+    outline: 1px solid var(--c-accent);
   }
   .rank {
     flex: 0 0 22px;

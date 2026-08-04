@@ -10,7 +10,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
-    "test": "npm run test:player && npm run test:episode-scroll && npm run test:random-show && npm run test:frontend-guards && npm run test:track-playback && npm run test:archive-timing && npm run test:audition-fade && npm run test:shortcuts && npm run test:profile-lists",
+    "test": "npm run test:player && npm run test:episode-scroll && npm run test:random-show && npm run test:frontend-guards && npm run test:track-playback && npm run test:archive-timing && npm run test:audition-fade && npm run test:shortcuts && npm run test:profile-lists && npm run test:queue-build",
     "test:player": "node --experimental-strip-types tests/playback-transition.test.mjs",
     "test:episode-scroll": "node --experimental-strip-types tests/episode-scroll.test.mjs",
     "test:random-show": "node --experimental-strip-types tests/random-show.test.mjs",
@@ -20,6 +20,7 @@
     "test:audition-fade": "node --experimental-strip-types tests/audition-fade.test.mjs",
     "test:shortcuts": "node --experimental-strip-types tests/shortcuts.test.mjs",
     "test:profile-lists": "node --experimental-strip-types tests/profile-lists.test.mjs",
+    "test:queue-build": "node --experimental-strip-types tests/queue-build.test.mjs",
     "check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
     "tauri": "tauri"
   },

@@ -47,6 +47,8 @@ export interface EpisodeRow {
 export interface TrackRowData {
   id: number;
   episodeId: number;
+  /** The song's own episode, which is what makes the row queueable and playable. */
+  episode: Episode;
   showId: string;
   showName: string;
   airDate: string | null;
@@ -187,6 +189,7 @@ export function toTrackRows(favs: FavouriteTrack[]): TrackRowData[] {
   return favs.map((f) => ({
     id: f.track.id,
     episodeId: f.track.episode_id,
+    episode: f.episode,
     showId: f.show_id,
     showName: f.show_name,
     airDate: f.air_date,

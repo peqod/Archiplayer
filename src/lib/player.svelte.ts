@@ -19,14 +19,19 @@ import {
   transitionFadeOutGain,
 } from "./audition-fade";
 import { isAbortError, PlaybackTransitions } from "./playback-transition";
+import {
+  nextEpisodeIndex,
+  nextQueueIndex,
+  prevEpisodeIndex,
+  prevQueueIndex,
+  shuffledFrom,
+  type QueueItem,
+} from "./queue-build";
 import { shouldRetryStaleSource, staleResumeAt } from "./stale-source";
-import { trackMarkSeconds } from "./track-playback";
+import { segmentEndSec, trackMarkSeconds } from "./track-playback";
 import { normalizeVolume } from "./volume";
 
-export interface QueueItem {
-  episode: Episode;
-  showName: string;
-}
+export type { QueueItem, QueueSong } from "./queue-build";
 
 export interface LiveEpisode {
   episode: Episode;
@@ -50,6 +55,11 @@ class Player {
 
   queue = $state<QueueItem[]>([]);
   queueIndex = $state(-1);
+  shuffle = $state(false);
+  repeat = $state(false);
+  // The queue in the order it was handed over, kept so turning shuffle back off restores
+  // the list the listener actually chose rather than leaving them with a permutation.
+  private queueSource: QueueItem[] = [];
   // Non-null while a WFMU live channel is playing. The episode is the current live
   // playlist context; audio still comes from the station stream rather than the archive.
   live = $state<LiveStream | null>(null);
@@ -107,6 +117,42 @@ class Player {
 
   current = $derived(this.queueIndex >= 0 ? this.queue[this.queueIndex] : null);
 
+  /** True while the queue is a list of songs rather than a list of whole episodes. */
+  songMode = $derived(!!this.current?.song);
+
+  /**
+   * Audio-time position where the current entry has to stop, or null when the episode's
+   * own end is the boundary. Derived from the loaded playlist, so it is null during a
+   * transition (`loadCurrent` empties `tracks`) and the check below stays inert until
+   * there is something to compare against.
+   */
+  private segmentEnd = $derived.by(() => {
+    const song = this.current?.song;
+    if (this.live || !song) return null;
+    const end = segmentEndSec(this.tracks, song.startSec);
+    return end === null ? null : end + this.offset;
+  });
+
+  /** Where the closing fade belongs: the song's end in song mode, the episode's otherwise. */
+  private fadeEnd = $derived(this.segmentEnd ?? this.duration);
+
+  private episodeIds = $derived(this.queue.map((item) => item.episode.id));
+
+  canPrevTrack = $derived(
+    this.songMode ? this.queue.length > 0 : this.tracks.length > 0,
+  );
+  canNextTrack = $derived(
+    this.songMode
+      ? nextQueueIndex(this.queueIndex, this.queue.length, this.repeat) >= 0
+      : this.tracks.length > 0,
+  );
+  canPrevEpisode = $derived(!!this.current);
+  canNextEpisode = $derived(
+    this.songMode
+      ? nextEpisodeIndex(this.episodeIds, this.queueIndex, this.repeat) >= 0
+      : nextQueueIndex(this.queueIndex, this.queue.length, this.repeat) >= 0,
+  );
+
   currentTrackIndex = $derived.by(() => {
     if (!this.tracks.length) return -1;
     if (this.live) return this.liveTrackIndex;
@@ -132,6 +178,8 @@ class Player {
     let saved: string | null = null;
     try {
       saved = localStorage.getItem("ab2.volume");
+      this.shuffle = localStorage.getItem("ab2.shuffle") === "1";
+      this.repeat = localStorage.getItem("ab2.repeat") === "1";
     } catch {
       /* storage can be unavailable in restricted webviews */
     }
@@ -143,11 +191,13 @@ class Player {
       this.currentTime = el.currentTime;
       this.accumulateListen();
       this.updateEndFade();
+      this.advanceAtSegmentEndIfNeeded();
       this.finishAtScheduledEndIfNeeded();
     });
     el.addEventListener("durationchange", () => {
       this.mediaDuration = el.duration || 0;
       this.updateEndFade();
+      this.advanceAtSegmentEndIfNeeded();
       this.finishAtScheduledEndIfNeeded();
     });
     el.addEventListener("play", () => {
@@ -174,7 +224,7 @@ class Player {
       if (this.completionHandled) return;
       this.completionHandled = true;
       this.finishSession(true);
-      void this.nextEpisode();
+      void this.advanceOne();
     });
     el.addEventListener("loadedmetadata", () => {
       if (this.pendingSeek !== null) {
@@ -351,9 +401,51 @@ class Player {
     startTrackSec: number | null = null,
   ) {
     if (!items.length) return;
-    this.queue = items;
-    this.queueIndex = index;
+    this.queueSource = items;
+    if (this.shuffle && items.length > 1) {
+      // Pin what was clicked at the front, permute the rest: shuffle changes what comes
+      // next, never what the listener just asked for.
+      const pinned = [items[index], ...items.filter((_, i) => i !== index)];
+      this.queue = shuffledFrom(pinned, 0);
+      this.queueIndex = 0;
+    } else {
+      this.queue = items;
+      this.queueIndex = index;
+    }
     await this.loadCurrent(startSec, startTrackSec);
+  }
+
+  setShuffle(on: boolean) {
+    this.shuffle = on;
+    if (on) this.queue = shuffledFrom(this.queue, this.queueIndex);
+    else this.restoreQueueOrder();
+    this.persistQueueModes();
+  }
+
+  setRepeat(on: boolean) {
+    this.repeat = on;
+    this.persistQueueModes();
+  }
+
+  /** Back to the order the queue was built in, with the playhead still on its entry. */
+  private restoreQueueOrder() {
+    const item = this.current;
+    if (!this.queueSource.length || !item) return;
+    const at = this.queueSource.findIndex(
+      (q) => q.episode.id === item.episode.id && (q.song?.id ?? null) === (item.song?.id ?? null),
+    );
+    if (at < 0) return;
+    this.queue = [...this.queueSource];
+    this.queueIndex = at;
+  }
+
+  private persistQueueModes() {
+    try {
+      localStorage.setItem("ab2.shuffle", this.shuffle ? "1" : "0");
+      localStorage.setItem("ab2.repeat", this.repeat ? "1" : "0");
+    } catch {
+      /* the modes still apply for this session */
+    }
   }
 
   async playEpisode(
@@ -403,12 +495,13 @@ class Player {
       const url = src.local ? convertFileSrc(src.url) : src.url;
       this.offset = src.offset_sec ?? 0;
       // Resolve the initial seek (all in audio time):
-      //  • a clicked song → its show-relative timestamp + offset
+      //  • a clicked song, or a song-granular queue entry → its show-relative timestamp + offset
       //  • a resume position → already audio-relative, use as-is
       //  • fresh play → the jingle lead-in, just before the show's playlist zero
+      const trackSec = startTrackSec ?? item.song?.startSec ?? null;
       this.pendingSeek =
-        startTrackSec !== null
-          ? startTrackSec + this.offset
+        trackSec !== null
+          ? trackSec + this.offset
           : startSec !== null
             ? startSec
             : Math.max(0, this.offset - INTRO_LEAD_IN_SEC);
@@ -456,6 +549,7 @@ class Player {
     this.audio.pause();
     this.queue = [];
     this.queueIndex = -1;
+    this.queueSource = [];
     this.tracks = [];
     this.offset = 0;
     this.currentTime = 0;
@@ -628,7 +722,8 @@ class Player {
     if (!this.audio) return;
     if (!this.live && this.completionHandled && this.current) {
       this.completionHandled = false;
-      this.seek(Math.max(0, this.offset - INTRO_LEAD_IN_SEC));
+      // Replay what actually finished: the song for a song entry, the broadcast otherwise.
+      this.seek(this.entryStart(this.current));
       this.startSession(this.current.episode);
       this.prepareFadeIn();
     }
@@ -719,7 +814,7 @@ class Player {
     this.fadeMode = "out";
     const frame = () => {
       if (this.fadeMode !== "out" || !this.audio || this.audio.paused || this.live) return;
-      const gain = auditionFadeOutGain(this.audio.currentTime, this.duration);
+      const gain = auditionFadeOutGain(this.audio.currentTime, this.fadeEnd);
       this.setFadeGain(Math.min(this.fadeGain, gain));
       if (gain > 0) {
         this.fadeFrame = requestAnimationFrame(frame);
@@ -776,7 +871,7 @@ class Player {
 
   private updateEndFade() {
     if (this.live || !this.audio) return;
-    const gain = auditionFadeOutGain(this.currentTime, this.duration);
+    const gain = auditionFadeOutGain(this.currentTime, this.fadeEnd);
     if (gain < 1) {
       if (this.fadeMode !== "out" && !this.audio.paused) this.startFadeOut();
     } else if (
@@ -803,7 +898,23 @@ class Player {
     this.currentTime = this.duration;
     this.finishSession(true);
     this.audio?.pause();
-    void this.nextEpisode();
+    void this.advanceOne();
+  }
+
+  /**
+   * Stop a song entry at its own end and hand over to the next queue entry. Deliberately
+   * not `finishSession(true)`: a song that ends 20% into a broadcast is not a completed
+   * episode, and marking it so would write a bogus `resume_sec` and completion badge.
+   *
+   * `completionHandled` is the same one-shot latch the two episode-end paths use, so
+   * exactly one of the three fires per crossing.
+   */
+  private advanceAtSegmentEndIfNeeded() {
+    if (this.live || this.completionHandled) return;
+    const end = this.segmentEnd;
+    if (end === null || this.currentTime < end) return;
+    this.completionHandled = true;
+    void this.advanceOne();
   }
 
   seekToTrack(track: Track) {
@@ -821,6 +932,12 @@ class Player {
   // Skip to the start of the next timestamped track in the current episode.
   // Track timestamps are show-relative, so add the archive offset when seeking.
   nextTrack() {
+    // In a song queue the next song is the next queue entry, not the next timecode in
+    // this episode: the queue is the list the listener chose.
+    if (this.songMode) {
+      void this.advanceOne("stay");
+      return;
+    }
     if (!this.tracks.length) return;
     for (let i = this.currentTrackIndex + 1; i < this.tracks.length; i++) {
       const s = this.tracks[i].start_sec;
@@ -832,9 +949,21 @@ class Player {
     }
   }
 
-  // Skip to the previous track start. If we're already a few seconds into the
-  // current track, restart it instead (mirrors the prev-episode "restart" feel).
+  // Song queue: step back one entry. Episode: skip to the previous track start, or if
+  // we're already a few seconds into the current track, restart it instead.
   prevTrack() {
+    if (this.songMode) {
+      const item = this.current;
+      if (!item) return;
+      // A playlist steps a whole entry, symmetrically with next. No "restart first" rule
+      // here: next advances on the first press, so back has to retreat on the first press
+      // too. Restarting the song stays available on its row and on the scrubber.
+      const prev = prevQueueIndex(this.queueIndex, this.queue.length, this.repeat);
+      // Nothing before this entry, so the only thing left to go back to is its own start.
+      if (prev >= 0) void this.advanceTo(prev);
+      else this.seek(this.entryStart(item));
+      return;
+    }
     if (!this.tracks.length) return;
     const idx = this.currentTrackIndex;
     const curStart = idx >= 0 ? this.tracks[idx].start_sec : null;
@@ -890,24 +1019,104 @@ class Player {
     if (t) t.favourite = fav;
   }
 
-  async nextEpisode() {
-    if (this.queueIndex < this.queue.length - 1) {
-      this.queueIndex += 1;
+  /** Audio position an entry starts at: its song, or the episode's jingle lead-in. */
+  private entryStart(item: QueueItem): number {
+    return item.song
+      ? item.song.startSec + this.offset
+      : Math.max(0, this.offset - INTRO_LEAD_IN_SEC);
+  }
+
+  /**
+   * One step through the queue. This, not `nextEpisode`, is what the end of a song and
+   * the end of an episode hand over to: in a song queue sorted by artist the next entry
+   * can be an *earlier* song of the episode that just finished, and that has to play.
+   */
+  private async advanceOne(atEnd: "halt" | "stay" = "halt") {
+    const next = nextQueueIndex(this.queueIndex, this.queue.length, this.repeat);
+    if (next < 0) {
+      // Reaching the end by playing stops; being asked for a next that does not exist
+      // leaves what is playing alone.
+      if (atEnd === "halt") this.haltAtQueueEnd();
+      return;
+    }
+    // A shuffled queue that wraps plays a different order the second time round.
+    if (next === 0 && this.shuffle && this.queue.length > 1) {
+      this.queue = shuffledFrom(this.queue, -1);
+    }
+    await this.advanceTo(next);
+  }
+
+  private haltAtQueueEnd() {
+    this.playing = false;
+    // A song entry ends mid-file, where nothing else stops the element.
+    this.audio?.pause();
+  }
+
+  /**
+   * Move to `index`. Two consecutive entries in the same episode are two positions in one
+   * audio file, so that case seeks instead of re-resolving the source: no network, no
+   * reload gap, and the listen session keeps running because it belongs to the episode.
+   */
+  private async advanceTo(index: number) {
+    if (index < 0 || index >= this.queue.length) return;
+    const to = this.queue[index];
+    const sameFile =
+      !this.live &&
+      !!this.audio?.src &&
+      this.sourceEpisodeId === to.episode.id &&
+      this.transitions.isCurrent(this.sourceGeneration) &&
+      !this.staleRetryActive;
+    this.queueIndex = index;
+    if (!sameFile) {
       await this.loadCurrent();
+      return;
+    }
+    // Clear the latch before seeking: the new entry brings a new boundary, and the check
+    // runs on the very next `timeupdate`.
+    this.completionHandled = false;
+    // A mid-episode boundary leaves the session running and this is a no-op; arriving
+    // from the episode's own end means `finishSession` already closed it.
+    this.startSession(to.episode);
+    this.seek(this.entryStart(to));
+    if (this.audio?.paused) {
+      this.prepareFadeIn();
+      this.resumeAudio();
     } else {
-      this.playing = false;
+      // Seeking fires no `play` event, so the opening ramp has to be started by hand.
+      this.stopFadeAnimation();
+      this.setFadeGain(0);
+      this.startFadeIn();
     }
   }
 
+  async nextEpisode() {
+    const next = this.songMode
+      ? nextEpisodeIndex(this.episodeIds, this.queueIndex, this.repeat)
+      : nextQueueIndex(this.queueIndex, this.queue.length, this.repeat);
+    // Nothing to step to: leave what is playing alone. The button is disabled here, so
+    // this is the media-key and shortcut path.
+    if (next < 0) return;
+    await this.advanceTo(next);
+  }
+
   async prevEpisode() {
-    if (this.currentTime > 10) {
-      this.seek(0);
+    const start = this.current ? this.entryStart(this.current) : 0;
+    if (this.songMode) {
+      // Same rule as prev-song: in a playlist, back means back one, on the first press.
+      const prev = prevEpisodeIndex(this.episodeIds, this.queueIndex, this.repeat);
+      if (prev >= 0) await this.advanceTo(prev);
+      else this.seek(start);
       return;
     }
-    if (this.queueIndex > 0) {
-      this.queueIndex -= 1;
-      await this.loadCurrent();
+    // Episode mode keeps the long-standing "restart the broadcast you are deep into"
+    // behaviour: an episode is an hour or more, so a mis-press is expensive.
+    if (this.currentTime - start > 10) {
+      this.seek(start);
+      return;
     }
+    const prev = prevQueueIndex(this.queueIndex, this.queue.length, this.repeat);
+    if (prev >= 0) await this.advanceTo(prev);
+    else this.seek(start);
   }
 
   stop() {
@@ -921,6 +1130,7 @@ class Player {
     }
     this.queue = [];
     this.queueIndex = -1;
+    this.queueSource = [];
     this.live = null;
     this.liveEpisode = null;
     this.liveSong = null;

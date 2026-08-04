@@ -806,6 +806,11 @@ pub struct FavouriteEpisode {
 #[derive(Serialize)]
 pub struct FavouriteTrack {
     pub track: Track,
+    /// The episode the song sits in. Carried so a favourite song can be queued and played
+    /// without a round-trip through `get_show`: playback needs `offset_sec` to turn the
+    /// show-relative timecode into an audio position, and `has_audio` to know it is
+    /// playable at all.
+    pub episode: Episode,
     pub show_id: String,
     pub show_name: String,
     pub air_date: Option<String>,
@@ -899,6 +904,9 @@ pub fn list_favourites(state: State<'_, AppState>) -> CmdResult<Favourites> {
                         },
                     );
                     if let Ok((track, show_id, air_date)) = row {
+                        let Ok(episode) = db.get_episode(track.episode_id) else {
+                            continue;
+                        };
                         let show_name = all_shows
                             .iter()
                             .find(|s| s.id == show_id)
@@ -906,6 +914,7 @@ pub fn list_favourites(state: State<'_, AppState>) -> CmdResult<Favourites> {
                             .unwrap_or_default();
                         tracks.push(FavouriteTrack {
                             track,
+                            episode,
                             show_id,
                             show_name,
                             air_date,

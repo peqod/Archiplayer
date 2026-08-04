@@ -1162,7 +1162,7 @@ mod tests {
             .conn
             .pragma_query_value(None, "user_version", |row| row.get(0))
             .expect("schema version");
-        assert_eq!(version, 5);
+        assert_eq!(version, 6);
         let offset_column: i64 = db
             .conn
             .query_row(

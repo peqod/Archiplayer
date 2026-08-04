@@ -408,6 +408,10 @@
     player.currentTrackIndex >= 0 ? player.tracks[player.currentTrackIndex] : null,
   );
 
+  // What the marquee names. A queued song knows its own artist and title, so the line is
+  // right from the first frame instead of after the playlist fetch lands a second later.
+  const nowPlayingSong = $derived(currentTrack ?? player.current?.song ?? null);
+
   async function bookmarkShow() {
     const ep = player.current?.episode;
     if (!ep) return;
@@ -651,15 +655,15 @@
     <!-- svelte-ignore a11y_media_has_caption -->
     <audio bind:this={audioEl} preload="none"></audio>
     <div class="p-controls">
-      <button class="pbtn" onclick={() => player.prevEpisode()} disabled={!player.current} aria-label="Previous episode or restart" title="Previous episode / restart"><Icon name="prev-ep" /></button>
-      <button class="pbtn" onclick={() => player.prevTrack()} disabled={!player.tracks.length} aria-label="Previous song" title="Previous song"><Icon name="prev" /></button>
+      <button class="pbtn" onclick={() => player.prevEpisode()} disabled={!player.canPrevEpisode} aria-label="Previous episode or restart" title="Previous episode / restart"><Icon name="prev-ep" /></button>
+      <button class="pbtn" onclick={() => player.prevTrack()} disabled={!player.canPrevTrack} aria-label="Previous song" title="Previous song"><Icon name="prev" /></button>
       <button class="pbtn skip" onclick={() => player.skip(-15)} disabled={!player.current} aria-label="Back 15 seconds" title="Back 15 seconds">«15</button>
       <button class="pbtn main" onclick={() => player.toggle()} disabled={!player.current && !player.live} aria-label={playPauseLabel} title={playPauseLabel}>
         {#if player.loading}…{:else}<Icon name={playGlyph(!!player.current || !!player.live, player.playing)} size="22px" />{/if}
       </button>
       <button class="pbtn skip" onclick={() => player.skip(15)} disabled={!player.current} aria-label="Forward 15 seconds" title="Forward 15 seconds">15»</button>
-      <button class="pbtn" onclick={() => player.nextTrack()} disabled={!player.tracks.length} aria-label="Next song" title="Next song"><Icon name="next" /></button>
-      <button class="pbtn" onclick={() => player.nextEpisode()} disabled={!player.current || player.queueIndex >= player.queue.length - 1} aria-label="Next episode" title="Next episode"><Icon name="next-ep" /></button>
+      <button class="pbtn" onclick={() => player.nextTrack()} disabled={!player.canNextTrack} aria-label="Next song" title="Next song"><Icon name="next" /></button>
+      <button class="pbtn" onclick={() => player.nextEpisode()} disabled={!player.canNextEpisode} aria-label="Next episode" title="Next episode"><Icon name="next-ep" /></button>
     </div>
     <div class="p-info">
       {#if player.current}
@@ -692,10 +696,10 @@
             title={currentTrack ? "Star this song" : "No song info yet"}
           ><Icon name="star" filled={currentTrack?.favourite ?? false} /></button>
           <MarqueeText
-            text={currentTrack
-              ? `♪ ${currentTrack.artist ?? "?"} — ${currentTrack.title ?? "?"}`
+            text={nowPlayingSong
+              ? `♪ ${nowPlayingSong.artist ?? "?"} — ${nowPlayingSong.title ?? "?"}`
               : player.error ?? player.current.episode.title ?? ""}
-            tone={!currentTrack && player.error ? "danger" : "default"}
+            tone={!nowPlayingSong && player.error ? "danger" : "default"}
           />
         </div>
         <div class="p-scrub">

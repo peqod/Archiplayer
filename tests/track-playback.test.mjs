@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import {
   canPlayExactTrack,
   hasExactTrackTimestamp,
+  segmentEndSec,
   trackMarkSeconds,
 } from "../src/lib/track-playback.ts";
 
@@ -23,6 +24,30 @@ test("untimestamped tracks never expose exact-song playback", () => {
 
 test("timestamped tracks remain unavailable when the episode has no audio", () => {
   assert.equal(canPlayExactTrack(false, 125), false);
+});
+
+test("a song ends where the next timecoded track starts", () => {
+  const tracks = [{ start_sec: 0 }, { start_sec: 190 }, { start_sec: 400 }];
+  assert.equal(segmentEndSec(tracks, 0), 190);
+  assert.equal(segmentEndSec(tracks, 190), 400);
+});
+
+test("the last timecoded song runs to the end of the episode", () => {
+  const tracks = [{ start_sec: 0 }, { start_sec: 190 }];
+  assert.equal(segmentEndSec(tracks, 190), null);
+  assert.equal(segmentEndSec([], 190), null);
+});
+
+test("the song end ignores untimecoded tracks and anything at or behind the song", () => {
+  const tracks = [{ start_sec: 0 }, { start_sec: 190 }, { start_sec: null }, { start_sec: 400 }];
+  assert.equal(segmentEndSec(tracks, 190), 400);
+  assert.equal(segmentEndSec([{ start_sec: null }], 0), null);
+  assert.equal(segmentEndSec([{ start_sec: 190 }], 190), null);
+});
+
+test("the song end is the nearest boundary ahead, whatever order the playlist is in", () => {
+  const tracks = [{ start_sec: 400 }, { start_sec: 190 }, { start_sec: 250 }];
+  assert.equal(segmentEndSec(tracks, 190), 250);
 });
 
 test("scrubber marks shift show-relative timecodes into audio time", () => {

@@ -84,6 +84,8 @@ export interface FavouriteEpisode {
 }
 export interface FavouriteTrack {
   track: Track;
+  /** The song's episode, so a favourite can be queued without resolving its show first. */
+  episode: Episode;
   show_id: string;
   show_name: string;
   air_date: string | null;
