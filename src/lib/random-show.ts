@@ -25,8 +25,8 @@ function shuffled<T>(items: T[], random: RandomSource): T[] {
 
 /**
  * Choose a random playable show and a random starting episode. The API returns
- * episodes newest-first, so the returned queue is reversed for chronological
- * next/previous navigation.
+ * episodes in air-date order, newest first, so the returned queue is reversed for
+ * chronological next/previous navigation.
  */
 export async function selectRandomPlayback(
   shows: Show[],

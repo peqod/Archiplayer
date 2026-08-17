@@ -24,6 +24,13 @@ const LIVE_PLAYLIST_REFRESH_SECONDS: i64 = 30;
 const CATALOG_CACHE_KEY: &str = "catalog_last_scraped";
 const CATALOG_CACHE_MAX_AGE_SECONDS: i64 = 24 * 60 * 60;
 const SHOW_CACHE_MAX_AGE_SECONDS: i64 = 6 * 60 * 60;
+/// Bump this whenever a scraper starts reading something it used to miss. Shows and
+/// playlists cached by an older generation are re-read once, the next time they are
+/// opened, so an upgrade heals an old library instead of freezing its gaps: a date the
+/// parser could not read then, or a playlist template it did not recognise, stays wrong
+/// forever otherwise, because the ordinary cache policy only ever fetches a show's
+/// archive years once and only fetches a playlist that was never scraped at all.
+const SCRAPE_VERSION: i64 = 1;
 
 fn broadcast_duration_for_tracks(
     duration_sec: Option<i64>,
@@ -187,12 +194,18 @@ pub async fn get_show(
     refresh: bool,
     state: State<'_, AppState>,
 ) -> CmdResult<ShowDetail> {
-    let last_scraped = {
+    let (last_scraped, scrape_version) = {
         let db = state.db()?;
-        db.show_last_scraped(&show_id).map_err(db_err)?
+        (
+            db.show_last_scraped(&show_id).map_err(db_err)?,
+            db.show_scrape_version(&show_id).map_err(db_err)?,
+        )
     };
     let had_cache = last_scraped.is_some();
+    // Cached by an older scraper generation: re-read it once, archive years included.
+    let stale_parse = scrape_version < SCRAPE_VERSION;
     let need_scrape = refresh
+        || stale_parse
         || cache_is_stale(
             last_scraped,
             crate::db::Db::now(),
@@ -216,10 +229,11 @@ pub async fn get_show(
             let mut episodes = wfmu::parse_show_page(&html);
             let description = wfmu::parse_show_description(&html);
 
-            // Deep archive hydration is needed once (or for an explicit forced refresh). Routine
-            // TTL refreshes only fetch the current show page; sync_show_episodes keeps the cached
-            // historical tail ordered behind the new rows.
-            if !had_cache || refresh {
+            // Deep archive hydration is needed once (on a forced refresh, or when the cache
+            // predates this scraper generation). Routine TTL refreshes only fetch the current
+            // show page; sync_show_episodes keeps the cached historical tail ordered behind
+            // the new rows.
+            if !had_cache || refresh || stale_parse {
                 let archive_years = wfmu::parse_show_archive_years(&html, &show_id);
                 // Year pages link back to the show and to each other, so track what we've
                 // already pulled.
@@ -248,6 +262,10 @@ pub async fn get_show(
                 db.set_show_description(&show_id, &desc).map_err(db_err)?;
             }
             db.mark_show_scraped(&show_id).map_err(db_err)?;
+            // Only after a parse actually landed: a visit that could not reach WFMU must
+            // stay stale so the next one retries.
+            db.set_show_scrape_version(&show_id, SCRAPE_VERSION)
+                .map_err(db_err)?;
         }
     }
     let db = state.db()?;
@@ -267,15 +285,19 @@ pub async fn get_playlist(
     refresh: bool,
     state: State<'_, AppState>,
 ) -> CmdResult<PlaylistPayload> {
-    let (tracks_scraped, timing_checked) = {
+    let (tracks_scraped, timing_checked, tracks_version) = {
         let db = state.db()?;
         (
             db.episode_tracks_scraped(episode_id).map_err(db_err)?,
             db.episode_playlist_timing_checked(episode_id)
                 .map_err(db_err)?,
+            db.episode_tracks_version(episode_id).map_err(db_err)?,
         )
     };
-    let need_scrape = refresh || !tracks_scraped || !timing_checked;
+    // An older generation may have read this page as empty — its template unknown to the
+    // parsers of the day — and stamped it scraped all the same. Re-read it once.
+    let need_scrape =
+        refresh || !tracks_scraped || !timing_checked || tracks_version < SCRAPE_VERSION;
     if need_scrape {
         let fetched = state
             .fetcher
@@ -295,6 +317,8 @@ pub async fn get_playlist(
                 let discovered = wfmu::parse_playlist_archive(&html);
                 let mut db = state.db()?;
                 db.sync_tracks(episode_id, &tracks, TrackSyncMode::Snapshot)
+                    .map_err(db_err)?;
+                db.set_episode_tracks_version(episode_id, SCRAPE_VERSION)
                     .map_err(db_err)?;
                 db.set_episode_broadcast_duration(episode_id, broadcast_duration_sec)
                     .map_err(db_err)?;

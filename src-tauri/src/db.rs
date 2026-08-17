@@ -287,6 +287,19 @@ impl Db {
                 "air_date_iso",
                 "ALTER TABLE episodes ADD COLUMN air_date_iso TEXT",
             ),
+            // Which scraper generation produced the cached rows. Everything already on
+            // disk starts at 0, so a build with better parsers re-reads it once. See
+            // `commands::SCRAPE_VERSION`.
+            (
+                "shows",
+                "scrape_version",
+                "ALTER TABLE shows ADD COLUMN scrape_version INTEGER NOT NULL DEFAULT 0",
+            ),
+            (
+                "episodes",
+                "tracks_version",
+                "ALTER TABLE episodes ADD COLUMN tracks_version INTEGER NOT NULL DEFAULT 0",
+            ),
         ];
         for (table, column, sql) in migrations {
             let exists = {
@@ -475,6 +488,28 @@ impl Db {
         )
     }
 
+    /// The scraper generation that produced this show's cached episodes, 0 for a show
+    /// never stamped and for one this build has not re-read yet. An unknown show reads
+    /// as 0 too, so a first visit is treated as stale rather than as up to date.
+    pub fn show_scrape_version(&self, id: &str) -> Result<i64, rusqlite::Error> {
+        self.conn
+            .query_row(
+                "SELECT scrape_version FROM shows WHERE id=?1",
+                params![id],
+                |r| r.get(0),
+            )
+            .optional()
+            .map(|version| version.unwrap_or(0))
+    }
+
+    pub fn set_show_scrape_version(&self, id: &str, version: i64) -> Result<(), rusqlite::Error> {
+        self.conn.execute(
+            "UPDATE shows SET scrape_version=?2 WHERE id=?1",
+            params![id, version],
+        )?;
+        Ok(())
+    }
+
     /// `seq` is `None` for callers with no ordering opinion, such as the live-status path
     /// that meets a hosted episode mid-broadcast. Those keep whatever ordering a show-page
     /// scrape already established instead of resetting it to the top of the list.
@@ -571,6 +606,17 @@ impl Db {
         tx.commit()
     }
 
+    /// A show's episodes, newest air date first.
+    ///
+    /// Order comes from `air_date_iso`, not from `seq`. WFMU's templates are not
+    /// consistent: some per-year archive pages list their episodes oldest first, so
+    /// scrape order (what `seq` records) runs backwards inside those year blocks and
+    /// the UI's reverse toggle cannot straighten it out. Sorting on the parsed date
+    /// fixes both directions at once, for already-cached rows as well as fresh ones.
+    ///
+    /// Episodes whose date could not be parsed keep their scrape order behind the
+    /// dated ones — better a stable tail than a guessed date filed under the wrong
+    /// year. They therefore lead the list in the oldest-first view.
     pub fn list_episodes(&self, show_id: &str) -> Result<Vec<Episode>, rusqlite::Error> {
         let mut stmt = self.conn.prepare(
             "SELECT e.id, e.show_id, e.air_date, e.title, e.archive_id, e.audio_url, e.has_audio,
@@ -579,7 +625,8 @@ impl Db {
                     (SELECT COUNT(*) FROM tracks t WHERE t.episode_id = e.id),
                     e.resume_sec, e.duration_sec, e.completed, e.offset_sec, e.broadcast_duration_sec
              FROM episodes e LEFT JOIN downloads d ON d.episode_id = e.id
-             WHERE e.show_id = ?1 ORDER BY e.seq",
+             WHERE e.show_id = ?1
+             ORDER BY (e.air_date_iso IS NULL), e.air_date_iso DESC, e.seq",
         )?;
         let rows = stmt.query_map([show_id], |r| {
             let status: String = r.get(9)?;
@@ -980,6 +1027,31 @@ impl Db {
         Ok(scraped.is_some())
     }
 
+    /// The scraper generation that produced this episode's cached tracks. Same rule as
+    /// `show_scrape_version`: unknown or never stamped reads as 0, i.e. stale.
+    pub fn episode_tracks_version(&self, episode_id: i64) -> Result<i64, rusqlite::Error> {
+        self.conn
+            .query_row(
+                "SELECT tracks_version FROM episodes WHERE id=?1",
+                [episode_id],
+                |r| r.get(0),
+            )
+            .optional()
+            .map(|version| version.unwrap_or(0))
+    }
+
+    pub fn set_episode_tracks_version(
+        &self,
+        episode_id: i64,
+        version: i64,
+    ) -> Result<(), rusqlite::Error> {
+        self.conn.execute(
+            "UPDATE episodes SET tracks_version=?2 WHERE id=?1",
+            params![episode_id, version],
+        )?;
+        Ok(())
+    }
+
     pub fn episode_playlist_timing_checked(
         &self,
         episode_id: i64,
@@ -1324,6 +1396,72 @@ mod tests {
             vec![40, 30, 20, 10]
         );
         assert_eq!(episodes[1].title.as_deref(), Some("Updated"));
+
+        drop(db);
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn episodes_are_listed_by_air_date_not_scrape_order() {
+        let path = std::env::temp_dir().join(format!(
+            "archiplayer-episode-order-{}-{}.db",
+            std::process::id(),
+            Db::now()
+        ));
+        let db = Db::open(&path).expect("open episode order test db");
+        db.upsert_show("KG", "Kenny", None, false).unwrap();
+        // Scrape order as a legacy archive serves it: year blocks newest first, but
+        // oldest first inside each block. A plain reversal of this cannot be chronological.
+        for (seq, (id, air_date)) in [
+            (1, Some("January 8, 2026")),
+            (2, Some("December 3, 2026")),
+            (3, Some("January 9, 2025")),
+            (4, Some("December 4, 2025")),
+            (5, None),
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            db.upsert_episode(id, "KG", air_date, None, Some(id), Some(seq as i64))
+                .unwrap();
+        }
+
+        let ids: Vec<i64> = db
+            .list_episodes("KG")
+            .unwrap()
+            .iter()
+            .map(|episode| episode.id)
+            .collect();
+        // Newest air date first; the undated episode keeps its scrape place at the tail.
+        assert_eq!(ids, vec![2, 1, 4, 3, 5]);
+
+        drop(db);
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn scrape_versions_start_stale_and_stamp_once_set() {
+        let path = std::env::temp_dir().join(format!(
+            "archiplayer-scrape-version-{}-{}.db",
+            std::process::id(),
+            Db::now()
+        ));
+        let db = Db::open(&path).expect("open scrape version test db");
+        db.upsert_show("KG", "Kenny", None, false).unwrap();
+        db.upsert_episode(13141, "KG", None, None, None, Some(0))
+            .unwrap();
+
+        // Rows that predate the column, and rows this build has not re-read, both read as 0.
+        assert_eq!(db.show_scrape_version("KG").unwrap(), 0);
+        assert_eq!(db.episode_tracks_version(13141).unwrap(), 0);
+        // A show or episode nobody has cached yet is stale rather than an error.
+        assert_eq!(db.show_scrape_version("NOPE").unwrap(), 0);
+        assert_eq!(db.episode_tracks_version(-99).unwrap(), 0);
+
+        db.set_show_scrape_version("KG", 3).unwrap();
+        db.set_episode_tracks_version(13141, 3).unwrap();
+        assert_eq!(db.show_scrape_version("KG").unwrap(), 3);
+        assert_eq!(db.episode_tracks_version(13141).unwrap(), 3);
 
         drop(db);
         let _ = std::fs::remove_file(path);

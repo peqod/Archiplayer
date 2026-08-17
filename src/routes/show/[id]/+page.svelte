@@ -39,8 +39,10 @@
 
   const showId = $derived($page.params.id ?? "");
 
-  // Displayed episode order. WFMU lists newest first; the reverse toggle flips to
-  // oldest first. Queue building and Play-all follow this so playback matches the view.
+  // Displayed episode order. The backend sorts by air date, newest first, so this
+  // reversal is a true chronological flip to oldest first (undated episodes, which sit
+  // at the tail of the default order, lead here). Queue building and Play-all follow
+  // this so playback matches the view.
   const orderedEpisodes = $derived(reverse ? [...episodes].reverse() : episodes);
 
   // The playing/paused episode, but only if it belongs to the show being viewed —
