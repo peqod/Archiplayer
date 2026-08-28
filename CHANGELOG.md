@@ -9,6 +9,17 @@ file; their notes are on the [releases page](https://github.com/peqod/Archiplaye
 
 ## [Unreleased]
 
+## [0.5.1] - 2026-08-28
+
+### Fixed
+
+- WebView's disk cache grew without bound across runs; it is now purged on startup and
+  capped, so long-running use no longer eats disk space.
+- Episode and playlist ordering now follows the air date the backend sorts by, instead of
+  drifting out of sync with what the archive actually returns.
+- Connection trouble now reads as a short message ("No connection.") instead of the raw
+  network error, and shows as a quiet toast rather than a banner stuck in the page flow.
+
 ## [0.5.0] - 2026-08-04
 
 ### Added
