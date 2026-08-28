@@ -27,8 +27,37 @@ impl AppState {
     }
 }
 
+/// Deletes the WebView2 HTTP disk cache on startup. Its contents are only ever streamed
+/// WFMU audio and the app's own bundled assets; user prefs live in localStorage and the
+/// library lives in `library.db`, both a sibling subtree left untouched here. Runs before
+/// the Tauri builder creates the webview, while nothing holds the files open, and never
+/// fails the launch.
+#[cfg(windows)]
+fn purge_webview_http_cache() {
+    let Some(local) = std::env::var_os("LOCALAPPDATA") else {
+        return;
+    };
+    // Keep the identifier in sync with `identifier` in tauri.conf.json.
+    let profile = std::path::Path::new(&local)
+        .join("org.archiplayer.app")
+        .join("EBWebView")
+        .join("Default");
+    if !profile.is_dir() {
+        return; // first run, or the data dir was relocated: nothing to clear
+    }
+    let cache = profile.join("Cache");
+    if let Err(e) = std::fs::remove_dir_all(&cache) {
+        if e.kind() != std::io::ErrorKind::NotFound {
+            eprintln!("archiplayer: could not clear webview cache: {e}");
+        }
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    #[cfg(windows)]
+    purge_webview_http_cache();
+
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
