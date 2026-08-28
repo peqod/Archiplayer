@@ -16,6 +16,7 @@
   import { shortcuts, type ActionHandlers } from "$lib/shortcuts.svelte";
   import { matchesAccel, shouldIgnoreKey } from "$lib/shortcuts";
   import { api, fmtTime } from "$lib/api";
+  import { reportError } from "$lib/toaster.svelte";
   import { selectRandomPlayback } from "$lib/random-show";
   import { theme } from "$lib/theme.svelte";
   import Icon from "$lib/Icon.svelte";
@@ -58,7 +59,7 @@
       if (collapsed) await growForPlayback();
       await player.playQueue(items, selection.index);
     } catch (err) {
-      favError = String(err);
+      reportError(err, (m) => (favError = m));
     } finally {
       luckyBusy = false;
     }
@@ -419,7 +420,7 @@
       const fav = await api.toggleFavourite("episode", String(ep.id));
       player.setEpisodeFavourite(fav);
     } catch (e) {
-      favError = String(e);
+      reportError(e, (m) => (favError = m));
     }
   }
 
@@ -430,7 +431,7 @@
       const fav = await api.toggleFavourite("track", String(t.id));
       player.setTrackFavourite(t.id, fav);
     } catch (e) {
-      favError = String(e);
+      reportError(e, (m) => (favError = m));
     }
   }
 
@@ -441,7 +442,7 @@
       const fav = await api.toggleFavourite("episode", String(ep.id));
       player.setLiveEpisodeFavourite(fav);
     } catch (e) {
-      favError = String(e);
+      reportError(e, (m) => (favError = m));
     }
   }
 
@@ -452,7 +453,7 @@
       const fav = await api.toggleFavourite("track", String(t.id));
       player.setTrackFavourite(t.id, fav);
     } catch (e) {
-      favError = String(e);
+      reportError(e, (m) => (favError = m));
     }
   }
 

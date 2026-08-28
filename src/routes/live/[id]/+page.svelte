@@ -12,6 +12,7 @@
   import { playGlyph } from "$lib/play-icon";
   import TrackRow from "$lib/TrackRow.svelte";
   import { player } from "$lib/player.svelte";
+  import { reportError } from "$lib/toaster.svelte";
   import { onMount } from "svelte";
 
   const streamId = $derived($page.params.id ?? "");
@@ -35,7 +36,7 @@
       error = null;
     } catch (cause) {
       if (generation !== requestGeneration) return;
-      error = String(cause);
+      reportError(cause, (m) => (error = m));
     } finally {
       if (generation === requestGeneration) {
         loading = false;
@@ -75,7 +76,7 @@
       }
       player.setTrackFavourite(track.id, favourite);
     } catch (cause) {
-      error = String(cause);
+      reportError(cause, (m) => (error = m));
     }
   }
 

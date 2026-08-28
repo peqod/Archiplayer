@@ -17,6 +17,8 @@
   import BackButton from "$lib/BackButton.svelte";
   import { centerEpisodeRow } from "$lib/episode-scroll";
   import { LatestRequest } from "$lib/request-gate";
+  import { isOfflineError } from "$lib/errors";
+  import { reportError } from "$lib/toaster.svelte";
   import { canPlayExactTrack } from "$lib/track-playback";
   import { onMount, tick } from "svelte";
 
@@ -29,6 +31,8 @@
   let episodes = $state<Episode[]>([]);
   let loading = $state(true);
   let error = $state<string | null>(null);
+  // A first visit with no cached page has nothing to draw, so the empty view says why.
+  let offline = $state(false);
   let expanded = $state<Record<number, Track[] | "loading">>({});
   let downloading = $state<Record<number, { bytes: number; total: number }>>({});
   let episodeListEl = $state<HTMLElement | null>(null);
@@ -80,14 +84,20 @@
   }
 
   async function load(requestedShowId: string, generation: number) {
-    if (detailRequests.isCurrent(generation)) error = null;
+    if (detailRequests.isCurrent(generation)) {
+      error = null;
+      offline = false;
+    }
     try {
       const detail = await api.getShow(requestedShowId);
       if (!detailRequests.isCurrent(generation)) return;
       show = detail.show;
       episodes = detail.episodes;
     } catch (e) {
-      if (detailRequests.isCurrent(generation)) error = String(e);
+      if (detailRequests.isCurrent(generation)) {
+        offline = isOfflineError(e);
+        reportError(e, (m) => (error = m));
+      }
     } finally {
       if (detailRequests.isCurrent(generation)) loading = false;
     }
@@ -181,7 +191,7 @@
         showId !== requestedShowId
       )
         return;
-      error = String(e);
+      reportError(e, (m) => (error = m));
       const { [ep.id]: _, ...rest } = expanded;
       expanded = rest;
     } finally {
@@ -219,7 +229,7 @@
         !ep.completed && ep.resume_sec && ep.resume_sec > 5 ? ep.resume_sec : null;
       await queueShowAt(ep, resume);
     } catch (e) {
-      error = String(e);
+      reportError(e, (m) => (error = m));
     }
   }
 
@@ -267,7 +277,7 @@
       const fav = await api.toggleFavourite("episode", String(ep.id));
       episodes = episodes.map((e) => (e.id === ep.id ? { ...e, favourite: fav } : e));
     } catch (e) {
-      error = String(e);
+      reportError(e, (m) => (error = m));
     }
   }
 
@@ -282,7 +292,7 @@
         };
       }
     } catch (e) {
-      error = String(e);
+      reportError(e, (m) => (error = m));
     }
   }
 
@@ -292,7 +302,7 @@
       const fav = await api.toggleFavourite("show", show.id);
       show = { ...show, favourite: fav };
     } catch (e) {
-      error = String(e);
+      reportError(e, (m) => (error = m));
     }
   }
 
@@ -301,7 +311,7 @@
     try {
       await api.downloadEpisode(ep.id);
     } catch (e) {
-      error = String(e);
+      reportError(e, (m) => (error = m));
       delete downloading[ep.id];
     }
   }
@@ -465,6 +475,8 @@
       </div>
     {/each}
   </div>
+{:else if offline}
+  <p class="muted" role="status">No connection. This show loads as soon as you are back online.</p>
 {/if}
 
 <style>

@@ -8,12 +8,17 @@
   import { playGlyph } from "$lib/play-icon";
   import { selectRandomPlayback } from "$lib/random-show";
   import { LatestRequest } from "$lib/request-gate";
+  import { isOfflineError } from "$lib/errors";
+  import { reportError } from "$lib/toaster.svelte";
   import { shareShow } from "$lib/share";
   import { hasExactTrackTimestamp } from "$lib/track-playback";
 
   let shows = $state<Show[]>([]);
   let loading = $state(true);
   let error = $state<string | null>(null);
+  // Set when the catalog fetch died on the network. Drives the quiet empty-state line, so a
+  // first run with no cache says why the list is bare instead of claiming "no shows match".
+  let offline = $state(false);
   let query = $state("");
   let trackHits = $state<TrackHit[]>([]);
   let letterFilter = $state<string | null>(null);
@@ -27,12 +32,18 @@
   let visibleCount = $state(PAGE_SIZE);
 
   async function load(generation: number) {
-    if (catalogRequests.isCurrent(generation)) error = null;
+    if (catalogRequests.isCurrent(generation)) {
+      error = null;
+      offline = false;
+    }
     try {
       const next = await api.getCatalog();
       if (catalogRequests.isCurrent(generation)) shows = next;
     } catch (e) {
-      if (catalogRequests.isCurrent(generation)) error = String(e);
+      if (catalogRequests.isCurrent(generation)) {
+        offline = isOfflineError(e);
+        reportError(e, (m) => (error = m));
+      }
     } finally {
       if (catalogRequests.isCurrent(generation)) loading = false;
     }
@@ -139,7 +150,7 @@
       }
       await player.playQueue(items);
     } catch (err) {
-      error = String(err);
+      reportError(err, (m) => (error = m));
     } finally {
       busyShow = null;
     }
@@ -176,7 +187,7 @@
       });
       await player.playQueue(items, selection.index);
     } catch (err) {
-      error = String(err);
+      reportError(err, (m) => (error = m));
     } finally {
       randomBusy = false;
     }
@@ -189,7 +200,7 @@
       const fav = await api.toggleFavourite("show", show.id);
       shows = shows.map((s) => (s.id === show.id ? { ...s, favourite: fav } : s));
     } catch (err) {
-      error = String(err);
+      reportError(err, (m) => (error = m));
     }
   }
 
@@ -210,7 +221,7 @@
       }
       await player.playEpisode(ep, hit.show_name, null, hit.track.start_sec);
     } catch (err) {
-      error = String(err);
+      reportError(err, (m) => (error = m));
     }
   }
 
@@ -368,7 +379,9 @@
   </div>
 {/if}
 {#if !loading && !filtered.length}
-  {#if letterFilter === "★"}
+  {#if offline && !shows.length}
+    <p class="muted" role="status">No connection. The catalog loads as soon as you are back online.</p>
+  {:else if letterFilter === "★"}
     <p class="muted">No favourited shows yet — hover a show and hit ☆ to add one.</p>
   {:else}
     <p class="muted">No shows match.</p>

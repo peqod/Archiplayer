@@ -21,6 +21,7 @@
   import StatBand from "$lib/StatBand.svelte";
   import ListToolbar from "$lib/ListToolbar.svelte";
   import { LatestRequest } from "$lib/request-gate";
+  import { reportError } from "$lib/toaster.svelte";
   import { shareShowRef, shareEpisodeRef, shareTrackRef, wfmuShowUrl } from "$lib/share";
   import { canPlayExactTrack, hasExactTrackTimestamp } from "$lib/track-playback";
   import { playGlyph } from "$lib/play-icon";
@@ -288,7 +289,7 @@
       stats = nextStats;
       eras = nextEras;
     } catch (e) {
-      if (profileRequests.isCurrent(generation)) error = String(e);
+      if (profileRequests.isCurrent(generation)) reportError(e, (m) => (error = m));
     }
   }
 
@@ -304,7 +305,7 @@
       downloads = nextDownloads;
       downloadDir = nextDownloadDir;
     } catch (e) {
-      if (downloadRequests.isCurrent(generation)) error = String(e);
+      if (downloadRequests.isCurrent(generation)) reportError(e, (m) => (error = m));
     } finally {
       if (downloadRequests.isCurrent(generation)) dlLoading = false;
     }
@@ -318,7 +319,7 @@
         downloadDir = picked;
       }
     } catch (e) {
-      error = String(e);
+      reportError(e, (m) => (error = m));
     }
   }
 
@@ -326,7 +327,7 @@
     try {
       await revealItemInDir(row.download.path);
     } catch (e) {
-      error = String(e);
+      reportError(e, (m) => (error = m));
     }
   }
 
@@ -373,7 +374,7 @@
       const ep = detail.episodes.find((e) => e.id === row.download.episode_id);
       if (ep) await player.playEpisode(ep, row.show_name ?? row.show_id);
     } catch (e) {
-      error = String(e);
+      reportError(e, (m) => (error = m));
     }
   }
 
@@ -390,7 +391,7 @@
       await api.deleteDownload(row.download.episode_id);
       downloads = downloads.filter((r) => r.download.episode_id !== row.download.episode_id);
     } catch (e) {
-      error = String(e);
+      reportError(e, (m) => (error = m));
     }
   }
 
@@ -405,7 +406,7 @@
       await api.toggleFavourite(kind, refId);
       await load();
     } catch (e) {
-      error = String(e);
+      reportError(e, (m) => (error = m));
     }
   }
 
@@ -428,7 +429,7 @@
       const ep = detail.episodes.find((e) => e.id === row.id);
       if (ep) await player.playQueue([{ episode: ep, showName: row.showName }, ...items]);
     } catch (e) {
-      error = String(e);
+      reportError(e, (m) => (error = m));
     }
   }
 
@@ -442,7 +443,7 @@
       const items = songQueueFrom(orderedTracks, row.id);
       if (items.length) await player.playQueue(items);
     } catch (e) {
-      error = String(e);
+      reportError(e, (m) => (error = m));
     }
   }
 
@@ -458,7 +459,7 @@
       if (!dest) return;
       notice = await api.exportCsv(kind, dest);
     } catch (e) {
-      error = String(e);
+      reportError(e, (m) => (error = m));
     }
   }
 </script>

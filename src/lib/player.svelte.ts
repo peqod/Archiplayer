@@ -30,6 +30,7 @@ import {
 import { shouldRetryStaleSource, staleResumeAt } from "./stale-source";
 import { segmentEndSec, trackMarkSeconds } from "./track-playback";
 import { normalizeVolume } from "./volume";
+import { friendlyError } from "./errors";
 
 export type { QueueItem, QueueSong } from "./queue-build";
 
@@ -301,7 +302,7 @@ class Player {
       if (!this.transitions.isCurrent(generation)) return;
       // The replacement source failing is already reported by the error listener, which by
       // then has spent this episode's retry. Anything else is ours to surface.
-      if (!reloaded || !el.error) this.error = String(e);
+      if (!reloaded || !el.error) this.error = friendlyError(e);
       this.playing = false;
     } finally {
       this.staleRetryActive = false;
@@ -519,7 +520,7 @@ class Player {
       // re-resolving a stale URL right now. Don't clobber its message or its retry with the
       // play() rejection. Failures before that (a dead resolve) are still ours to report.
       if (installed && this.audio?.error) return;
-      this.error = String(e);
+      this.error = friendlyError(e);
       this.playing = false;
     } finally {
       if (this.transitions.isCurrent(generation)) {
@@ -577,7 +578,7 @@ class Player {
     } catch (e) {
       if (!this.transitions.isCurrent(generation) && isAbortError(e)) return;
       if (!this.transitions.isCurrent(generation)) return;
-      this.error = String(e);
+      this.error = friendlyError(e);
       this.playing = false;
       this.livePlaylistLoading = false;
       this.resetFade();
@@ -642,7 +643,7 @@ class Player {
         this.live?.id === stream.id &&
         (initial || !this.liveEpisode)
       ) {
-        this.livePlaylistError = String(e);
+        this.livePlaylistError = friendlyError(e);
       }
     } finally {
       if (this.liveRefreshGeneration === generation) this.liveRefreshGeneration = null;
@@ -694,7 +695,7 @@ class Player {
         this.transitions.isCurrent(generation) &&
         this.liveEpisode?.episode.id === episodeId
       )
-        this.livePlaylistError = String(error);
+        this.livePlaylistError = friendlyError(error);
     } finally {
       if (this.livePlaylistLoads.get(episodeId) === request)
         this.livePlaylistLoads.delete(episodeId);
@@ -728,7 +729,7 @@ class Player {
       this.prepareFadeIn();
     }
     void this.audio.play().catch((error) => {
-      this.error = String(error);
+      this.error = friendlyError(error);
       this.playing = false;
       if (this.live) this.resetFade();
     });
