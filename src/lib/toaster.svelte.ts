@@ -21,8 +21,12 @@ export function toast(text: string, ms = 1600) {
  * Surface a failure. Connection trouble goes to the floating toast, out of the page flow;
  * anything else the user can act on stays in the caller's inline banner.
  */
-export function reportError(e: unknown, inline: (msg: string | null) => void): void {
-  const friendly = friendlyError(e);
+export function reportError(
+  e: unknown,
+  inline: (msg: string | null) => void,
+  fallback?: string,
+): void {
+  const friendly = friendlyError(e, fallback);
   if (isOfflineError(e)) {
     toast(friendly, 3200);
     inline(null);

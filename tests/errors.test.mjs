@@ -32,10 +32,42 @@ test("local library trouble gets its own line", () => {
   assert.equal(friendlyError("db error: no such column: air_date"), "Could not read the local library.");
 });
 
-test("anything else stays readable as a plain sentence", () => {
-  assert.equal(friendlyError("show page was empty"), "Show page was empty.");
+test("browser media errors map by name, never by their developer text", () => {
+  const abort = { name: "AbortError", message: "The play() request was interrupted by a call to pause()." };
+  assert.equal(friendlyError(abort), "Playback stopped.");
+  assert.equal(friendlyError({ name: "NotAllowedError", message: "play() failed" }), "Press play to start.");
+  assert.equal(
+    friendlyError({ name: "NotSupportedError", message: "The element has no supported sources." }),
+    "This audio can't be played. The archive may be unavailable.",
+  );
+  assert.equal(friendlyError({ name: "SecurityError", message: "x" }), "Playback was blocked.");
+});
+
+test("known backend messages get plain copy", () => {
+  assert.equal(friendlyError("HTTP 500 downloading audio"), "The download failed. Try again later.");
+  assert.equal(friendlyError("database lock poisoned"), "Something went wrong. Restart Archiplayer.");
+  assert.equal(
+    friendlyError("catalog parse produced no shows (site layout changed?)"),
+    "Could not read the WFMU show list. Try again later.",
+  );
+  assert.equal(friendlyError("the listen.m3u response carries no audio source"), "No audio found for this episode.");
+  assert.equal(friendlyError("audio URL on evil.example is outside /x"), "No audio found for this episode.");
+  assert.equal(friendlyError("download destination already exists: C:\\\\a.mp3"), "This episode is already downloaded.");
+  assert.equal(friendlyError("Access is denied. (os error 5)"), "Could not save the download. Check the folder.");
+  assert.equal(friendlyError("show page was empty"), "This show has no episodes yet.");
+});
+
+test("log-like text never reaches the user", () => {
+  assert.equal(friendlyError("thread 'main' panicked at src/lib.rs:10:5"), "Something went wrong. Try again.");
+  assert.equal(friendlyError("bad thing at https://wfmu.org/x"), "Something went wrong. Try again.");
+  assert.equal(friendlyError("x".repeat(120)), "Something went wrong. Try again.");
+  assert.equal(friendlyError("tauri::ipc failed", "The download failed."), "The download failed.");
+});
+
+test("short plain text stays readable as a sentence", () => {
   assert.equal(friendlyError("That episode has no audio archive."), "That episode has no audio archive.");
   assert.equal(friendlyError(new Error("Error: unknown show KG")), "Unknown show KG.");
+  assert.equal(friendlyError("this episode is already downloading"), "This episode is already downloading.");
   assert.equal(friendlyError(""), "Something went wrong.");
 });
 

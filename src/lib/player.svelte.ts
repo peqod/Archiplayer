@@ -45,6 +45,8 @@ const TICK_SECONDS = 15;
 // audition jingle stays audible, while skipping the bulk of the archive pre-roll
 // (the tail of the previous show). See `offset` below.
 const INTRO_LEAD_IN_SEC = 15;
+// Shown when a playback failure carries no text fit for the user.
+const PLAY_FAILED = "Couldn't start playback. Try again.";
 
 class Player {
   audio: HTMLAudioElement | null = null;
@@ -238,7 +240,7 @@ class Player {
         if (this.beginStaleSourceRetry(el)) return;
         this.error = this.live
           ? "Live stream unavailable. Try again shortly."
-          : "Audio failed to load. Archive may be unavailable.";
+          : "This episode can't load. The archive may be unavailable.";
       }
       this.loading = false;
       this.playing = false;
@@ -300,10 +302,12 @@ class Player {
       this.afterPlaybackStarted(item, generation);
     } catch (e) {
       if (!this.transitions.isCurrent(generation)) return;
+      this.playing = false;
+      // A pause or skip interrupting play() is the user's doing, not a failure.
+      if (isAbortError(e)) return;
       // The replacement source failing is already reported by the error listener, which by
       // then has spent this episode's retry. Anything else is ours to surface.
-      if (!reloaded || !el.error) this.error = friendlyError(e);
-      this.playing = false;
+      if (!reloaded || !el.error) this.error = friendlyError(e, PLAY_FAILED);
     } finally {
       this.staleRetryActive = false;
       if (this.transitions.isCurrent(generation)) this.loading = false;
@@ -520,8 +524,10 @@ class Player {
       // re-resolving a stale URL right now. Don't clobber its message or its retry with the
       // play() rejection. Failures before that (a dead resolve) are still ours to report.
       if (installed && this.audio?.error) return;
-      this.error = friendlyError(e);
       this.playing = false;
+      // A pause or skip interrupting play() is the user's doing, not a failure.
+      if (isAbortError(e)) return;
+      this.error = friendlyError(e, PLAY_FAILED);
     } finally {
       if (this.transitions.isCurrent(generation)) {
         if (!this.staleRetryActive) this.loading = false;
@@ -576,12 +582,14 @@ class Player {
       await this.audio.play();
       if (!this.transitions.isCurrent(generation)) return;
     } catch (e) {
-      if (!this.transitions.isCurrent(generation) && isAbortError(e)) return;
       if (!this.transitions.isCurrent(generation)) return;
-      this.error = friendlyError(e);
       this.playing = false;
-      this.livePlaylistLoading = false;
       this.resetFade();
+      // A pause interrupting play() is the user's doing, not a failure. The status poll
+      // keeps the playlist panel, so only a real failure clears its spinner.
+      if (isAbortError(e)) return;
+      this.error = friendlyError(e, PLAY_FAILED);
+      this.livePlaylistLoading = false;
     } finally {
       if (this.transitions.isCurrent(generation)) {
         this.loading = false;
@@ -729,9 +737,11 @@ class Player {
       this.prepareFadeIn();
     }
     void this.audio.play().catch((error) => {
-      this.error = friendlyError(error);
       this.playing = false;
       if (this.live) this.resetFade();
+      // A pause interrupting play() is the user's doing, not a failure.
+      if (isAbortError(error)) return;
+      this.error = friendlyError(error, PLAY_FAILED);
     });
   }
 

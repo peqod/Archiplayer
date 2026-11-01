@@ -46,17 +46,72 @@ export function isOfflineError(e: unknown): boolean {
   return typeof navigator !== "undefined" && navigator.onLine === false && raw.length > 0;
 }
 
-/** Short, plain sentence for any command or playback failure. */
-export function friendlyError(e: unknown): string {
+// Browser media errors carry developer text ("The play() request was interrupted by a call
+// to pause()."), so they map by name, never by message.
+const NAMED: Record<string, string> = {
+  AbortError: "Playback stopped.",
+  NotAllowedError: "Press play to start.",
+  NotSupportedError: "This audio can't be played. The archive may be unavailable.",
+  SecurityError: "Playback was blocked.",
+};
+
+// Known Rust command messages, in match order. Patterns test the lowercased raw text.
+const RULES: [RegExp, string][] = [
+  [/^http \d+ downloading audio/, "The download failed. Try again later."],
+  [/lock poisoned/, "Something went wrong. Restart Archiplayer."],
+  [/catalog parse produced no shows/, "Could not read the WFMU show list. Try again later."],
+  [/carries no audio source|audio url/, "No audio found for this episode."],
+  [/download destination already exists/, "This episode is already downloaded."],
+  [
+    /could not inspect download destination|os error 5|access is denied/,
+    "Could not save the download. Check the folder.",
+  ],
+  [/show page was empty/, "This show has no episodes yet."],
+];
+
+const GENERIC = "Something went wrong. Try again.";
+
+function errorName(e: unknown): string | null {
+  if (e && typeof e === "object" && "name" in e) {
+    const name = (e as { name: unknown }).name;
+    return typeof name === "string" ? name : null;
+  }
+  return null;
+}
+
+// Only short plain sentences reach the user as-is; anything that reads like a log line
+// (URLs, OS error codes, call parens, Rust paths, colon chains) does not.
+function looksPlain(text: string): boolean {
+  if (text.length > 80) return false;
+  if (/:\/\/|os error|\(\)|::/i.test(text)) return false;
+  return (text.match(/:/g) ?? []).length <= 1;
+}
+
+function replaced(raw: string, message: string): string {
+  if (raw) console.warn("[archiplayer]", raw);
+  return message;
+}
+
+/**
+ * Short, plain sentence for any command or playback failure. `fallback` replaces the
+ * generic line when the raw text is not fit to show.
+ */
+export function friendlyError(e: unknown, fallback: string = GENERIC): string {
   const raw = errorText(e);
+  const name = errorName(e);
+  if (name && Object.prototype.hasOwnProperty.call(NAMED, name)) return replaced(raw, NAMED[name]);
   if (isOfflineError(e)) return "No connection.";
   const lower = raw.toLowerCase();
-  if (/^http 5\d\d/.test(lower)) return "WFMU is not responding right now.";
-  if (lower.startsWith("http 404")) return "That page is gone from WFMU.";
-  if (/^http \d\d\d/.test(lower)) return "WFMU refused the request.";
-  if (lower.startsWith("db error")) return "Could not read the local library.";
+  for (const [pattern, message] of RULES) {
+    if (pattern.test(lower)) return replaced(raw, message);
+  }
+  if (/^http 5\d\d/.test(lower)) return replaced(raw, "WFMU is not responding right now.");
+  if (lower.startsWith("http 404")) return replaced(raw, "That page is gone from WFMU.");
+  if (/^http \d\d\d/.test(lower)) return replaced(raw, "WFMU refused the request.");
+  if (lower.startsWith("db error")) return replaced(raw, "Could not read the local library.");
   const trimmed = raw.replace(/^error:\s*/i, "").trim();
   if (!trimmed) return "Something went wrong.";
+  if (!looksPlain(trimmed)) return replaced(raw, fallback);
   const sentence = trimmed[0].toUpperCase() + trimmed.slice(1);
   return /[.!?]$/.test(sentence) ? sentence : `${sentence}.`;
 }

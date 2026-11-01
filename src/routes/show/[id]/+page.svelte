@@ -311,7 +311,7 @@
     try {
       await api.downloadEpisode(ep.id);
     } catch (e) {
-      reportError(e, (m) => (error = m));
+      reportError(e, (m) => (error = m), "The download failed. Try again later.");
       delete downloading[ep.id];
     }
   }
