@@ -12,10 +12,23 @@ import type { Episode } from "$lib/api";
 export interface QueueSong {
   /** Playlist track id, the same id the favourites table stores. */
   id: number;
-  /** Show-relative timecode. The audio position is `startSec + offset`. */
+  /**
+   * Show-relative start the entry seeks to: the listener's own start, else the playlist
+   * timecode, else 0. The audio position is `startSec + offset`.
+   */
   startSec: number;
+  /** False when `startSec` is only the 0:00 fallback for a song with no time at all. */
+  startKnown?: boolean;
+  /** Show-relative start the listener set, if any. */
+  manualStartSec?: number | null;
+  /** The playlist's own timecode, so clearing the listener's start can fall back to it. */
+  playlistStartSec?: number | null;
   artist: string | null;
   title: string | null;
+  /** Show-relative end the listener marked. See `songEnd` for how it is used. */
+  manualEndSec?: number | null;
+  /** Recording length; filled in by the player's lookup when not known at queue time. */
+  lengthSec?: number | null;
 }
 
 export interface QueueItem {
@@ -125,7 +138,11 @@ export interface SongQueueRow {
   showName: string;
   artist: string | null;
   title: string | null;
+  /** Playlist timecode; null in a playlist without times. */
   startSec: number | null;
+  manualStartSec?: number | null;
+  manualEndSec?: number | null;
+  lengthSec?: number | null;
 }
 
 export interface EpisodeQueueRow {
@@ -135,13 +152,16 @@ export interface EpisodeQueueRow {
 }
 
 function playableSong(row: SongQueueRow): boolean {
-  return row.episode !== null && row.episode.has_audio && row.startSec !== null;
+  // Same rule as `canPlayFavouriteSong`; kept local so the node tests load this module
+  // without a `$lib` value import.
+  return row.episode !== null && row.episode.has_audio;
 }
 
 /**
  * The clicked row and everything below it, in the order the list renders. Rows with no
- * timecode, no audio, or no resolvable episode drop out of the tail; if the clicked row
- * itself is one of those, the whole thing is empty and the caller does nothing.
+ * audio or no resolvable episode drop out of the tail; if the clicked row itself is one
+ * of those, the whole thing is empty and the caller does nothing. A row with no time at
+ * all starts at the top of its episode (see `effectiveStart`).
  */
 export function songQueueFrom(rows: SongQueueRow[], fromId: number): QueueItem[] {
   const at = rows.findIndex((r) => r.id === fromId);
@@ -149,14 +169,27 @@ export function songQueueFrom(rows: SongQueueRow[], fromId: number): QueueItem[]
   const out: QueueItem[] = [];
   for (const row of rows.slice(at)) {
     if (!playableSong(row)) continue;
+    // Same order as `effectiveStart`: the listener's start, the timecode, then 0.
+    const manual = row.manualStartSec ?? null;
+    const start =
+      manual !== null && manual >= 0
+        ? { sec: manual, known: true }
+        : row.startSec !== null
+          ? { sec: row.startSec, known: true }
+          : { sec: 0, known: false };
     out.push({
       episode: row.episode as Episode,
       showName: row.showName,
       song: {
         id: row.id,
-        startSec: row.startSec as number,
+        startSec: start.sec,
+        startKnown: start.known,
+        manualStartSec: row.manualStartSec ?? null,
+        playlistStartSec: row.startSec,
         artist: row.artist,
         title: row.title,
+        manualEndSec: row.manualEndSec ?? null,
+        lengthSec: row.lengthSec ?? null,
       },
     });
   }

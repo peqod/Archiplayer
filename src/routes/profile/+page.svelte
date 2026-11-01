@@ -9,6 +9,7 @@
     type DownloadRow,
   } from "$lib/api";
   import { player } from "$lib/player.svelte";
+  import { liveRelink, runLiveRelink } from "$lib/live-relink.svelte";
   import { confirm, open, save } from "@tauri-apps/plugin-dialog";
   import { revealItemInDir } from "@tauri-apps/plugin-opener";
   import { listen } from "@tauri-apps/api/event";
@@ -23,7 +24,13 @@
   import { LatestRequest } from "$lib/request-gate";
   import { reportError } from "$lib/toaster.svelte";
   import { shareShowRef, shareEpisodeRef, shareTrackRef, wfmuShowUrl } from "$lib/share";
-  import { canPlayExactTrack, hasExactTrackTimestamp } from "$lib/track-playback";
+  import {
+    MIN_SONG_SEC,
+    SONG_LENGTH_GRACE_SEC,
+    canPlayFavouriteSong,
+    effectiveStart,
+    parseClock,
+  } from "$lib/track-playback";
   import { playGlyph } from "$lib/play-icon";
   import { episodeQueueFrom, songQueueFrom } from "$lib/queue-build";
   import {
@@ -331,6 +338,16 @@
     }
   }
 
+  // A relink that moved favourites (started here or at app start) refreshes the lists, so
+  // a live song turns into its archived row without leaving the page.
+  let seenRelink = liveRelink.version;
+  $effect(() => {
+    const version = liveRelink.version;
+    if (version === seenRelink) return;
+    seenRelink = version;
+    if (mounted) untrack(() => void load());
+  });
+
   onMount(() => {
     mounted = true;
     loadPrefs();
@@ -341,6 +358,8 @@
     }
     void load();
     void loadDownloads();
+    // A broadcast WFMU archived while the app was open is found without a restart.
+    void runLiveRelink();
 
     const un = listen<{ episode_id: number; bytes: number; total: number; status: string }>(
       "download-progress",
@@ -434,7 +453,7 @@
   }
 
   async function playFavTrack(row: TrackRowData) {
-    if (!canPlayExactTrack(row.episode.has_audio, row.startSec)) return;
+    if (!canPlayFavouriteSong(row.episode.has_audio)) return;
     if (isPlayingTrack(row)) {
       player.toggle();
       return;
@@ -444,6 +463,82 @@
       if (items.length) await player.playQueue(items);
     } catch (e) {
       reportError(e, (m) => (error = m));
+    }
+  }
+
+  // -- Song range editor -----------------------------------------------------
+  //
+  // One row at a time. Times are show-relative, the same clock as the start time the play
+  // button shows, so what the listener types matches what they see. An empty field clears
+  // that side: the start goes back to the playlist time (or 0:00), the end to automatic.
+
+  let rangeEditId = $state<number | null>(null);
+  let startDraft = $state("");
+  let endDraft = $state("");
+  let rangeError = $state<string | null>(null);
+  // What the fields held when the editor opened. A field left as it was keeps an
+  // automatic value automatic instead of freezing it into a mark.
+  let startInitial = "";
+  let endInitial = "";
+
+  /** Where a row starts: the listener's start, the playlist time, or 0:00. */
+  const rowStart = (row: TrackRowData) => effectiveStart(row.startSec, row.manualStartSec);
+
+  /** The end a row plays to without a playlist in hand: the mark, else the length. */
+  function knownEnd(row: TrackRowData): { sec: number; manual: boolean } | null {
+    if (row.manualEndSec !== null) return { sec: row.manualEndSec, manual: true };
+    const start = rowStart(row);
+    if (start.known && row.lengthSec !== null) {
+      return { sec: start.sec + row.lengthSec + SONG_LENGTH_GRACE_SEC, manual: false };
+    }
+    return null;
+  }
+
+  function openRangeEditor(row: TrackRowData) {
+    const start = rowStart(row);
+    rangeEditId = row.id;
+    rangeError = null;
+    startDraft = start.known ? fmtTime(start.sec) : "";
+    const end = knownEnd(row);
+    endDraft = end ? fmtTime(end.sec) : "";
+    startInitial = startDraft;
+    endInitial = endDraft;
+  }
+
+  function closeRangeEditor() {
+    rangeEditId = null;
+    rangeError = null;
+  }
+
+  /** Parse one field: "" is null (clear), bad text is undefined (reported). */
+  function readClock(text: string): number | null | undefined {
+    if (!text.trim()) return null;
+    return parseClock(text) ?? undefined;
+  }
+
+  async function saveRange(row: TrackRowData) {
+    const typedStart = readClock(startDraft);
+    const typedEnd = readClock(endDraft);
+    if (typedStart === undefined || typedEnd === undefined) {
+      rangeError = "Use m:ss, for example 4:05.";
+      return;
+    }
+    // An untouched field keeps what was there, mark or automatic.
+    let startSec = startDraft === startInitial ? row.manualStartSec : typedStart;
+    const endSec = endDraft === endInitial ? row.manualEndSec : typedEnd;
+    // The playlist time typed back in is no mark of the listener's own.
+    if (startSec !== null && startSec === row.startSec) startSec = null;
+    const from = effectiveStart(row.startSec, startSec).sec;
+    if (endSec !== null && endSec < from + MIN_SONG_SEC) {
+      rangeError = "End must be after the start.";
+      return;
+    }
+    try {
+      await player.setSongRange(row.id, startSec, endSec);
+      closeRangeEditor();
+      await load();
+    } catch (e) {
+      reportError(e, (m) => (rangeError = m));
     }
   }
 
@@ -663,6 +758,8 @@
               {/if}
               {#each group.items as row (row.id)}
                 {@const now = isPlayingTrack(row)}
+                {@const start = rowStart(row)}
+                {@const marked = row.manualStartSec !== null || row.manualEndSec !== null}
                 <div
                   class="row"
                   class:now
@@ -672,31 +769,73 @@
                   <button
                     class="play"
                     onclick={() => playFavTrack(row)}
-                    disabled={!canPlayExactTrack(row.episode.has_audio, row.startSec)}
+                    disabled={!canPlayFavouriteSong(row.episode.has_audio)}
                     aria-label={now
                       ? player.playing ? "Pause song" : "Resume song"
-                      : canPlayExactTrack(row.episode.has_audio, row.startSec)
+                      : canPlayFavouriteSong(row.episode.has_audio)
                         ? `Play ${row.artist ?? "unknown artist"}, ${row.title ?? "unknown song"}`
-                        : `Exact-song playback unavailable for ${row.artist ?? "unknown artist"}, ${row.title ?? "unknown song"}: ${hasExactTrackTimestamp(row.startSec) ? "no archived audio" : "no timestamp"}`}
+                        : `Playback unavailable for ${row.artist ?? "unknown artist"}, ${row.title ?? "unknown song"}: no archived audio`}
                     title={now
                       ? player.playing ? "Pause song" : "Resume song"
-                      : !hasExactTrackTimestamp(row.startSec)
-                        ? "No timestamp available"
-                        : row.episode.has_audio
-                          ? `Play at ${fmtTime(row.startSec)}`
-                          : "No archived audio"}
+                      : !row.episode.has_audio
+                        ? "No archived audio"
+                        : start.known
+                          ? `Play at ${fmtTime(start.sec)}`
+                          : "Start not set, plays from the episode start"}
                   ><Icon name={playGlyph(now, player.playing)} /></button>
                   <div class="row-main">
                     <span class="row-text">
                       <span class="row-name"><b>{row.artist ?? "?"}</b> / {row.title ?? "?"}</span>
-                      <span class="row-sub">
-                        {row.showName}, {row.airDate ?? ""}
-                        {#if !hasExactTrackTimestamp(row.startSec)}, no timestamp
-                        {:else if !row.episode.has_audio}, no archived audio{/if}
-                      </span>
+                      {#if rangeEditId === row.id}
+                        <span class="end-edit">
+                          <span class="row-sub">Starts</span>
+                          <input
+                            class="end-input"
+                            bind:value={startDraft}
+                            placeholder={row.startSec !== null ? fmtTime(row.startSec) : "0:00"}
+                            aria-label="Song start time"
+                            onkeydown={(e) => {
+                              if (e.key === "Enter") void saveRange(row);
+                              else if (e.key === "Escape") closeRangeEditor();
+                            }}
+                          />
+                          <span class="row-sub">ends</span>
+                          <input
+                            class="end-input"
+                            bind:value={endDraft}
+                            placeholder="auto"
+                            aria-label="Song end time"
+                            onkeydown={(e) => {
+                              if (e.key === "Enter") void saveRange(row);
+                              else if (e.key === "Escape") closeRangeEditor();
+                            }}
+                          />
+                          <button class="end-btn" type="button" onclick={() => saveRange(row)}>Save</button>
+                          <button class="end-btn" type="button" onclick={closeRangeEditor}>Cancel</button>
+                          <span class="row-sub end-hint">Empty field: automatic.</span>
+                          {#if rangeError}<span class="end-error" role="alert">{rangeError}</span>{/if}
+                        </span>
+                      {:else}
+                        {@const end = knownEnd(row)}
+                        <span class="row-sub">
+                          {row.showName}, {row.airDate ?? ""}
+                          {#if !row.episode.has_audio && (row.episode.id < 0 || row.episode.show_id.startsWith("live-"))}, from a live stream, {liveRelink.running ? "checking the archive..." : "waiting for the archive"}
+                          {:else if !row.episode.has_audio}, no archived audio
+                          {:else if !start.known}, start not set{end ? `, ends ${fmtTime(end.sec)}` : ""}
+                          {:else if end || start.manual}, {fmtTime(start.sec)}{end ? ` to ${fmtTime(end.sec)}` : ""}{marked ? " (your mark)" : ""}{/if}
+                        </span>
+                      {/if}
                     </span>
                   </div>
                   <div class="row-actions">
+                    <button
+                      class="mini"
+                      class:on={marked}
+                      onclick={() => (rangeEditId === row.id ? closeRangeEditor() : openRangeEditor(row))}
+                      aria-label="Set song start and end"
+                      aria-expanded={rangeEditId === row.id}
+                      title={marked ? "Song start and end: your mark" : "Set song start and end"}
+                    ><Icon name="range" filled={marked} /></button>
                     <button class="mini" onclick={() => shareTrackRef(row.artist, row.title, row.showName, row.airDate, wfmuShowUrl(row.showId))} aria-label="Share song" title="Share"><Icon name="share" /></button>
                     <button class="mini starred" onclick={() => toggleFav("track", String(row.id))} aria-label="Remove song from favourites" title="Remove from favourites"><Icon name="star" filled /></button>
                   </div>
@@ -1052,6 +1191,46 @@
   }
   .mini.starred {
     color: var(--c-gold);
+  }
+  .mini.on {
+    opacity: 1;
+    color: var(--c-accent);
+  }
+  .end-edit {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--sp-1);
+  }
+  .end-input {
+    width: 7ch;
+    font: inherit;
+    font-size: 12px;
+    padding: 1px 4px;
+    color: var(--c-text);
+    background: var(--c-surface2);
+    border: 1px solid var(--c-dim);
+    border-radius: 4px;
+  }
+  .end-btn {
+    font: inherit;
+    font-size: 12px;
+    padding: 1px 6px;
+    color: var(--c-text);
+    background: var(--c-surface2);
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+  }
+  .end-btn:hover {
+    color: var(--c-accent);
+  }
+  .end-hint {
+    opacity: 0.7;
+  }
+  .end-error {
+    color: var(--c-danger);
+    font-size: 12px;
   }
   .mini:hover:not(:disabled) {
     color: var(--c-accent);

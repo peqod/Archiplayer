@@ -140,6 +140,8 @@ test("every action ships with a local binding and safe global defaults", () => {
     "next-episode": "Ctrl+Shift+F7",
     mute: "Ctrl+Shift+F8",
     "fav-song": "Ctrl+Shift+F9",
+    "mark-end": null,
+    "edit-range": null,
     "save-show": "Ctrl+Shift+F10",
     random: "Ctrl+Shift+F11",
   });

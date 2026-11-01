@@ -126,6 +126,18 @@ test("shuffle of a short or fully consumed list is the identity", () => {
 
 // -- songQueueFrom ----------------------------------------------------------
 
+test("a song queue carries each song's end mark and length", () => {
+  const rows = [
+    { ...song(1, 10, 0), manualEndSec: 170, lengthSec: 180 },
+    song(2, 10, 200),
+  ];
+  const queue = songQueueFrom(rows, 1);
+  assert.equal(queue[0].song.manualEndSec, 170);
+  assert.equal(queue[0].song.lengthSec, 180);
+  assert.equal(queue[1].song.manualEndSec, null);
+  assert.equal(queue[1].song.lengthSec, null);
+});
+
 test("a song queue runs from the clicked row to the end of the list", () => {
   const rows = [song(1, 10, 0), song(2, 10, 120), song(3, 11, 30)];
   const queue = songQueueFrom(rows, 2);
@@ -140,7 +152,7 @@ test("a song queue runs from the clicked row to the end of the list", () => {
   assert.equal(queue[0].song.title, "Song 2");
 });
 
-test("rows with no timecode, no audio or no episode drop out of the tail", () => {
+test("rows with no audio or no episode drop out of the tail; untimed rows stay", () => {
   const rows = [
     song(1, 10, 0),
     song(2, 10, null),
@@ -150,12 +162,28 @@ test("rows with no timecode, no audio or no episode drop out of the tail", () =>
   ];
   assert.deepEqual(
     songQueueFrom(rows, 1).map((q) => q.song.id),
-    [1, 5],
+    [1, 2, 5],
   );
 });
 
+test("an untimed song starts at 0:00 unless the listener set a start", () => {
+  const rows = [song(1, 10, null), { ...song(2, 10, null), manualStartSec: 754 }];
+  const queue = songQueueFrom(rows, 1);
+  assert.equal(queue[0].song.startSec, 0);
+  assert.equal(queue[0].song.startKnown, false);
+  assert.equal(queue[1].song.startSec, 754);
+  assert.equal(queue[1].song.startKnown, true);
+  assert.equal(queue[1].song.manualStartSec, 754);
+});
+
+test("the listener's start wins over the playlist timecode", () => {
+  const queue = songQueueFrom([{ ...song(1, 10, 120), manualStartSec: 130 }], 1);
+  assert.equal(queue[0].song.startSec, 130);
+  assert.equal(queue[0].song.startKnown, true);
+});
+
 test("clicking an unplayable row, or one that is not in the list, queues nothing", () => {
-  const rows = [song(1, 10, null), song(2, 11, 30, false), song(3, 12, 60)];
+  const rows = [song(1, 10, null, false), song(2, 11, 30, false), song(3, 12, 60)];
   assert.deepEqual(songQueueFrom(rows, 1), []);
   assert.deepEqual(songQueueFrom(rows, 2), []);
   assert.deepEqual(songQueueFrom(rows, 99), []);

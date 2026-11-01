@@ -53,6 +53,14 @@ pub struct Track {
     pub source_id: Option<String>,
     pub played_at: Option<i64>,
     pub favourite: bool,
+    /// Show-relative second the listener set as this song's start. Wins over `start_sec`
+    /// when a favourite song plays on its own.
+    pub manual_start_sec: Option<i64>,
+    /// Show-relative second the listener marked as this song's end. Wins over every
+    /// derived end when a favourite song plays on its own.
+    pub manual_end_sec: Option<i64>,
+    /// Recording length from MusicBrainz, once looked up and matched.
+    pub length_sec: Option<i64>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -62,6 +70,30 @@ pub struct Download {
     pub bytes: i64,
     pub total: i64,
     pub status: String,
+}
+
+/// A favourite song whose episode has no archived audio, typically one starred from a
+/// live stream. See `commands::relink_live_favourites`.
+#[derive(Debug, Clone)]
+pub struct UnplayableFavourite {
+    pub track_id: i64,
+    pub episode_id: i64,
+    pub show_id: String,
+    /// ISO date of the episode ("2026-07-23"), when readable.
+    pub air_date_iso: Option<String>,
+    pub artist: Option<String>,
+    pub title: Option<String>,
+    /// When the relink last looked for this song, if ever.
+    pub checked_at: Option<i64>,
+}
+
+#[derive(Debug, Clone)]
+pub struct TrackLengthInfo {
+    pub artist: Option<String>,
+    pub title: Option<String>,
+    pub album: Option<String>,
+    pub length_sec: Option<i64>,
+    pub checked_at: Option<i64>,
 }
 
 pub struct Db {
@@ -183,6 +215,18 @@ CREATE TABLE IF NOT EXISTS settings (
     key TEXT PRIMARY KEY,
     value TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS live_relink (
+    track_id INTEGER PRIMARY KEY,
+    checked_at INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS track_ends (
+    track_id INTEGER PRIMARY KEY,
+    manual_start_sec INTEGER,
+    manual_end_sec INTEGER,
+    length_sec INTEGER,
+    mbid TEXT,
+    checked_at INTEGER
+);
 "#;
 
 const FTS_SCHEMA: &str = r#"
@@ -300,6 +344,13 @@ impl Db {
                 "tracks_version",
                 "ALTER TABLE episodes ADD COLUMN tracks_version INTEGER NOT NULL DEFAULT 0",
             ),
+            // The listener's own start for a song: the moment they starred it in an
+            // untimed playlist, or a time they typed or dragged.
+            (
+                "track_ends",
+                "manual_start_sec",
+                "ALTER TABLE track_ends ADD COLUMN manual_start_sec INTEGER",
+            ),
         ];
         for (table, column, sql) in migrations {
             let exists = {
@@ -387,6 +438,7 @@ impl Db {
         }
         for (id, _) in &doomed {
             tx.execute("DELETE FROM tracks WHERE id=?1", params![id])?;
+            tx.execute("DELETE FROM track_ends WHERE track_id=?1", params![id])?;
             // The track's favourite would otherwise outlive it as an unreachable row.
             tx.execute(
                 "DELETE FROM favourites WHERE kind='track' AND ref_id=?1",
@@ -772,6 +824,13 @@ impl Db {
                 for (index, track) in tracks.iter().enumerate() {
                     let seq = index as i64;
                     let track_id = if let Some((_, id)) = existing.iter().find(|(s, _)| *s == seq) {
+                        // The row is reused by position. When a reparse puts a different
+                        // song at this seq, its stored end and length belong to the old one.
+                        tx.execute(
+                            "DELETE FROM track_ends WHERE track_id=?1 AND EXISTS(
+                                 SELECT 1 FROM tracks WHERE id=?1 AND (artist IS NOT ?2 OR title IS NOT ?3))",
+                            params![id, track.artist, track.title],
+                        )?;
                         tx.execute(
                             "UPDATE tracks SET artist=?3, title=?4, album=?5, label=?6, comments=?7, start_sec=?8
                              WHERE episode_id=?1 AND seq=?2",
@@ -801,6 +860,7 @@ impl Db {
                         .collect();
                     for id in surplus {
                         tx.execute("DELETE FROM tracks WHERE id=?1", params![id])?;
+                        tx.execute("DELETE FROM track_ends WHERE track_id=?1", params![id])?;
                         if fts {
                             tx.execute(
                                 "DELETE FROM tracks_fts WHERE track_id=?1",
@@ -867,8 +927,10 @@ impl Db {
         let mut stmt = self.conn.prepare(
             "SELECT t.id, t.episode_id, t.seq, t.artist, t.title, t.album, t.label, t.comments, t.start_sec,
                     t.source_id, t.played_at,
-                    EXISTS(SELECT 1 FROM favourites f WHERE f.kind='track' AND f.ref_id = CAST(t.id AS TEXT))
-             FROM tracks t WHERE t.episode_id = ?1 ORDER BY t.seq",
+                    EXISTS(SELECT 1 FROM favourites f WHERE f.kind='track' AND f.ref_id = CAST(t.id AS TEXT)),
+                    te.manual_end_sec, te.length_sec, te.manual_start_sec
+             FROM tracks t LEFT JOIN track_ends te ON te.track_id = t.id
+             WHERE t.episode_id = ?1 ORDER BY t.seq",
         )?;
         let rows = stmt.query_map([episode_id], |r| {
             Ok(Track {
@@ -884,6 +946,9 @@ impl Db {
                 source_id: r.get(9)?,
                 played_at: r.get(10)?,
                 favourite: r.get::<_, i64>(11)? != 0,
+                manual_end_sec: r.get(12)?,
+                length_sec: r.get(13)?,
+                manual_start_sec: r.get(14)?,
             })
         })?;
         rows.collect()
@@ -1011,11 +1076,209 @@ impl Db {
                     source_id: r.get(9)?,
                     played_at: r.get(10)?,
                     favourite: r.get::<_, i64>(11)? != 0,
+                    manual_start_sec: None,
+                    manual_end_sec: None,
+                    length_sec: None,
                 })
             })?
             .collect::<Result<Vec<_>, _>>()?;
         tracks.reverse();
         Ok(tracks)
+    }
+
+    /// What a length lookup needs: the names to search by and what is already stored.
+    /// None when the track does not exist.
+    pub fn track_length_info(
+        &self,
+        track_id: i64,
+    ) -> Result<Option<TrackLengthInfo>, rusqlite::Error> {
+        self.conn
+            .query_row(
+                "SELECT t.artist, t.title, t.album, te.length_sec, te.checked_at
+                 FROM tracks t LEFT JOIN track_ends te ON te.track_id = t.id WHERE t.id = ?1",
+                [track_id],
+                |r| {
+                    Ok(TrackLengthInfo {
+                        artist: r.get(0)?,
+                        title: r.get(1)?,
+                        album: r.get(2)?,
+                        length_sec: r.get(3)?,
+                        checked_at: r.get(4)?,
+                    })
+                },
+            )
+            .optional()
+    }
+
+    /// Store a lookup result. A miss is stored too (`length_sec` NULL), so the same song
+    /// is not searched again on every play.
+    pub fn set_track_length(
+        &self,
+        track_id: i64,
+        length_sec: Option<i64>,
+        mbid: Option<&str>,
+        checked_at: i64,
+    ) -> Result<(), rusqlite::Error> {
+        self.conn.execute(
+            "INSERT INTO track_ends (track_id, length_sec, mbid, checked_at) VALUES (?1, ?2, ?3, ?4)
+             ON CONFLICT(track_id) DO UPDATE SET length_sec=?2, mbid=?3, checked_at=?4",
+            params![track_id, length_sec, mbid, checked_at],
+        )?;
+        Ok(())
+    }
+
+    /// Favourite songs whose episode has no archived audio, oldest first.
+    pub fn unplayable_favourites(&self) -> Result<Vec<UnplayableFavourite>, rusqlite::Error> {
+        let mut stmt = self.conn.prepare(
+            "SELECT t.id, t.episode_id, e.show_id, COALESCE(e.air_date_iso, e.air_date),
+                    t.artist, t.title, lr.checked_at
+             FROM favourites f
+             JOIN tracks t ON CAST(t.id AS TEXT) = f.ref_id
+             JOIN episodes e ON e.id = t.episode_id
+             LEFT JOIN live_relink lr ON lr.track_id = t.id
+             WHERE f.kind = 'track' AND e.has_audio = 0
+             ORDER BY f.added_at",
+        )?;
+        let rows = stmt.query_map([], |r| {
+            Ok(UnplayableFavourite {
+                track_id: r.get(0)?,
+                episode_id: r.get(1)?,
+                show_id: r.get(2)?,
+                air_date_iso: r
+                    .get::<_, Option<String>>(3)?
+                    .as_deref()
+                    .and_then(air_date_to_iso),
+                artist: r.get(4)?,
+                title: r.get(5)?,
+                checked_at: r.get(6)?,
+            })
+        })?;
+        rows.collect()
+    }
+
+    pub fn set_relink_checked(&self, track_id: i64, at: i64) -> Result<(), rusqlite::Error> {
+        self.conn.execute(
+            "INSERT INTO live_relink (track_id, checked_at) VALUES (?1, ?2)
+             ON CONFLICT(track_id) DO UPDATE SET checked_at=?2",
+            params![track_id, at],
+        )?;
+        Ok(())
+    }
+
+    /// Real WFMU episodes (positive id) aired on `date_iso`, other than `exclude`, with
+    /// whether each has audio. Synthetic live episodes have negative ids and never match.
+    pub fn real_episodes_on(
+        &self,
+        date_iso: &str,
+        exclude: i64,
+    ) -> Result<Vec<(i64, bool)>, rusqlite::Error> {
+        let mut stmt = self.conn.prepare(
+            "SELECT id, has_audio FROM episodes
+             WHERE id > 0 AND id <> ?2 AND COALESCE(air_date_iso, air_date) = ?1",
+        )?;
+        let rows = stmt.query_map(params![date_iso, exclude], |r| {
+            Ok((r.get::<_, i64>(0)?, r.get::<_, i64>(1)? != 0))
+        })?;
+        rows.collect()
+    }
+
+    /// Point the episode at another show. Used when a playlist page names the real show
+    /// of an episode first met under a synthetic live-* show.
+    pub fn set_episode_show(&self, episode_id: i64, show_id: &str) -> Result<(), rusqlite::Error> {
+        self.conn.execute(
+            "UPDATE episodes SET show_id=?2 WHERE id=?1",
+            params![episode_id, show_id],
+        )?;
+        Ok(())
+    }
+
+    /// Move a song favourite from one playlist row to another, keeping when it was added.
+    /// The listener's start and end marks move with it only when the target row has no
+    /// playlist time and no marks of its own: a time typed against a live stream says
+    /// nothing about where the song sits in a timed archive playlist.
+    pub fn move_track_favourite(&mut self, from: i64, to: i64) -> Result<(), rusqlite::Error> {
+        if from == to {
+            return Ok(());
+        }
+        let tx = self.conn.transaction()?;
+        let target_is_fav: bool = tx.query_row(
+            "SELECT EXISTS(SELECT 1 FROM favourites WHERE kind='track' AND ref_id=?1)",
+            [to.to_string()],
+            |r| r.get(0),
+        )?;
+        if target_is_fav {
+            tx.execute(
+                "DELETE FROM favourites WHERE kind='track' AND ref_id=?1",
+                [from.to_string()],
+            )?;
+        } else {
+            tx.execute(
+                "UPDATE favourites SET ref_id=?2 WHERE kind='track' AND ref_id=?1",
+                params![from.to_string(), to.to_string()],
+            )?;
+        }
+        let target_untimed: bool = tx.query_row(
+            "SELECT start_sec IS NULL FROM tracks WHERE id=?1",
+            [to],
+            |r| r.get(0),
+        )?;
+        let target_has_marks: bool = tx.query_row(
+            "SELECT EXISTS(SELECT 1 FROM track_ends WHERE track_id=?1
+                 AND (manual_start_sec IS NOT NULL OR manual_end_sec IS NOT NULL))",
+            [to],
+            |r| r.get(0),
+        )?;
+        if target_untimed && !target_has_marks {
+            tx.execute(
+                "INSERT INTO track_ends (track_id, manual_start_sec, manual_end_sec)
+                 SELECT ?2, manual_start_sec, manual_end_sec FROM track_ends WHERE track_id=?1
+                 ON CONFLICT(track_id) DO UPDATE SET
+                   manual_start_sec=excluded.manual_start_sec,
+                   manual_end_sec=excluded.manual_end_sec",
+                params![from, to],
+            )?;
+        }
+        tx.execute("DELETE FROM live_relink WHERE track_id=?1", [from])?;
+        tx.commit()
+    }
+
+    /// Set or clear (None) the listener's own start for a song.
+    pub fn set_manual_start(
+        &self,
+        track_id: i64,
+        start_sec: Option<i64>,
+    ) -> Result<(), rusqlite::Error> {
+        self.conn.execute(
+            "INSERT INTO track_ends (track_id, manual_start_sec) VALUES (?1, ?2)
+             ON CONFLICT(track_id) DO UPDATE SET manual_start_sec=?2",
+            params![track_id, start_sec],
+        )?;
+        Ok(())
+    }
+
+    /// Set both of the listener's marks in one write. None clears that side.
+    pub fn set_manual_range(
+        &self,
+        track_id: i64,
+        start_sec: Option<i64>,
+        end_sec: Option<i64>,
+    ) -> Result<(), rusqlite::Error> {
+        self.conn.execute(
+            "INSERT INTO track_ends (track_id, manual_start_sec, manual_end_sec) VALUES (?1, ?2, ?3)
+             ON CONFLICT(track_id) DO UPDATE SET manual_start_sec=?2, manual_end_sec=?3",
+            params![track_id, start_sec, end_sec],
+        )?;
+        Ok(())
+    }
+
+    /// Set or clear (None) the listener's own end mark for a song.
+    pub fn set_manual_end(&self, track_id: i64, end_sec: Option<i64>) -> Result<(), rusqlite::Error> {
+        self.conn.execute(
+            "INSERT INTO track_ends (track_id, manual_end_sec) VALUES (?1, ?2)
+             ON CONFLICT(track_id) DO UPDATE SET manual_end_sec=?2",
+            params![track_id, end_sec],
+        )?;
+        Ok(())
     }
 
     pub fn episode_tracks_scraped(&self, episode_id: i64) -> Result<bool, rusqlite::Error> {
@@ -1462,6 +1725,121 @@ mod tests {
         db.set_episode_tracks_version(13141, 3).unwrap();
         assert_eq!(db.show_scrape_version("KG").unwrap(), 3);
         assert_eq!(db.episode_tracks_version(13141).unwrap(), 3);
+
+        drop(db);
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn track_ends_follow_their_song() {
+        let path = std::env::temp_dir().join(format!(
+            "archiplayer-ends-{}-{}.db",
+            std::process::id(),
+            Db::now()
+        ));
+        let mut db = Db::open(&path).expect("open track ends test db");
+        db.upsert_show("END", "Ends", None, false).unwrap();
+        db.upsert_episode(1, "END", None, Some("Ends"), None, None)
+            .unwrap();
+        let song = |artist: &str, start: i64| ParsedTrack {
+            artist: Some(artist.into()),
+            title: Some("Song".into()),
+            album: None,
+            label: None,
+            comments: None,
+            start_sec: Some(start),
+        };
+        db.sync_tracks(1, &[song("A", 0), song("B", 200)], TrackSyncMode::Snapshot)
+            .unwrap();
+        let ids: Vec<i64> = db.list_tracks(1).unwrap().iter().map(|t| t.id).collect();
+        db.set_manual_end(ids[0], Some(190)).unwrap();
+        db.set_track_length(ids[0], Some(185), Some("mb"), 1).unwrap();
+        db.set_manual_end(ids[1], Some(400)).unwrap();
+        db.set_manual_start(ids[1], Some(210)).unwrap();
+
+        let tracks = db.list_tracks(1).unwrap();
+        assert_eq!(tracks[1].manual_start_sec, Some(210));
+        assert_eq!(tracks[1].manual_end_sec, Some(400));
+        db.set_manual_range(ids[1], None, Some(390)).unwrap();
+        let tracks = db.list_tracks(1).unwrap();
+        assert_eq!(tracks[1].manual_start_sec, None);
+        assert_eq!(tracks[1].manual_end_sec, Some(390));
+        assert_eq!(tracks[0].manual_end_sec, Some(190));
+        assert_eq!(tracks[0].length_sec, Some(185));
+        let info = db.track_length_info(ids[0]).unwrap().unwrap();
+        assert_eq!(info.checked_at, Some(1));
+
+        // Clearing the mark keeps the looked-up length.
+        db.set_manual_end(ids[0], None).unwrap();
+        let tracks = db.list_tracks(1).unwrap();
+        assert_eq!(tracks[0].manual_end_sec, None);
+        assert_eq!(tracks[0].length_sec, Some(185));
+
+        // Same song at seq 0 keeps its row; the shrunk tail loses its end row with it.
+        db.sync_tracks(1, &[song("A", 0)], TrackSyncMode::Snapshot)
+            .unwrap();
+        assert_eq!(db.list_tracks(1).unwrap()[0].length_sec, Some(185));
+        let orphan: i64 = db
+            .conn
+            .query_row(
+                "SELECT COUNT(*) FROM track_ends WHERE track_id=?1",
+                [ids[1]],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(orphan, 0);
+
+        // A different song reparsed into the same seq does not inherit the old length.
+        db.sync_tracks(1, &[song("C", 0)], TrackSyncMode::Snapshot)
+            .unwrap();
+        let tracks = db.list_tracks(1).unwrap();
+        assert_eq!(tracks[0].id, ids[0]);
+        assert_eq!(tracks[0].length_sec, None);
+
+        drop(db);
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn live_favourite_moves_to_its_archive_row() {
+        let path = std::env::temp_dir().join(format!(
+            "archiplayer-relink-{}-{}.db",
+            std::process::id(),
+            Db::now()
+        ));
+        let mut db = Db::open(&path).expect("open relink test db");
+        db.upsert_show("live-drummer", "Drummer", None, true).unwrap();
+        db.upsert_show("WA", "Wake", None, false).unwrap();
+        db.upsert_episode(-5, "live-drummer", Some("2026-07-23"), Some("Live history"), None, None)
+            .unwrap();
+        db.upsert_episode(166690, "WA", Some("July 23, 2026"), None, Some(9), None)
+            .unwrap();
+        let song = |start: Option<i64>| ParsedTrack {
+            artist: Some("Cradle".into()),
+            title: Some("Man Is A Man".into()),
+            album: None,
+            label: None,
+            comments: None,
+            start_sec: start,
+        };
+        db.sync_tracks(-5, &[song(None)], TrackSyncMode::Snapshot).unwrap();
+        db.sync_tracks(166690, &[song(None)], TrackSyncMode::Snapshot).unwrap();
+        let live = db.list_tracks(-5).unwrap()[0].id;
+        let archived = db.list_tracks(166690).unwrap()[0].id;
+        db.toggle_favourite("track", &live.to_string()).unwrap();
+        db.set_manual_start(live, Some(600)).unwrap();
+
+        let pending = db.unplayable_favourites().unwrap();
+        assert_eq!(pending.len(), 1);
+        assert_eq!(pending[0].air_date_iso.as_deref(), Some("2026-07-23"));
+        assert_eq!(db.real_episodes_on("2026-07-23", -5).unwrap(), vec![(166690, true)]);
+
+        db.move_track_favourite(live, archived).unwrap();
+        assert!(db.unplayable_favourites().unwrap().is_empty());
+        let tracks = db.list_tracks(166690).unwrap();
+        assert!(tracks[0].favourite);
+        assert_eq!(tracks[0].manual_start_sec, Some(600));
+        assert!(!db.list_tracks(-5).unwrap()[0].favourite);
 
         drop(db);
         let _ = std::fs::remove_file(path);

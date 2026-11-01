@@ -43,6 +43,12 @@ export interface Track {
   source_id: string | null;
   played_at: number | null;
   favourite: boolean;
+  /** Show-relative start the listener set (star moment, typed or dragged); wins over `start_sec`. */
+  manual_start_sec?: number | null;
+  /** Show-relative end the listener marked; wins over every derived end. */
+  manual_end_sec?: number | null;
+  /** Recording length from MusicBrainz, once matched. */
+  length_sec?: number | null;
 }
 
 export interface ShowDetail {
@@ -258,6 +264,16 @@ export const api = {
     invoke<boolean>("toggle_favourite", { kind, refId }),
   listFavourites: () => invoke<Favourites>("list_favourites"),
   search: (query: string) => invoke<SearchResults>("search", { query }),
+  lookupTrackLength: (trackId: number) =>
+    invoke<number | null>("lookup_track_length", { trackId }),
+  setTrackEnd: (trackId: number, endSec: number | null) =>
+    invoke<void>("set_track_end", { trackId, endSec }),
+  setTrackStart: (trackId: number, startSec: number | null) =>
+    invoke<void>("set_track_start", { trackId, startSec }),
+  setTrackRange: (trackId: number, startSec: number | null, endSec: number | null) =>
+    invoke<void>("set_track_range", { trackId, startSec, endSec }),
+  /** Move song favourites starred from a live stream to their archived copy. Returns how many moved. */
+  relinkLiveFavourites: () => invoke<number>("relink_live_favourites"),
   recordListen: (
     sessionId: string,
     episodeId: number,

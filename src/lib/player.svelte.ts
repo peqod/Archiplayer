@@ -28,7 +28,13 @@ import {
   type QueueItem,
 } from "./queue-build";
 import { shouldRetryStaleSource, staleResumeAt } from "./stale-source";
-import { segmentEndSec, trackMarkSeconds } from "./track-playback";
+import {
+  MIN_SONG_SEC,
+  effectiveStart,
+  songEnd,
+  trackMarkSeconds,
+  type SongEndSource,
+} from "./track-playback";
 import { normalizeVolume } from "./volume";
 import { friendlyError } from "./errors";
 
@@ -55,6 +61,10 @@ class Player {
   // show's playlist zero. Playlist `start_sec` values are show-relative, so the audio
   // position of a track is `start_sec + offset`. 0 for old archives with no lead-in.
   private offset = $state(0);
+  /** Archive pre-roll in seconds: audio time = show-relative time + this. */
+  get audioOffset(): number {
+    return this.offset;
+  }
 
   queue = $state<QueueItem[]>([]);
   queueIndex = $state(-1);
@@ -123,16 +133,37 @@ class Player {
   /** True while the queue is a list of songs rather than a list of whole episodes. */
   songMode = $derived(!!this.current?.song);
 
+  // Song lengths looked up this session, and end marks set or cleared this session (null
+  // = cleared), by track id. They override what the queue entry and the playlist rows
+  // carried when they were loaded.
+  private songLengths = $state<Record<number, number>>({});
+  private manualEnds = $state<Record<number, number | null>>({});
+  private lengthRequests = new Set<number>();
+
+  /**
+   * Show-relative end of the current song entry and where it came from (see `songEnd`).
+   * Null outside song mode. Also null during a transition (`loadCurrent` empties
+   * `tracks`), so the boundary check below stays inert until the new playlist is in and
+   * `offset` belongs to the new file.
+   */
+  songEndInfo = $derived.by((): { endSec: number | null; source: SongEndSource } | null => {
+    const song = this.current?.song;
+    if (this.live || !song || !this.tracks.length) return null;
+    const row = this.tracks.find((t) => t.id === song.id);
+    const manual =
+      song.id in this.manualEnds
+        ? this.manualEnds[song.id]
+        : (row?.manual_end_sec ?? song.manualEndSec);
+    const length = this.songLengths[song.id] ?? row?.length_sec ?? song.lengthSec;
+    return songEnd(this.tracks, song.startSec, manual, length, song.startKnown ?? true);
+  });
+
   /**
    * Audio-time position where the current entry has to stop, or null when the episode's
-   * own end is the boundary. Derived from the loaded playlist, so it is null during a
-   * transition (`loadCurrent` empties `tracks`) and the check below stays inert until
-   * there is something to compare against.
+   * own end is the boundary.
    */
   private segmentEnd = $derived.by(() => {
-    const song = this.current?.song;
-    if (this.live || !song) return null;
-    const end = segmentEndSec(this.tracks, song.startSec);
+    const end = this.songEndInfo?.endSec ?? null;
     return end === null ? null : end + this.offset;
   });
 
@@ -161,6 +192,14 @@ class Player {
     if (this.live) return this.liveTrackIndex;
     // Track timestamps are show-relative; compare against show time (audio − offset).
     const showTime = this.currentTime - this.offset;
+    // A queued song with no playlist timecode (its start is the star moment, a mark of
+    // the listener's own, or 0:00) is the current song for as long as its entry plays:
+    // the timecodes cannot place it.
+    const song = this.current?.song;
+    if (song) {
+      const at = this.tracks.findIndex((t) => t.id === song.id);
+      if (at >= 0 && this.tracks[at].start_sec === null) return at;
+    }
     let idx = -1;
     for (let i = 0; i < this.tracks.length; i++) {
       const s = this.tracks[i].start_sec;
@@ -468,6 +507,7 @@ class Player {
   ) {
     const item = this.current;
     if (!item || !this.audio) return;
+    this.lookUpSongLengths();
     const generation = this.transitions.start(`archive:${item.episode.id}`);
     this.error = null;
     this.loading = true;
@@ -1030,9 +1070,12 @@ class Player {
     if (t) t.favourite = fav;
   }
 
-  /** Audio position an entry starts at: its song, or the episode's jingle lead-in. */
+  /**
+   * Audio position an entry starts at: its song, or the episode's jingle lead-in. A song
+   * with no start at all (the 0:00 fallback) starts like its episode does.
+   */
   private entryStart(item: QueueItem): number {
-    return item.song
+    return item.song && item.song.startKnown !== false
       ? item.song.startSec + this.offset
       : Math.max(0, this.offset - INTRO_LEAD_IN_SEC);
   }
@@ -1055,6 +1098,119 @@ class Player {
       this.queue = shuffledFrom(this.queue, -1);
     }
     await this.advanceTo(next);
+  }
+
+  /**
+   * Fetch the recording length of the current song entry and of the one after it, so the
+   * next song's end is known before it starts. Background only: a miss or a failure
+   * leaves the playlist's own boundary in charge. Each id is asked once per session; the
+   * backend caches answers across sessions.
+   */
+  private lookUpSongLengths() {
+    const next = nextQueueIndex(this.queueIndex, this.queue.length, this.repeat);
+    for (const item of [this.current, next >= 0 ? this.queue[next] : null]) {
+      const song = item?.song;
+      if (!song || this.lengthRequests.has(song.id)) continue;
+      // A length counted from the 0:00 fallback would end the entry at a random place.
+      if (song.lengthSec != null || song.startKnown === false) continue;
+      const manual = song.id in this.manualEnds ? this.manualEnds[song.id] : song.manualEndSec;
+      if (manual != null) continue;
+      this.lengthRequests.add(song.id);
+      api
+        .lookupTrackLength(song.id)
+        .then((length) => {
+          if (length != null) this.songLengths = { ...this.songLengths, [song.id]: length };
+        })
+        .catch((e) => console.warn("[archiplayer]", "song length lookup failed", e));
+    }
+  }
+
+  /**
+   * Save `endSec` (show-relative, or null to clear) as a song's end. Applies at once to the
+   * song if it is playing. Returns the mark it replaced, for undo.
+   */
+  async setSongEnd(trackId: number, endSec: number | null): Promise<number | null> {
+    const row = this.tracks.find((t) => t.id === trackId);
+    const queued = this.queue.find((q) => q.song?.id === trackId)?.song;
+    const previous =
+      trackId in this.manualEnds
+        ? this.manualEnds[trackId]
+        : (row?.manual_end_sec ?? queued?.manualEndSec ?? null);
+    await api.setTrackEnd(trackId, endSec);
+    this.manualEnds = { ...this.manualEnds, [trackId]: endSec };
+    return previous;
+  }
+
+  /**
+   * Show-relative position to save as the start of `track` when it is starred now, or
+   * null. Only for a song with no playlist timecode, and only while its own episode
+   * plays: then the playhead is the best clue the listener gives about where it is.
+   */
+  starStartFor(track: { id: number; episode_id: number; start_sec: number | null }): number | null {
+    const item = this.current;
+    if (this.live || !item || item.episode.id !== track.episode_id) return null;
+    if (track.start_sec !== null || !this.duration) return null;
+    return Math.max(0, Math.round(this.currentTime - this.offset));
+  }
+
+  /**
+   * Point every queued entry of `trackId` at its new start, so a replay or a later entry
+   * of the same song seeks to it. Null falls back to the playlist timecode, then 0:00.
+   */
+  private applySongStart(trackId: number, startSec: number | null) {
+    if (!this.queue.some((q) => q.song?.id === trackId)) return;
+    this.queue = this.queue.map((q) => {
+      if (q.song?.id !== trackId) return q;
+      const start = effectiveStart(q.song.playlistStartSec ?? null, startSec);
+      return {
+        ...q,
+        song: { ...q.song, startSec: start.sec, startKnown: start.known, manualStartSec: startSec },
+      };
+    });
+  }
+
+  /** Save `startSec` (show-relative, or null to clear) as a song's start. */
+  async setSongStart(trackId: number, startSec: number | null): Promise<void> {
+    await api.setTrackStart(trackId, startSec);
+    this.applySongStart(trackId, startSec);
+  }
+
+  /**
+   * Save a song's start and end in one write (show-relative; null clears that side). The
+   * end applies at once to the song if it is playing; the start applies the next time
+   * the entry starts.
+   */
+  async setSongRange(trackId: number, startSec: number | null, endSec: number | null) {
+    await api.setTrackRange(trackId, startSec, endSec);
+    this.applySongStart(trackId, startSec);
+    this.manualEnds = { ...this.manualEnds, [trackId]: endSec };
+  }
+
+  /** The listener's current start and end marks for a song (show-relative), for editors. */
+  songMarks(trackId: number): { start: number | null; end: number | null } {
+    const row = this.tracks.find((t) => t.id === trackId);
+    const queued = this.queue.find((q) => q.song?.id === trackId)?.song;
+    const end =
+      trackId in this.manualEnds
+        ? this.manualEnds[trackId]
+        : (row?.manual_end_sec ?? queued?.manualEndSec ?? null);
+    const start = queued ? (queued.manualStartSec ?? null) : (row?.manual_start_sec ?? null);
+    return { start, end };
+  }
+
+  /**
+   * Mark the playhead as the end of the song entry that is playing. The song then stops
+   * here, which is the point: the listener heard where it ends. Returns the replaced mark
+   * for undo, or undefined when there is nothing to mark (not a song, or too close to its
+   * start).
+   */
+  async markSongEnd(): Promise<{ trackId: number; previous: number | null } | undefined> {
+    const song = this.current?.song;
+    if (this.live || !song) return undefined;
+    const endSec = Math.round(this.currentTime - this.offset);
+    if (endSec < song.startSec + MIN_SONG_SEC) return undefined;
+    const previous = await this.setSongEnd(song.id, endSec);
+    return { trackId: song.id, previous };
   }
 
   private haltAtQueueEnd() {
@@ -1082,6 +1238,7 @@ class Player {
       await this.loadCurrent();
       return;
     }
+    this.lookUpSongLengths();
     // Clear the latch before seeking: the new entry brings a new boundary, and the check
     // runs on the very next `timeupdate`.
     this.completionHandled = false;

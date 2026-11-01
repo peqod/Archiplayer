@@ -16,11 +16,14 @@
   import { shortcuts, type ActionHandlers } from "$lib/shortcuts.svelte";
   import { matchesAccel, shouldIgnoreKey } from "$lib/shortcuts";
   import { api, fmtTime } from "$lib/api";
-  import { reportError } from "$lib/toaster.svelte";
+  import { reportError, toast } from "$lib/toaster.svelte";
   import { selectRandomPlayback } from "$lib/random-show";
   import { theme } from "$lib/theme.svelte";
   import Icon from "$lib/Icon.svelte";
   import MarqueeText from "$lib/MarqueeText.svelte";
+  import SongRangeBar from "$lib/SongRangeBar.svelte";
+  import { runLiveRelink } from "$lib/live-relink.svelte";
+  import { MIN_SONG_SEC } from "$lib/track-playback";
   import { playGlyph } from "$lib/play-icon";
   import Toast from "$lib/Toast.svelte";
   import { page } from "$app/stores";
@@ -429,6 +432,9 @@
     if (!t) return;
     try {
       const fav = await api.toggleFavourite("track", String(t.id));
+      // A song with no playlist time starts where the listener starred it.
+      const at = fav ? player.starStartFor(t) : null;
+      if (at !== null) await player.setSongStart(t.id, at);
       player.setTrackFavourite(t.id, fav);
     } catch (e) {
       reportError(e, (m) => (favError = m));
@@ -457,6 +463,83 @@
     }
   }
 
+  // Only a queued song has an end to mark: in a whole episode the playlist decides.
+  async function markSongEnd() {
+    if (!player.songMode) return;
+    try {
+      const done = await player.markSongEnd();
+      toast(done ? "Song end saved." : "Too close to the song start.");
+    } catch (e) {
+      reportError(e, (m) => (favError = m));
+    }
+  }
+
+  // -- Song range edit -------------------------------------------------------
+  //
+  // While it is open the seek bar becomes two handles, the song's start and end, in audio
+  // seconds. Save writes them show-relative, the clock the playlist and the profile use.
+  // A handle left where it opened keeps an automatic value automatic.
+
+  let rangeEdit = $state<{
+    trackId: number;
+    start: number;
+    end: number;
+    startInitial: number;
+    endInitial: number;
+  } | null>(null);
+
+  function openRangeEdit() {
+    const song = player.current?.song;
+    if (player.live || !song || !player.duration) return;
+    const offset = player.audioOffset;
+    const start = Math.min(song.startSec + offset, Math.max(0, player.duration - MIN_SONG_SEC));
+    const endShow = player.songEndInfo?.endSec ?? null;
+    const end =
+      endShow !== null
+        ? Math.min(endShow + offset, player.duration)
+        : Math.min(start + 300, player.duration);
+    rangeEdit = {
+      trackId: song.id,
+      start: Math.round(start),
+      end: Math.round(Math.max(end, start + MIN_SONG_SEC)),
+      startInitial: Math.round(start),
+      endInitial: Math.round(Math.max(end, start + MIN_SONG_SEC)),
+    };
+  }
+
+  function cancelRangeEdit() {
+    rangeEdit = null;
+  }
+
+  function toggleRangeEdit() {
+    if (rangeEdit) cancelRangeEdit();
+    else openRangeEdit();
+  }
+
+  async function saveRangeEdit() {
+    const edit = rangeEdit;
+    if (!edit) return;
+    const offset = player.audioOffset;
+    const marks = player.songMarks(edit.trackId);
+    const startSec =
+      edit.start === edit.startInitial ? marks.start : Math.max(0, Math.round(edit.start - offset));
+    const endSec =
+      edit.end === edit.endInitial ? marks.end : Math.max(0, Math.round(edit.end - offset));
+    try {
+      await player.setSongRange(edit.trackId, startSec, endSec);
+      rangeEdit = null;
+      toast("Song range saved.");
+    } catch (e) {
+      reportError(e, (m) => (favError = m));
+    }
+  }
+
+  // Another entry, or no player at all, ends the edit: its handles belong to one song.
+  $effect(() => {
+    const id = player.current?.song?.id ?? null;
+    if (rangeEdit && rangeEdit.trackId !== id) rangeEdit = null;
+  });
+
   // The one place a bound key turns into an act. Both tiers of shortcut and the OS
   // media controls come through here, so a rebind never means new behaviour.
   const actionHandlers: ActionHandlers = {
@@ -468,16 +551,27 @@
     mute: () => player.toggleMute(),
     // Live has its own favourite targets, so one binding covers both modes.
     "fav-song": () => void (player.live ? bookmarkLiveSong() : bookmarkSong()),
+    "mark-end": () => void markSongEnd(),
+    "edit-range": () => toggleRangeEdit(),
     "save-show": () => void (player.live ? bookmarkLiveEpisode() : bookmarkShow()),
     random: () => void feelingLucky(),
   };
 
   onMount(() => shortcuts.attach(actionHandlers));
 
+  // Songs starred from a live stream have no audio until WFMU archives the broadcast.
+  // Look for their archived copy at start, in the background.
+  onMount(() => void runLiveRelink());
+
   function onKey(e: KeyboardEvent) {
     if (!shortcuts.enabled || shortcuts.recording) return;
     // Held keys would step a song per repeat, and a raised loupe owns the keyboard.
     if (e.defaultPrevented || e.repeat || dragSec !== null) return;
+    if (rangeEdit && e.key === "Escape") {
+      e.preventDefault();
+      cancelRangeEdit();
+      return;
+    }
     for (const [id, accel] of shortcuts.localBindings()) {
       if (!matchesAccel(e, accel)) continue;
       // The focused control keeps the key: typing in search must stay typing.
@@ -696,65 +790,103 @@
             aria-pressed={currentTrack?.favourite ?? false}
             title={currentTrack ? "Star this song" : "No song info yet"}
           ><Icon name="star" filled={currentTrack?.favourite ?? false} /></button>
-          <MarqueeText
-            text={nowPlayingSong
-              ? `♪ ${nowPlayingSong.artist ?? "?"} — ${nowPlayingSong.title ?? "?"}`
-              : player.error ?? player.current.episode.title ?? ""}
-            tone={!nowPlayingSong && player.error ? "danger" : "default"}
-          />
+          {#if rangeEdit}
+            <span class="range-edit">
+              <span class="range-times">
+                {fmtTime(Math.max(0, rangeEdit.start - player.audioOffset))} to {fmtTime(Math.max(0, rangeEdit.end - player.audioOffset))}
+              </span>
+              <button class="range-btn" type="button" onclick={saveRangeEdit}>Save</button>
+              <button class="range-btn" type="button" onclick={cancelRangeEdit}>Cancel</button>
+            </span>
+          {:else}
+            <MarqueeText
+              text={nowPlayingSong
+                ? `♪ ${nowPlayingSong.artist ?? "?"} — ${nowPlayingSong.title ?? "?"}`
+                : player.error ?? player.current.episode.title ?? ""}
+              tone={!nowPlayingSong && player.error ? "danger" : "default"}
+            />
+          {/if}
+          {#if player.songMode}
+            <button
+              class="pfav"
+              class:on={!!rangeEdit}
+              onclick={toggleRangeEdit}
+              disabled={!player.duration}
+              aria-label="Edit song start and end"
+              aria-pressed={!!rangeEdit}
+              title="Edit song start and end"
+            ><Icon name="range" filled={!!rangeEdit} /></button>
+            <button
+              class="pfav"
+              class:on={player.songEndInfo?.source === "manual"}
+              onclick={markSongEnd}
+              aria-label="Mark song end here"
+              title="Mark song end here"
+            ><Icon name="flag" filled={player.songEndInfo?.source === "manual"} /></button>
+          {/if}
         </div>
         <div class="p-scrub">
           <span class="p-time">{fmtTime(displaySec)}</span>
-          <div
-            class="hsl seek"
-            class:off={!player.duration}
-            class:lensing={dragSec !== null}
-            style={`--hsl-level: ${seekLevel}; --seek-n: ${seekFrac}; --track-w: ${seekTrackW}px; --lens-zoom: ${LOUPE_ZOOM}; --lens-size: ${LOUPE_SIZE}px`}
-          >
-            <!-- Input first so the paint can key its focus ring off it with `~`. It is
-                 transparent and the paint ignores the pointer, so order costs nothing. -->
-            <input
-              class="sl-input"
-              type="range"
-              min="0"
-              max={player.duration || 0}
-              step="1"
-              value={Math.round(displaySec)}
-              oninput={onScrub}
-              onpointerdown={onSeekDown}
-              onpointermove={onSeekMove}
-              onpointerup={onSeekUp}
-              onpointercancel={onSeekUp}
-              onlostpointercapture={endSeek}
-              disabled={!player.duration}
-              aria-label="Episode position"
+          {#if rangeEdit}
+            <SongRangeBar
+              duration={player.duration}
+              position={player.currentTime}
+              minGap={MIN_SONG_SEC}
+              bind:start={rangeEdit.start}
+              bind:end={rangeEdit.end}
             />
-            <span
-              class="hsl-track"
-              aria-hidden="true"
-              bind:this={seekTrackEl}
-              bind:clientWidth={seekTrackW}
+          {:else}
+            <div
+              class="hsl seek"
+              class:off={!player.duration}
+              class:lensing={dragSec !== null}
+              style={`--hsl-level: ${seekLevel}; --seek-n: ${seekFrac}; --track-w: ${seekTrackW}px; --lens-zoom: ${LOUPE_ZOOM}; --lens-size: ${LOUPE_SIZE}px`}
             >
-              <span class="hsl-fill"></span>
-              {#each seekMarks as pct (pct)}
-                <span class="hsl-tick mark" style={`left: ${pct}%`}></span>
-              {/each}
-              <span class="hsl-thumb"></span>
-              {#if dragSec !== null}
-                <!-- The loupe: the same track, fill and notches re-rendered at zoom and
-                     slid so the held position lands under the crosshair. -->
-                <span class="seek-lens">
-                  <span class="lens-strip">
-                    <span class="hsl-fill"></span>
-                    {#each seekMarks as pct (pct)}
-                      <span class="hsl-tick mark" style={`left: ${pct}%`}></span>
-                    {/each}
+              <!-- Input first so the paint can key its focus ring off it with `~`. It is
+                   transparent and the paint ignores the pointer, so order costs nothing. -->
+              <input
+                class="sl-input"
+                type="range"
+                min="0"
+                max={player.duration || 0}
+                step="1"
+                value={Math.round(displaySec)}
+                oninput={onScrub}
+                onpointerdown={onSeekDown}
+                onpointermove={onSeekMove}
+                onpointerup={onSeekUp}
+                onpointercancel={onSeekUp}
+                onlostpointercapture={endSeek}
+                disabled={!player.duration}
+                aria-label="Episode position"
+              />
+              <span
+                class="hsl-track"
+                aria-hidden="true"
+                bind:this={seekTrackEl}
+                bind:clientWidth={seekTrackW}
+              >
+                <span class="hsl-fill"></span>
+                {#each seekMarks as pct (pct)}
+                  <span class="hsl-tick mark" style={`left: ${pct}%`}></span>
+                {/each}
+                <span class="hsl-thumb"></span>
+                {#if dragSec !== null}
+                  <!-- The loupe: the same track, fill and notches re-rendered at zoom and
+                       slid so the held position lands under the crosshair. -->
+                  <span class="seek-lens">
+                    <span class="lens-strip">
+                      <span class="hsl-fill"></span>
+                      {#each seekMarks as pct (pct)}
+                        <span class="hsl-tick mark" style={`left: ${pct}%`}></span>
+                      {/each}
+                    </span>
+                    <span class="lens-cross"></span>
                   </span>
-                  <span class="lens-cross"></span>
-                </span>
-              {/if}
-            </span>
-          </div>
+                {/if}
+              </span>
+            </div>
+          {/if}
           <span class="p-time p-time-end">{fmtTime(player.duration)}</span>
           {@render volumeControl()}
         </div>
@@ -1174,6 +1306,30 @@
     min-width: 0;
     font-size: 13px;
     color: var(--c-dim);
+  }
+  .range-edit {
+    display: flex;
+    flex: 1 1 auto;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+  }
+  .range-times {
+    color: var(--c-text);
+    font-variant-numeric: tabular-nums;
+  }
+  .range-btn {
+    font: inherit;
+    font-size: 12px;
+    padding: 1px 8px;
+    color: var(--c-text);
+    background: var(--c-surface2);
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+  }
+  .range-btn:hover {
+    color: var(--c-accent);
   }
   .p-track.idle {
     color: var(--c-dim);

@@ -54,7 +54,14 @@ export interface TrackRowData {
   airDate: string | null;
   artist: string | null;
   title: string | null;
+  /** Playlist timecode; null in a playlist without times. */
   startSec: number | null;
+  /** Show-relative start the listener set (star moment, typed or dragged), if any. */
+  manualStartSec: number | null;
+  /** Show-relative end the listener marked, if any. */
+  manualEndSec: number | null;
+  /** Recording length from MusicBrainz, if looked up and matched. */
+  lengthSec: number | null;
   addedAt: number;
   label: string;
   search: string;
@@ -196,6 +203,9 @@ export function toTrackRows(favs: FavouriteTrack[]): TrackRowData[] {
     artist: f.track.artist,
     title: f.track.title,
     startSec: f.track.start_sec,
+    manualStartSec: f.track.manual_start_sec ?? null,
+    manualEndSec: f.track.manual_end_sec ?? null,
+    lengthSec: f.track.length_sec ?? null,
     addedAt: f.added_at,
     label: text(f.track.artist, f.track.title),
     search: text(f.track.artist, f.track.title, f.show_name, f.air_date),

@@ -332,6 +332,31 @@ pub async fn get_playlist(
                             .map_err(db_err)?;
                     }
                 }
+                // A hosted episode met through a live stream whose program did not map to
+                // a show sits under a synthetic live-* show. Its playlist page names the
+                // real one: file it there, so it shows up with its siblings.
+                if let Some(real_show) = meta.show_id.as_deref() {
+                    let filed_live = db
+                        .get_episode(episode_id)
+                        .map(|e| e.show_id.starts_with("live-"))
+                        .unwrap_or(false);
+                    if filed_live && !real_show.starts_with("live-") {
+                        let known = db
+                            .list_shows()
+                            .map(|shows| shows.iter().any(|s| s.id == real_show))
+                            .unwrap_or(false);
+                        if !known {
+                            if let Some(name) = meta.show_name.as_deref() {
+                                db.upsert_show(real_show, name, None, false)
+                                    .map_err(db_err)?;
+                            }
+                        }
+                        if known || meta.show_name.is_some() {
+                            db.set_episode_show(episode_id, real_show)
+                                .map_err(db_err)?;
+                        }
+                    }
+                }
             }
             // A timing-only migration must not make an already-cached playlist unusable
             // offline. Keep the marker unset so a later online request can retry.
@@ -913,8 +938,11 @@ pub fn list_favourites(state: State<'_, AppState>) -> CmdResult<Favourites> {
                 if let Ok(id) = ref_id.parse::<i64>() {
                     let row = db.conn.query_row(
                         "SELECT t.id, t.episode_id, t.seq, t.artist, t.title, t.album, t.label,
-                                t.comments, t.start_sec, t.source_id, t.played_at, e.show_id, e.air_date
-                         FROM tracks t JOIN episodes e ON e.id = t.episode_id WHERE t.id = ?1",
+                                t.comments, t.start_sec, t.source_id, t.played_at, e.show_id, e.air_date,
+                                te.manual_end_sec, te.length_sec, te.manual_start_sec
+                         FROM tracks t JOIN episodes e ON e.id = t.episode_id
+                         LEFT JOIN track_ends te ON te.track_id = t.id
+                         WHERE t.id = ?1",
                         [id],
                         |r| {
                             Ok((
@@ -931,6 +959,9 @@ pub fn list_favourites(state: State<'_, AppState>) -> CmdResult<Favourites> {
                                     source_id: r.get(9)?,
                                     played_at: r.get(10)?,
                                     favourite: true,
+                                    manual_end_sec: r.get(13)?,
+                                    length_sec: r.get(14)?,
+                                    manual_start_sec: r.get(15)?,
                                 },
                                 r.get::<_, String>(11)?,
                                 r.get::<_, Option<String>>(12)?,
@@ -1044,6 +1075,9 @@ pub fn search(query: String, state: State<'_, AppState>) -> CmdResult<SearchResu
                     source_id: r.get(9)?,
                     played_at: r.get(10)?,
                     favourite: r.get::<_, i64>(11)? != 0,
+                    manual_start_sec: None,
+                    manual_end_sec: None,
+                    length_sec: None,
                 },
                 show_id: r.get(12)?,
                 show_name: r.get(13)?,
@@ -1055,6 +1089,323 @@ pub fn search(query: String, state: State<'_, AppState>) -> CmdResult<SearchResu
         .collect();
 
     Ok(SearchResults { shows, tracks })
+}
+
+/// A miss is retried after this long: MusicBrainz grows, and a song absent today may be
+/// added later.
+const TRACK_LENGTH_RECHECK_SECONDS: i64 = 30 * 24 * 60 * 60;
+
+/// The song's recording length in seconds, from the cache or a MusicBrainz search. None
+/// when the song is unknown there, or was looked up recently and not found.
+#[tauri::command]
+pub async fn lookup_track_length(
+    track_id: i64,
+    state: State<'_, AppState>,
+) -> CmdResult<Option<i64>> {
+    let Some(info) = state.db()?.track_length_info(track_id).map_err(db_err)? else {
+        return Ok(None);
+    };
+    if info.length_sec.is_some() {
+        return Ok(info.length_sec);
+    }
+    let now = crate::db::Db::now();
+    if info
+        .checked_at
+        .is_some_and(|at| !cache_is_stale(Some(at), now, TRACK_LENGTH_RECHECK_SECONDS))
+    {
+        return Ok(None);
+    }
+    let (Some(artist), Some(title)) = (info.artist, info.title) else {
+        return Ok(None);
+    };
+    let found = crate::musicbrainz::lookup(
+        state.fetcher.client(),
+        &state.musicbrainz_gate,
+        &artist,
+        &title,
+        info.album.as_deref(),
+    )
+    .await?;
+    state
+        .db()?
+        .set_track_length(
+            track_id,
+            found.as_ref().map(|m| m.length_sec),
+            found.as_ref().map(|m| m.mbid.as_str()),
+            now,
+        )
+        .map_err(db_err)?;
+    Ok(found.map(|m| m.length_sec))
+}
+
+// -- Live favourites to archive ---------------------------------------------
+//
+// A song starred from a live stream sits on a live episode with no audio. Once WFMU
+// archives the broadcast, the same song is in a normal playlist with audio. The app looks
+// for it at start-up and moves the favourite there:
+// 1. the favourite's own episode, when it is a real WFMU playlist (a hosted live show):
+//    reload its page, which names the archive once there is one;
+// 2. real episodes of the same day already in the library;
+// 3. the shows the station schedule lists for that weekday: their episode of that day.
+// Live dates are UTC and archive dates Eastern, so the day before and after count too.
+
+/// A favourite that was looked for and not found is tried again after this long.
+const RELINK_RECHECK_SECONDS: i64 = 6 * 60 * 60;
+
+/// Artist and title, normalized, for matching a live row to its archive row. None
+/// without a title: an artist alone names many songs.
+fn song_key(artist: Option<&str>, title: Option<&str>) -> Option<(String, String)> {
+    let title = crate::musicbrainz::normalize(title?);
+    if title.is_empty() {
+        return None;
+    }
+    let artist = artist.map(crate::musicbrainz::normalize).unwrap_or_default();
+    Some((artist, title))
+}
+
+fn matching_track(
+    state: &State<'_, AppState>,
+    episode_id: i64,
+    key: &(String, String),
+) -> Option<i64> {
+    let tracks = state.db().ok()?.list_tracks(episode_id).ok()?;
+    tracks
+        .iter()
+        .find(|t| song_key(t.artist.as_deref(), t.title.as_deref()).as_ref() == Some(key))
+        .map(|t| t.id)
+}
+
+/// The song's row in `episode_id`, if that episode has archived audio and the song is in
+/// its playlist. With `may_load` the playlist is fetched or reloaded as needed; without
+/// it only an episode whose cached playlist already holds the song is reloaded, to pick
+/// up an archive that appeared since.
+async fn archived_match(
+    state: &State<'_, AppState>,
+    episode_id: i64,
+    key: &(String, String),
+    may_load: bool,
+) -> Option<i64> {
+    let scraped = state.db().ok()?.episode_tracks_scraped(episode_id).ok()?;
+    let found = if scraped {
+        matching_track(state, episode_id, key)
+    } else {
+        None
+    };
+    if !may_load && found.is_none() {
+        return None;
+    }
+    let has_audio = state.db().ok()?.get_episode(episode_id).ok()?.has_audio;
+    if !scraped || !has_audio || found.is_none() {
+        get_playlist(episode_id, scraped, state.clone()).await.ok()?;
+    }
+    let has_audio = state.db().ok()?.get_episode(episode_id).ok()?.has_audio;
+    if !has_audio {
+        return None;
+    }
+    matching_track(state, episode_id, key)
+}
+
+/// `date` and the days either side, as ISO dates.
+fn nearby_dates(date: &str) -> Vec<String> {
+    use chrono::Datelike;
+    let Ok(day) = chrono::NaiveDate::parse_from_str(date, "%Y-%m-%d") else {
+        return vec![date.to_string()];
+    };
+    [Some(day), day.pred_opt(), day.succ_opt()]
+        .into_iter()
+        .flatten()
+        .map(|d| format!("{:04}-{:02}-{:02}", d.year(), d.month(), d.day()))
+        .collect()
+}
+
+/// Whether a schedule day heading ("Thursday", "Thu Jul 23") names the weekday of `date`.
+fn schedule_day_matches(heading: &str, date: &str) -> bool {
+    use chrono::{Datelike, Weekday};
+    let Ok(day) = chrono::NaiveDate::parse_from_str(date, "%Y-%m-%d") else {
+        return false;
+    };
+    let name = match day.weekday() {
+        Weekday::Mon => "monday",
+        Weekday::Tue => "tuesday",
+        Weekday::Wed => "wednesday",
+        Weekday::Thu => "thursday",
+        Weekday::Fri => "friday",
+        Weekday::Sat => "saturday",
+        Weekday::Sun => "sunday",
+    };
+    let heading = heading.trim().to_lowercase();
+    heading.contains(name) || heading.starts_with(&name[..3])
+}
+
+async fn find_archived_song(
+    state: &State<'_, AppState>,
+    fav: &crate::db::UnplayableFavourite,
+    key: &(String, String),
+    schedules: &mut std::collections::HashMap<String, Vec<wfmu::ParsedLiveProgram>>,
+) -> Option<i64> {
+    if fav.episode_id > 0 {
+        if let Some(id) = archived_match(state, fav.episode_id, key, true).await {
+            return Some(id);
+        }
+    }
+    let dates = nearby_dates(fav.air_date_iso.as_deref()?);
+
+    for date in &dates {
+        let candidates = state
+            .db()
+            .ok()?
+            .real_episodes_on(date, fav.episode_id)
+            .ok()?;
+        for (episode_id, _) in candidates {
+            if let Some(id) = archived_match(state, episode_id, key, false).await {
+                return Some(id);
+            }
+        }
+    }
+
+    let station = fav.show_id.strip_prefix("live-")?;
+    let config = wfmu::live_station(station)?;
+    if !schedules.contains_key(station) {
+        let programs = match state.fetcher.get_live_page_text(config.info_url).await {
+            Ok(html) => wfmu::parse_live_schedule(&html),
+            Err(_) => Vec::new(),
+        };
+        schedules.insert(station.to_string(), programs);
+    }
+    let programs = schedules.get(station)?.clone();
+    let mut tried = HashSet::new();
+    for date in &dates {
+        for program in &programs {
+            let Some(show_id) = program.show_id.clone() else {
+                continue;
+            };
+            if !program
+                .day
+                .as_deref()
+                .is_some_and(|day| schedule_day_matches(day, date))
+            {
+                continue;
+            }
+            if !tried.insert(show_id.clone()) {
+                continue;
+            }
+            let Ok(detail) = get_show(show_id, false, state.clone()).await else {
+                continue;
+            };
+            let episodes: Vec<i64> = detail
+                .episodes
+                .iter()
+                .filter(|e| {
+                    e.air_date
+                        .as_deref()
+                        .and_then(crate::db::air_date_to_iso)
+                        .is_some_and(|iso| dates.contains(&iso))
+                })
+                .map(|e| e.id)
+                .collect();
+            for episode_id in episodes {
+                if let Some(id) = archived_match(state, episode_id, key, true).await {
+                    return Some(id);
+                }
+            }
+        }
+    }
+    None
+}
+
+/// Look for the archived copy of every favourite song that has no audio, and move the
+/// favourite to it. Returns how many favourites became playable.
+#[tauri::command]
+pub async fn relink_live_favourites(state: State<'_, AppState>) -> CmdResult<u32> {
+    let now = crate::db::Db::now();
+    let pending = state.db()?.unplayable_favourites().map_err(db_err)?;
+    let mut schedules = std::collections::HashMap::new();
+    let mut relinked = 0;
+    for fav in pending {
+        if fav
+            .checked_at
+            .is_some_and(|at| !cache_is_stale(Some(at), now, RELINK_RECHECK_SECONDS))
+        {
+            continue;
+        }
+        let target = match song_key(fav.artist.as_deref(), fav.title.as_deref()) {
+            Some(key) => find_archived_song(&state, &fav, &key, &mut schedules).await,
+            None => None,
+        };
+        match target {
+            Some(track_id) => {
+                state
+                    .db()?
+                    .move_track_favourite(fav.track_id, track_id)
+                    .map_err(db_err)?;
+                relinked += 1;
+            }
+            None => state
+                .db()?
+                .set_relink_checked(fav.track_id, now)
+                .map_err(db_err)?,
+        }
+    }
+    Ok(relinked)
+}
+
+/// Shortest span the listener can give a song. Matches `MIN_SONG_SEC` in the frontend.
+const MIN_SONG_SEC: i64 = 10;
+
+/// Set the listener's own start for a song, in show-relative seconds. None clears it, so
+/// the song goes back to its playlist time (or the episode start when it has none).
+#[tauri::command]
+pub fn set_track_start(
+    track_id: i64,
+    start_sec: Option<i64>,
+    state: State<'_, AppState>,
+) -> CmdResult<()> {
+    if start_sec.is_some_and(|start| start < 0) {
+        return Err("song start must not be negative".into());
+    }
+    state
+        .db()?
+        .set_manual_start(track_id, start_sec)
+        .map_err(db_err)
+}
+
+/// Set both of the listener's marks for a song in one write. None clears that side.
+#[tauri::command]
+pub fn set_track_range(
+    track_id: i64,
+    start_sec: Option<i64>,
+    end_sec: Option<i64>,
+    state: State<'_, AppState>,
+) -> CmdResult<()> {
+    if start_sec.is_some_and(|start| start < 0) || end_sec.is_some_and(|end| end < 0) {
+        return Err("song start and end must not be negative".into());
+    }
+    if let (Some(start), Some(end)) = (start_sec, end_sec) {
+        if end < start + MIN_SONG_SEC {
+            return Err("song end must be after its start".into());
+        }
+    }
+    state
+        .db()?
+        .set_manual_range(track_id, start_sec, end_sec)
+        .map_err(db_err)
+}
+
+/// Set the listener's own end mark for a song, in show-relative seconds. None clears it,
+/// so the song goes back to the automatic end.
+#[tauri::command]
+pub fn set_track_end(
+    track_id: i64,
+    end_sec: Option<i64>,
+    state: State<'_, AppState>,
+) -> CmdResult<()> {
+    if end_sec.is_some_and(|end| end < 0) {
+        return Err("song end must not be negative".into());
+    }
+    state
+        .db()?
+        .set_manual_end(track_id, end_sec)
+        .map_err(db_err)
 }
 
 #[tauri::command]
@@ -1613,8 +1964,27 @@ pub fn export_csv(kind: String, dest: String, state: State<'_, AppState>) -> Cmd
 #[cfg(test)]
 mod tests {
     use super::{
-        broadcast_duration_for_tracks, cache_is_stale, neutralize_csv_cell, write_csv_record,
+        broadcast_duration_for_tracks, cache_is_stale, nearby_dates, neutralize_csv_cell,
+        schedule_day_matches, song_key, write_csv_record,
     };
+
+    #[test]
+    fn live_relink_helpers() {
+        assert_eq!(
+            nearby_dates("2026-07-23"),
+            vec!["2026-07-23", "2026-07-22", "2026-07-24"]
+        );
+        assert_eq!(nearby_dates("2026-03-01")[1], "2026-02-28");
+        // 2026-07-23 is a Thursday.
+        assert!(schedule_day_matches("Thursday", "2026-07-23"));
+        assert!(schedule_day_matches("Thu Jul 23", "2026-07-23"));
+        assert!(!schedule_day_matches("Friday", "2026-07-23"));
+        assert_eq!(
+            song_key(Some("Ike & Tina Turner"), Some("Shake (Live)")),
+            song_key(Some("ike and tina turner"), Some("Shake"))
+        );
+        assert_eq!(song_key(Some("Cradle"), None), None);
+    }
     use crate::wfmu::ParsedTrack;
 
     #[test]

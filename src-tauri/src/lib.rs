@@ -1,6 +1,7 @@
 pub mod commands;
 pub mod db;
 pub mod downloads;
+pub mod musicbrainz;
 pub mod wfmu;
 
 use std::{
@@ -17,6 +18,8 @@ pub struct AppState {
     pub active_downloads: Mutex<HashSet<i64>>,
     pub live_schedule_cache:
         tokio::sync::Mutex<HashMap<String, (Instant, Vec<wfmu::ParsedLiveProgram>)>>,
+    /// Last MusicBrainz request, for its one-request-per-second limit.
+    pub musicbrainz_gate: tokio::sync::Mutex<Option<Instant>>,
 }
 
 impl AppState {
@@ -84,6 +87,7 @@ pub fn run() {
                 fetcher: wfmu::Fetcher::new(),
                 active_downloads: Mutex::new(HashSet::new()),
                 live_schedule_cache: tokio::sync::Mutex::new(HashMap::new()),
+                musicbrainz_gate: tokio::sync::Mutex::new(None),
             });
             Ok(())
         })
@@ -97,6 +101,11 @@ pub fn run() {
             commands::toggle_favourite,
             commands::list_favourites,
             commands::search,
+            commands::lookup_track_length,
+            commands::set_track_end,
+            commands::set_track_start,
+            commands::set_track_range,
+            commands::relink_live_favourites,
             commands::record_listen,
             commands::get_stats,
             commands::get_era_stats,

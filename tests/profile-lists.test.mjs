@@ -282,6 +282,10 @@ test("a favourite song carries its episode through, so it can be queued", () => 
   assert.equal(rows[0].episode.id, 42);
   assert.equal(rows[0].episode.has_audio, true);
   assert.equal(rows[0].startSec, 190);
+  // A favourite stored before song ends existed has neither field.
+  assert.equal(rows[0].manualStartSec, null);
+  assert.equal(rows[0].manualEndSec, null);
+  assert.equal(rows[0].lengthSec, null);
 });
 
 // -- Calendar ---------------------------------------------------------------

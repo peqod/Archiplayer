@@ -284,6 +284,10 @@
   async function favTrack(ep: Episode, track: Track) {
     try {
       const fav = await api.toggleFavourite("track", String(track.id));
+      // A song with no playlist time, starred while its episode plays, starts where the
+      // listener heard it.
+      const at = fav ? player.starStartFor(track) : null;
+      if (at !== null) await api.setTrackStart(track.id, at);
       const cur = expanded[ep.id];
       if (Array.isArray(cur)) {
         expanded = {

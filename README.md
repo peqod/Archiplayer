@@ -8,7 +8,7 @@
   A local-first desktop browser and player for the [WFMU](https://wfmu.org/) archives.<br>
   Rust + Tauri 2 + Svelte 5 · No login · No cloud · Open source
 
-  [Website](https://peqod.github.io/Archiplayer) · [Latest release](../../releases/latest) · [Build from source](#build-from-source) · [Report a problem](../../issues/new/choose)
+  [Website](https://peqod.github.io/Archiplayer) · [Latest release](../../releases/latest) · [User manual](docs/MANUAL.md) · [Build from source](#build-from-source) · [Report a problem](../../issues/new/choose)
 </div>
 
 ---
@@ -44,6 +44,9 @@ Download the matching file from the [latest release](../../releases/latest).
 - Favourite shows, episodes, and tracks.
 - Download broadcasts for offline listening to a directory you choose.
 - Track listening time and export favourites, listens, and stats as CSV.
+- Set the start and end of a favourite song by hand, in the profile or on the seek bar.
+
+The [user manual](docs/MANUAL.md) explains every feature step by step.
 
 ### Keyboard shortcuts
 
@@ -51,7 +54,7 @@ Profile, **Keyboard shortcuts** sets both tiers, and one switch turns the system
 
 | Tier | Default bindings |
 |---|---|
-| In the app | `Space` play/pause, `J`/`K` previous/next song, `,`/`.` previous/next episode, `M` mute, `F` favourite, `S` save episode, `R` random show |
+| In the app | `Space` play/pause, `J`/`K` previous/next song, `,`/`.` previous/next episode, `M` mute, `F` favourite, `E` mark song end, `B` edit song range, `S` save episode, `R` random show |
 | System-wide | `Ctrl+Shift+F6` through `Ctrl+Shift+F11`: previous/next episode, mute, favourite, save episode, and random show |
 
 Bindings record the physical key, so one binding is the same key on every layout. A system-wide

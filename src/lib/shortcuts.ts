@@ -15,6 +15,8 @@ export type ActionId =
   | "prev-episode"
   | "mute"
   | "fav-song"
+  | "mark-end"
+  | "edit-range"
   | "save-show"
   | "random";
 
@@ -34,6 +36,8 @@ export const ACTIONS: readonly ActionDef[] = [
   { id: "next-episode", label: "Next episode" },
   { id: "mute", label: "Mute" },
   { id: "fav-song", label: "Star this song" },
+  { id: "mark-end", label: "Mark song end" },
+  { id: "edit-range", label: "Edit song range" },
   { id: "save-show", label: "Save this episode" },
   { id: "random", label: "Random audition" },
 ];
@@ -49,6 +53,8 @@ export const DEFAULT_LOCAL: Bindings = {
   "next-episode": "Period",
   mute: "M",
   "fav-song": "F",
+  "mark-end": "E",
+  "edit-range": "B",
   "save-show": "S",
   random: "R",
 };
@@ -63,6 +69,8 @@ export const DEFAULT_GLOBAL: Bindings = {
   "next-episode": "Ctrl+Shift+F7",
   mute: "Ctrl+Shift+F8",
   "fav-song": "Ctrl+Shift+F9",
+  "mark-end": null,
+  "edit-range": null,
   "save-show": "Ctrl+Shift+F10",
   random: "Ctrl+Shift+F11",
 };

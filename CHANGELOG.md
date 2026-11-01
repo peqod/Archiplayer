@@ -9,6 +9,29 @@ file; their notes are on the [releases page](https://github.com/peqod/Archiplaye
 
 ## [Unreleased]
 
+### Added
+
+- A favourite song now stops at its own end. Before, a song with no later timecode in its
+  playlist played to the end of the episode. The app gets the song length from
+  MusicBrainz and stops a few seconds after it, or at the next timecode if that comes
+  first.
+- You can set the end of a song yourself. Press the flag button in the player (or `E`)
+  at the moment the song ends, or type the end time with the flag button in the Songs
+  tab of your profile. Your mark always wins. Clear it to use the automatic end again.
+- When you star a song from a playlist without times while its episode plays, the app saves
+  that moment as the start of the song. The favourite then plays from there.
+- You can set the start and the end of a favourite song: type them with the range button in
+  the Songs tab of your profile, or drag the two handles on the seek bar with the range
+  button in the player (or `B`).
+- Songs starred from a live stream move to their archived episode when WFMU archives the
+  broadcast. The app looks for them at start-up and then plays them from the archive.
+- A user manual: [docs/MANUAL.md](docs/MANUAL.md).
+
+### Fixed
+
+- Favourite songs from playlists without times play again. Without a saved start they play
+  from the start of the episode, as before 0.4.0.
+
 ## [0.5.1] - 2026-08-28
 
 ### Fixed
