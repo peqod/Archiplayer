@@ -7,7 +7,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Releases before 0.4.0 predate this
 file; their notes are on the [releases page](https://github.com/peqod/Archiplayer/releases).
 
-## [Unreleased]
+## [0.6.0] - 2026-11-01
 
 ### Added
 
@@ -16,8 +16,8 @@ file; their notes are on the [releases page](https://github.com/peqod/Archiplaye
   MusicBrainz and stops a few seconds after it, or at the next timecode if that comes
   first.
 - You can set the end of a song yourself. Press the flag button in the player (or `E`)
-  at the moment the song ends, or type the end time with the flag button in the Songs
-  tab of your profile. Your mark always wins. Clear it to use the automatic end again.
+  at the moment the song ends, or type the end time in the Songs tab of your profile.
+  Your mark always wins. Clear it to use the automatic end again.
 - When you star a song from a playlist without times while its episode plays, the app saves
   that moment as the start of the song. The favourite then plays from there.
 - You can set the start and the end of a favourite song: type them with the range button in
@@ -25,12 +25,16 @@ file; their notes are on the [releases page](https://github.com/peqod/Archiplaye
   button in the player (or `B`).
 - Songs starred from a live stream move to their archived episode when WFMU archives the
   broadcast. The app looks for them at start-up and then plays them from the archive.
-- A user manual: [docs/MANUAL.md](docs/MANUAL.md).
+- A user manual: [docs/MANUAL.md](https://github.com/peqod/Archiplayer/blob/main/docs/MANUAL.md).
 
 ### Fixed
 
 - Favourite songs from playlists without times play again. Without a saved start they play
   from the start of the episode, as before 0.4.0.
+- The Profile lists update by themselves when a live favourite moves to the archive.
+- Error messages are short and plain. Playback and download problems say what to do (for
+  example "Press play to start." or "Could not save the download. Check the folder.")
+  instead of showing raw technical text.
 
 ## [0.5.1] - 2026-08-28
 
