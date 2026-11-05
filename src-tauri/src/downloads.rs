@@ -209,8 +209,9 @@ async fn download_episode_inner(
     // before the backend fetch. The audio-only client applies it again to every redirect.
     //
     // A cached URL can go dead: WFMU rolls its 128k mp3s off mp3archives.wfmu.org and falls back
-    // to the permanent S3 mp4, so the old URL answers 404. One forced re-resolve picks up the new
-    // backend, which also changes the extension, hence the destination is recomputed per attempt.
+    // to the permanent arch.wfmu.org mp4, so the old URL answers 404. One forced re-resolve picks
+    // up the new backend, which also changes the extension, hence the destination is recomputed
+    // per attempt.
     let mut retried = false;
     let (resp, dest, dest_str) = loop {
         let audio_url = crate::wfmu::validate_audio_url(&source.url)?;

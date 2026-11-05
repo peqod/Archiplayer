@@ -711,7 +711,7 @@ fn synthetic_live_episode_id(stream_id: &str, timestamp: i64) -> i64 {
 ///
 /// `force` skips and clears the cached URL. WFMU rolls its 128k mp3s off
 /// mp3archives.wfmu.org after a few weeks and its player falls back to the permanent
-/// s3.amazonaws.com/arch.wfmu.org mp4, which leaves a cached mp3 URL answering 404 forever.
+/// arch.wfmu.org mp4, which leaves a cached mp3 URL answering 404 forever.
 /// Callers use `force` after a playback or download failure to pick up the new backend.
 #[tauri::command]
 pub async fn resolve_audio(

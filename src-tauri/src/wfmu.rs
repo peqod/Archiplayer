@@ -24,6 +24,13 @@ const ARCHIVE_BACKENDS: &[ArchiveBackend] = &[
         host: "mp3archives.wfmu.org",
         path_prefix: None,
     },
+    // The permanent archive. AccuPlayer links here once an mp3 rolls off the host above.
+    ArchiveBackend {
+        host: "arch.wfmu.org",
+        path_prefix: None,
+    },
+    // The same bucket, addressed directly. AccuPlayer no longer links this form, but URLs
+    // cached in user databases do, and it still serves.
     ArchiveBackend {
         host: "s3.amazonaws.com",
         path_prefix: Some("/arch.wfmu.org/"),
@@ -1769,6 +1776,7 @@ mod tests {
     fn audio_urls_are_limited_to_https_wfmu_archive_backends() {
         for url in [
             "https://mp3archives.wfmu.org/archive/WA/wa260709.mp3",
+            "https://arch.wfmu.org/AU/au260711.mp4",
             "https://s3.amazonaws.com/arch.wfmu.org/BT/bt010116r.mp4",
             "https://emory.kfjc.org/archive/ftr/1400_1499/f-1429.mp3",
         ] {
@@ -1790,6 +1798,7 @@ mod tests {
         for url in [
             "http://127.0.0.1/private.mp3",
             "https://mp3archives.wfmu.org.evil.example/show.mp3",
+            "https://arch.wfmu.org.evil.example/show.mp4",
             "https://emory.kfjc.org.evil.example/show.mp3",
             "https://blogfiles.wfmu.org.evil.example/show.m4a",
             "https://s3.amazonaws.com/other-bucket/show.mp3",

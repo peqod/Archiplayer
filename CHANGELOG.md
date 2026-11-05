@@ -7,6 +7,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Releases before 0.4.0 predate this
 file; their notes are on the [releases page](https://github.com/peqod/Archiplayer/releases).
 
+## [0.6.1] - 2026-11-05
+
+### Fixed
+
+- Older episodes play and download again. WFMU moved its permanent archive to arch.wfmu.org,
+  and the app refused that host with the message "not an approved WFMU archive backend".
+
 ## [0.6.0] - 2026-11-01
 
 ### Added

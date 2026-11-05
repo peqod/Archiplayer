@@ -1,8 +1,8 @@
 // Recovery rules for an archive URL that has gone dead since it was cached.
 //
 // WFMU keeps its 128k mp3s on mp3archives.wfmu.org for a few weeks only; once one rolls off,
-// the station's own player falls back to the permanent s3.amazonaws.com/arch.wfmu.org mp4 and
-// the mp3 answers 404. A URL cached before that switch never plays again, so a failed media
+// the station's own player falls back to the permanent arch.wfmu.org mp4 and the mp3 answers
+// 404. A URL cached before that switch never plays again, so a failed media
 // source earns exactly one forced re-resolve.
 
 export interface StaleSourceState {
